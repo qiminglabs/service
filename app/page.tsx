@@ -157,7 +157,8 @@ type BusinessObject = {
   name: string;
   product: 'SMTX OS';
   nodeCount: number;
-  entitlementQuantity: number;
+  upgradeEntitlement: number;
+  inspectionEntitlement: number;
 };
 
 const initialCustomers: Customer[] = [
@@ -200,7 +201,8 @@ const initialBusinessObjects: BusinessObject[] = [
     name: '生产超融合集群',
     product: 'SMTX OS',
     nodeCount: 8,
-    entitlementQuantity: 120,
+    upgradeEntitlement: 8,
+    inspectionEntitlement: 8,
   },
   {
     id: 'OBJ-002',
@@ -208,7 +210,8 @@ const initialBusinessObjects: BusinessObject[] = [
     name: '核心数据库集群',
     product: 'SMTX OS',
     nodeCount: 6,
-    entitlementQuantity: 80,
+    upgradeEntitlement: 6,
+    inspectionEntitlement: 4,
   },
   {
     id: 'OBJ-003',
@@ -216,7 +219,8 @@ const initialBusinessObjects: BusinessObject[] = [
     name: '研发测试集群',
     product: 'SMTX OS',
     nodeCount: 4,
-    entitlementQuantity: 40,
+    upgradeEntitlement: 4,
+    inspectionEntitlement: 0,
   },
 ];
 
@@ -563,17 +567,26 @@ export default function Home() {
     }
     if (referenceTab === 'business-objects') {
       const nodeCount = Number(referenceForm.nodeCount);
-      const entitlementQuantity = Number(referenceForm.entitlementQuantity);
+      const upgradeEntitlement = Number(referenceForm.upgradeEntitlement);
+      const inspectionEntitlement = Number(referenceForm.inspectionEntitlement);
       if (
         !customerId ||
         !referenceForm.name?.trim() ||
         !Number.isInteger(nodeCount) ||
         nodeCount <= 0 ||
-        !Number.isInteger(entitlementQuantity) ||
-        entitlementQuantity < 0
+        referenceForm.upgradeEntitlement === undefined ||
+        referenceForm.upgradeEntitlement === '' ||
+        !Number.isInteger(upgradeEntitlement) ||
+        upgradeEntitlement < 0 ||
+        upgradeEntitlement > nodeCount ||
+        referenceForm.inspectionEntitlement === undefined ||
+        referenceForm.inspectionEntitlement === '' ||
+        !Number.isInteger(inspectionEntitlement) ||
+        inspectionEntitlement < 0 ||
+        inspectionEntitlement > nodeCount
       )
         return setReferenceFormError(
-          '请选择客户并填写对象名称；节点数须为正整数，权益数量须为非负整数。',
+          '请选择客户并填写对象名称；两类权益须为非负整数，且均不能超过节点数。',
         );
       setBusinessObjects((records) => [
         ...records,
@@ -583,7 +596,8 @@ export default function Home() {
           name: referenceForm.name.trim(),
           product: 'SMTX OS',
           nodeCount,
-          entitlementQuantity,
+          upgradeEntitlement,
+          inspectionEntitlement,
         },
       ]);
     }
@@ -1563,7 +1577,8 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                 <th>所属客户</th>
                 <th>产品</th>
                 <th>节点数</th>
-                <th>权益数量</th>
+                <th>升级权益</th>
+                <th>巡检权益</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
               </tr>
@@ -1579,7 +1594,10 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <span className="product-tag">{record.product}</span>
                   </td>
                   <td className="numeric-cell">{record.nodeCount}</td>
-                  <td className="numeric-cell">{record.entitlementQuantity}</td>
+                  <td className="numeric-cell">{record.upgradeEntitlement}</td>
+                  <td className="numeric-cell">
+                    {record.inspectionEntitlement}
+                  </td>
                   <td>
                     <code>{record.id}</code>
                   </td>
@@ -1758,7 +1776,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   aria-readonly="true"
                 />
               </label>
-              <div className="dialog-grid">
+              <div className="dialog-grid dialog-grid--three">
                 <label htmlFor="node-count">
                   <span>
                     节点数 <em>*</em>
@@ -1775,23 +1793,44 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                     placeholder="例如：8"
                   />
                 </label>
-                <label htmlFor="entitlement-quantity">
+                <label htmlFor="upgrade-entitlement">
                   <span>
-                    权益数量 <em>*</em>
+                    升级权益 <em>*</em>
                   </span>
                   <Input
-                    id="entitlement-quantity"
+                    id="upgrade-entitlement"
                     type="number"
                     min="0"
+                    max={props.form.nodeCount || undefined}
                     step="1"
-                    value={props.form.entitlementQuantity ?? ''}
+                    value={props.form.upgradeEntitlement ?? ''}
                     onChange={(event) =>
-                      update('entitlementQuantity', event.target.value)
+                      update('upgradeEntitlement', event.target.value)
                     }
-                    placeholder="例如：120"
+                    placeholder="不超过节点数"
+                  />
+                </label>
+                <label htmlFor="inspection-entitlement">
+                  <span>
+                    巡检权益 <em>*</em>
+                  </span>
+                  <Input
+                    id="inspection-entitlement"
+                    type="number"
+                    min="0"
+                    max={props.form.nodeCount || undefined}
+                    step="1"
+                    value={props.form.inspectionEntitlement ?? ''}
+                    onChange={(event) =>
+                      update('inspectionEntitlement', event.target.value)
+                    }
+                    placeholder="不超过节点数"
                   />
                 </label>
               </div>
+              <p className="field-hint">
+                升级权益和巡检权益均须小于或等于节点数。
+              </p>
             </>
           ) : null}
           {props.error ? (
