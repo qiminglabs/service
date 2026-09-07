@@ -1,0 +1,500 @@
+export type CatalogService = {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  deliveryMethods: string[];
+  status: string;
+  priceUnit: string;
+};
+export type CustomerRef = { id: string; name: string; status: string };
+export type ContactRef = CustomerRef & { customerId: string };
+export type ObjectRef = ContactRef & {
+  nodeCount: number;
+  product?: string;
+  sn?: string;
+};
+export function matchesObjectProduct(object: ObjectRef, config: RequestConfig) {
+  const products = config.basicFields?.businessObjects?.products;
+  return products === undefined || products.includes(object.product ?? '');
+}
+export type StoredFile = {
+  id: string;
+  name: string;
+  size: number;
+  uploadedAt: string;
+  blob: Blob;
+  onlineDocument?: {
+    title: string;
+    content: string;
+    source: 'template' | 'blank';
+    richText?: Record<string, unknown>;
+  };
+};
+export type FieldKey = string;
+export const fieldLabels: Record<string, string> = {
+  edition: '产品版本类型',
+  version: '产品版本号',
+  nodes: '节点数',
+};
+export type MaterialRequirement = {
+  id: string;
+  name: string;
+  required: boolean;
+  instructions: string;
+  template?: StoredFile;
+  templateUrl?: string;
+  onlineTemplateUrl?: string;
+};
+export type RequestConfig = {
+  basicFields?: {
+    description?: { enabled: boolean; required: boolean };
+    businessObjects?: {
+      enabled: boolean;
+      required: boolean;
+      products?: string[];
+    };
+  };
+  serviceId: string;
+  revision: number;
+  fields: FieldKey[];
+  fieldRequired?: Record<string, boolean>;
+  fieldNames: Record<string, string>;
+  fieldOptions: Record<string, string[]>;
+  materials: MaterialRequirement[];
+};
+export type ItemMaterial = {
+  requirementId: string;
+  files?: StoredFile[];
+  /** Read compatibility for materials saved before independent files. */
+  versions?: StoredFile[];
+};
+export function materialFiles(material?: ItemMaterial): StoredFile[] {
+  return material?.files ?? material?.versions ?? [];
+}
+export function withMaterialFiles(
+  material: ItemMaterial,
+  files: StoredFile[],
+): ItemMaterial {
+  return { requirementId: material.requirementId, files };
+}
+export function saveMaterialFile(
+  material: ItemMaterial,
+  file: StoredFile,
+  editingId?: string | null,
+): ItemMaterial {
+  const files = materialFiles(material);
+  if (editingId && !files.some((entry) => entry.id === editingId)) {
+    throw new Error('待编辑的文件不存在，请重新打开材料。');
+  }
+  return withMaterialFiles(
+    material,
+    editingId
+      ? files.map((entry) =>
+          entry.id === editingId ? { ...file, id: editingId } : entry,
+        )
+      : [...files, file],
+  );
+}
+export function removeMaterialFile(
+  material: ItemMaterial,
+  fileId: string,
+): ItemMaterial {
+  return withMaterialFiles(
+    material,
+    materialFiles(material).filter((file) => file.id !== fileId),
+  );
+}
+export function businessObjectsEnabled(config: RequestConfig): boolean {
+  return (
+    config.basicFields?.businessObjects?.enabled ??
+    config.fields.includes('businessObjects')
+  );
+}
+export type RequestItem = {
+  id: string;
+  serviceId: string;
+  serviceName: string;
+  methods: string[];
+  method: string;
+  methodFieldType?:
+    | 'single'
+    | 'multiple'
+    | 'text'
+    | 'textarea'
+    | 'integer'
+    | 'decimal'
+    | 'date';
+  description: string;
+  businessObjectIds: string[];
+  values: Record<string, string>;
+  config: RequestConfig;
+  materials: ItemMaterial[];
+};
+export type ServiceRequest = {
+  id: string;
+  title: string;
+  customerId: string;
+  contactId: string;
+  description: string;
+  owner: string;
+  status: '草稿' | '待评估';
+  createdAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  items: RequestItem[];
+};
+export function itemSummary(item: RequestItem): string {
+  const fields = [
+    ['服务方式', item.method],
+    ['产品版本', item.values.edition],
+    ['节点数', item.values.nodes],
+    ['产品版本号', item.values.version],
+  ];
+  return fields
+    .flatMap(([label, raw]) => {
+      let value = (raw ?? '').trim();
+      if (value.startsWith('[')) {
+        try {
+          const options: unknown = JSON.parse(value);
+          if (Array.isArray(options))
+            value = options
+              .filter((option) => typeof option === 'string' && option.trim())
+              .map((option) => option.trim())
+              .join('、');
+        } catch {
+          /* Keep legacy text values readable. */
+        }
+      }
+      return value ? [`${label}：${value}`] : [];
+    })
+    .join(' · ');
+}
+export function newRequest(
+  title: string,
+  customerId: string,
+  owner: string,
+): ServiceRequest {
+  const now = new Date().toISOString();
+  return {
+    id: `SR-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 4).toUpperCase()}`,
+    title: title.trim(),
+    customerId,
+    contactId: '',
+    description: '',
+    owner,
+    status: '草稿',
+    createdAt: now,
+    updatedAt: now,
+    items: [],
+  };
+}
+export function requestIdentityIssue(
+  record: ServiceRequest,
+  existing?: ServiceRequest,
+): string | null {
+  if (existing) {
+    return existing.customerId !== record.customerId
+      ? '服务请求创建后不支持修改客户。'
+      : null;
+  }
+  if (!record.title.trim()) return '请填写服务请求名称。';
+  if (!record.customerId.trim()) return '请选择客户。';
+  return null;
+}
+export class RequestIdentityError extends Error {}
+export function defaultConfig(service: CatalogService): RequestConfig {
+  const installation = service.category === '产品实施交付';
+  return {
+    serviceId: service.id,
+    revision: 1,
+    basicFields: {
+      description: { enabled: true, required: true },
+      businessObjects: { enabled: false, required: false },
+    },
+    fields: installation ? ['edition', 'version', 'nodes'] : [],
+    fieldNames: { ...fieldLabels },
+    fieldOptions: {},
+    materials: [
+      {
+        id: 'requirements',
+        name: installation ? '售前向交付移交材料' : '服务需求与环境说明',
+        required: true,
+        instructions: installation
+          ? '按模板说明硬件、网络、部署范围和准备情况；不适用章节请说明原因。'
+          : '说明服务目标、环境现状、涉及范围和已知限制。不适用内容请说明原因。',
+        templateUrl: installation
+          ? '/templates/handover-template.docx'
+          : '/templates/service-requirements.md',
+      },
+    ],
+  };
+}
+export function newItem(
+  service: CatalogService,
+  config: RequestConfig,
+): RequestItem {
+  const snapshot = structuredClone(normalizeRequestConfig(config));
+  return {
+    id: crypto.randomUUID(),
+    serviceId: service.id,
+    serviceName: service.name,
+    methods: [...service.deliveryMethods],
+    method: service.deliveryMethods[0] ?? '',
+    description: '',
+    businessObjectIds: [],
+    values: Object.fromEntries(snapshot.fields.map((fieldId) => [fieldId, ''])),
+    config: snapshot,
+    materials: [],
+  };
+}
+export function itemBasicIssues(item: RequestItem): string[] {
+  const issues: string[] = [];
+  if (
+    item.config.basicFields?.description?.enabled !== false &&
+    item.config.basicFields?.description?.required !== false &&
+    !item.description.trim()
+  )
+    issues.push('需求说明');
+  if (
+    businessObjectsEnabled(item.config) &&
+    item.config.basicFields?.businessObjects?.required === true &&
+    !item.businessObjectIds.length
+  )
+    issues.push('业务对象');
+  const methodType = item.methodFieldType ?? 'single';
+  let methodValid = Boolean(item.method.trim());
+  if (methodType === 'single')
+    methodValid = methodValid && item.methods.includes(item.method);
+  if (methodType === 'multiple') {
+    try {
+      const values: unknown = JSON.parse(item.method);
+      methodValid =
+        Array.isArray(values) &&
+        values.length > 0 &&
+        values.every(
+          (value) => typeof value === 'string' && item.methods.includes(value),
+        );
+    } catch {
+      methodValid = item.methods.includes(item.method);
+    }
+  }
+  if (methodType === 'integer')
+    methodValid =
+      methodValid &&
+      /^-?\d+$/.test(item.method) &&
+      Number.isSafeInteger(Number(item.method));
+  if (methodType === 'decimal')
+    methodValid = methodValid && Number.isFinite(Number(item.method));
+  if (methodType === 'date')
+    methodValid =
+      methodValid &&
+      /^\d{4}-\d{2}-\d{2}$/.test(item.method) &&
+      !Number.isNaN(Date.parse(item.method));
+  if (!methodValid) issues.push('服务方式');
+  for (const key of item.config.fields) {
+    if (key === 'businessObjects') continue;
+    const value = (item.values[key] ?? '').trim();
+    const empty = !value || value === '[]';
+    if (empty && item.config.fieldRequired?.[key] === false) continue;
+    if (
+      key === 'nodes'
+        ? !/^\d+$/.test(value) ||
+          !Number.isSafeInteger(Number(value)) ||
+          Number(value) <= 0
+        : empty
+    )
+      issues.push(
+        key === 'nodes'
+          ? '节点数（正整数）'
+          : (item.config.fieldNames?.[key] ??
+              fieldLabels[key] ??
+              `申请字段 ${key}`),
+      );
+  }
+  return issues;
+}
+
+export function normalizeRequestConfig(
+  config: RequestConfig & {
+    fieldNames?: Record<string, string>;
+    fieldOptions?: Record<string, string[]>;
+  },
+): RequestConfig {
+  return {
+    ...config,
+    fields: config.fields.filter((id) => id !== 'businessObjects'),
+    basicFields: {
+      ...config.basicFields,
+      businessObjects: {
+        ...config.basicFields?.businessObjects,
+        enabled: businessObjectsEnabled(config),
+        required: config.basicFields?.businessObjects?.required ?? false,
+      },
+    },
+    fieldNames: { ...fieldLabels, ...config.fieldNames },
+    fieldOptions: Object.fromEntries(
+      Object.entries(config.fieldOptions ?? {}).map(([fieldId, options]) => [
+        fieldId,
+        [...options],
+      ]),
+    ),
+  };
+}
+export function itemIssues(item: RequestItem): string[] {
+  const issues = itemBasicIssues(item);
+  for (const requirement of item.config.materials.filter((m) => m.required)) {
+    const material = item.materials.find(
+      (m) => m.requirementId === requirement.id,
+    );
+    if (!materialFiles(material).length) issues.push(`上传${requirement.name}`);
+  }
+  return issues;
+}
+export function requestIssues(
+  request: ServiceRequest,
+  refs: {
+    customers: CustomerRef[];
+    contacts: ContactRef[];
+    businessObjects: ObjectRef[];
+    services: CatalogService[];
+  },
+): string[] {
+  const issues: string[] = [];
+  if (!request.title.trim()) issues.push('填写申请主题');
+  if (
+    !refs.customers.some(
+      (c) => c.id === request.customerId && c.status === '启用',
+    )
+  )
+    issues.push('选择有效客户');
+  if (
+    !refs.contacts.some(
+      (c) =>
+        c.id === request.contactId &&
+        c.customerId === request.customerId &&
+        c.status === '启用',
+    )
+  )
+    issues.push('选择该客户的有效联系人');
+  if (!request.description.trim()) issues.push('填写申请背景');
+  if (!request.items.length) issues.push('至少添加一个申请项');
+  request.items.forEach((item, index) => {
+    const prefix = `申请项 ${index + 1}：`;
+    issues.push(...itemIssues(item).map((issue) => prefix + issue));
+    if (
+      !refs.services.some(
+        (s) => s.id === item.serviceId && s.status === '已启用',
+      )
+    )
+      issues.push(prefix + '服务目录已停用或不存在');
+    if (
+      businessObjectsEnabled(item.config) &&
+      item.businessObjectIds.some(
+        (id) =>
+          !refs.businessObjects.some(
+            (o) =>
+              o.id === id &&
+              o.customerId === request.customerId &&
+              matchesObjectProduct(o, item.config) &&
+              o.status === '启用',
+          ),
+      )
+    )
+      issues.push(
+        prefix + '业务对象不属于当前客户、已停用、不符合可搜索产品或不存在',
+      );
+  });
+  return issues;
+}
+export const fileAccept =
+  '.doc,.docx,.pdf,.xls,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg';
+export function checkFile(file: File): string | null {
+  if (!file.size) return '不能上传空文件。';
+  if (file.size > 20 * 1024 * 1024) return '单个文件不能超过 20 MB。';
+  const extension = '.' + file.name.split('.').at(-1)?.toLowerCase();
+  if (!fileAccept.split(',').includes(extension))
+    return '请上传支持的文档、表格或图片格式。';
+  return null;
+}
+export function storedFile(file: File): StoredFile {
+  return {
+    id: crypto.randomUUID(),
+    name: file.name,
+    size: file.size,
+    uploadedAt: new Date().toISOString(),
+    blob: file,
+  };
+}
+export function downloadFile(file: StoredFile) {
+  const url = URL.createObjectURL(file.blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = file.name;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// Device-local prototype storage. Blobs and metadata commit in the same transaction.
+async function openDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('smartx-service-request-local-v1', 2);
+    request.onupgradeneeded = () => {
+      for (const [name, keyPath] of [
+        ['requests', 'id'],
+        ['configs', 'serviceId'],
+        ['references', 'id'],
+      ]) {
+        if (!request.result.objectStoreNames.contains(name))
+          request.result.createObjectStore(name, { keyPath });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('请关闭其他站点标签页后重试。'));
+  });
+}
+export async function readLocal<T>(
+  store: 'requests' | 'configs' | 'references',
+): Promise<T[]> {
+  const db = await openDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const transaction = db.transaction(store, 'readonly');
+      const request = transaction.objectStore(store).getAll();
+      transaction.oncomplete = () => resolve(request.result as T[]);
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+export async function saveLocal(
+  store: 'requests' | 'configs' | 'references',
+  record: ServiceRequest | RequestConfig | { id: string; payload: unknown },
+): Promise<void> {
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(store, 'readwrite');
+      const records = transaction.objectStore(store);
+      if (store === 'requests') {
+        const serviceRequest = record as ServiceRequest;
+        const current = records.get(serviceRequest.id);
+        current.onsuccess = () => {
+          const issue = requestIdentityIssue(serviceRequest, current.result);
+          if (issue) {
+            reject(new RequestIdentityError(issue));
+            transaction.abort();
+          } else records.put(record);
+        };
+      } else records.put(record);
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+  } finally {
+    db.close();
+  }
+}
