@@ -342,13 +342,13 @@ const navigation: Array<{
     icon: Boxes,
   },
   {
-    key: 'field-settings',
-    label: '后台字段配置',
+    key: 'reference-data',
+    label: '引用数据',
     icon: Database,
   },
   {
-    key: 'reference-data',
-    label: '引用数据',
+    key: 'field-settings',
+    label: '后台字段配置',
     icon: Database,
   },
 ];
@@ -1462,7 +1462,7 @@ function CatalogView(props: CatalogViewProps) {
       <section className="table-panel" aria-label="服务目录列表">
         {props.services.length ? (
           <div className="table-scroll">
-            <table className="service-table">
+            <table className="service-table app-list-table">
               <thead>
                 <tr>
                   <th
@@ -1776,20 +1776,9 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
         </Button>
       </div>
 
-      <div className="reference-context">
-        <div>
-          <Database aria-hidden="true" />
-          <span>
-            <strong>{activeLabel}</strong>
-            <small>Demo 引用主数据</small>
-          </span>
-        </div>
-        <p>这些记录只用于演示业务流程中的选择与关联。</p>
-      </div>
-
       <div className="table-scroll">
         {props.activeTab === 'customers' ? (
-          <table className="reference-table">
+          <table className="reference-table app-list-table">
             <thead>
               <tr>
                 <th>客户名</th>
@@ -1831,7 +1820,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
         ) : null}
 
         {props.activeTab === 'contacts' ? (
-          <table className="reference-table">
+          <table className="reference-table app-list-table">
             <thead>
               <tr>
                 <th>姓名</th>
@@ -1877,7 +1866,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
         ) : null}
 
         {props.activeTab === 'assets' ? (
-          <table className="reference-table">
+          <table className="reference-table app-list-table">
             <thead>
               <tr>
                 <th>所属客户</th>
@@ -1919,7 +1908,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
         ) : null}
 
         {props.activeTab === 'business-objects' ? (
-          <table className="reference-table">
+          <table className="reference-table app-list-table">
             <thead>
               <tr>
                 <th>对象名称</th>

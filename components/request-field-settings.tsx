@@ -188,7 +188,7 @@ export function RequestFieldSettings({
         </div>
         <TabsContent value="request-items">
           <div className="table-scroll">
-            <table className="reference-table">
+            <table className="reference-table app-list-table">
               <thead>
                 <tr>
                   <th>字段名称</th>

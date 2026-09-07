@@ -8,7 +8,19 @@ export type CatalogService = {
   priceUnit: string;
 };
 export type CustomerRef = { id: string; name: string; status: string };
-export type ContactRef = CustomerRef & { customerId: string };
+export type ContactRef = CustomerRef & {
+  customerId: string;
+  phone?: string;
+  email?: string;
+};
+export function contactDisplay(contact: ContactRef) {
+  return {
+    name: contact.name,
+    phone: contact.phone?.trim() || '未填写',
+    email: contact.email?.trim() || '未填写',
+    inactive: contact.status !== '启用',
+  };
+}
 export type ObjectRef = ContactRef & {
   nodeCount: number;
   product?: string;
@@ -174,13 +186,14 @@ export function newRequest(
   title: string,
   customerId: string,
   owner: string,
+  contactId = '',
 ): ServiceRequest {
   const now = new Date().toISOString();
   return {
     id: `SR-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 4).toUpperCase()}`,
     title: title.trim(),
     customerId,
-    contactId: '',
+    contactId,
     description: '',
     owner,
     status: '草稿',
@@ -200,6 +213,33 @@ export function requestIdentityIssue(
   }
   if (!record.title.trim()) return '请填写服务请求名称。';
   if (!record.customerId.trim()) return '请选择客户。';
+  if (!record.contactId?.trim()) return '请选择客户联系人。';
+  return null;
+}
+export function requestCreationIssue(
+  record: ServiceRequest,
+  refs: { customers: CustomerRef[]; contacts: ContactRef[] },
+): string | null {
+  const identityIssue = requestIdentityIssue(record);
+  if (identityIssue) return identityIssue;
+  if (
+    !refs.customers.some(
+      (customer) =>
+        customer.id === record.customerId && customer.status === '启用',
+    )
+  ) {
+    return '请选择有效且已启用的客户。';
+  }
+  if (
+    !refs.contacts.some(
+      (contact) =>
+        contact.id === record.contactId &&
+        contact.customerId === record.customerId &&
+        contact.status === '启用',
+    )
+  ) {
+    return '请选择该客户下有效且已启用的联系人。';
+  }
   return null;
 }
 export class RequestIdentityError extends Error {}

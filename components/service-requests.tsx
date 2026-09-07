@@ -18,6 +18,7 @@ import {
 } from '@/components/request-field-settings';
 import type { RequestField } from '@/components/request-field-settings';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
+import { RequestContactField } from '@/components/request-contact-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -38,7 +39,7 @@ import {
 } from '@/components/ui/sheet';
 import {
   checkFile,
-  requestIdentityIssue,
+  requestCreationIssue,
   RequestIdentityError,
   businessObjectsEnabled,
   matchesObjectProduct,
@@ -128,6 +129,11 @@ export function RequestWorkspace(props: Props) {
   const [createOpen, setCreateOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
   const [createCustomer, setCreateCustomer] = useState('');
+  const [createContact, setCreateContact] = useState('');
+  const createContacts = props.contacts.filter(
+    (contact) =>
+      contact.customerId === createCustomer && contact.status === '启用',
+  );
   const [addOpen, setAddOpen] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState('');
   const [pendingItem, setPendingItem] = useState<RequestItem | null>(null);
@@ -167,6 +173,7 @@ export function RequestWorkspace(props: Props) {
       handledToken.current = props.createToken;
       setCreateTitle('');
       setCreateCustomer('');
+      setCreateContact('');
       setCreateOpen(true);
     }
   }, [props.createToken]);
@@ -195,18 +202,15 @@ export function RequestWorkspace(props: Props) {
   }
   async function createDraft() {
     if (!ready || busy) return;
-    const record = newRequest(createTitle, createCustomer, props.currentRole);
-    const issue = requestIdentityIssue(record);
+    const record = newRequest(
+      createTitle,
+      createCustomer,
+      props.currentRole,
+      createContact,
+    );
+    const issue = requestCreationIssue(record, props);
     if (issue) {
       setError(issue);
-      return;
-    }
-    if (
-      !props.customers.some(
-        (c) => c.id === record.customerId && c.status === '启用',
-      )
-    ) {
-      setError('请选择有效且已启用的客户。');
       return;
     }
     if (await persist(record, '草稿已创建，可以逐项完善申请内容')) {
@@ -318,11 +322,6 @@ export function RequestWorkspace(props: Props) {
 
   return (
     <div className="sr-workspace">
-      <div className="sr-local-note">
-        <span className="sr-local-dot" />
-        本地演示 ·
-        草稿与附件保存在当前浏览器，不上传云端。清除站点数据会删除本地资料。
-      </div>
       {error && (
         <div className="sr-error" role="alert">
           {error}
@@ -362,6 +361,7 @@ export function RequestWorkspace(props: Props) {
               onClick={() => {
                 setCreateTitle('');
                 setCreateCustomer('');
+                setCreateContact('');
                 setCreateOpen(true);
               }}
             >
@@ -370,13 +370,8 @@ export function RequestWorkspace(props: Props) {
             </Button>
           </div>
           <section className="sr-panel">
-            <div className="sr-panel-heading">
-              <h2>
-                全部请求 <span>{filtered.length}</span>
-              </h2>
-            </div>
             <div className="sr-table-scroll">
-              <table className="sr-table">
+              <table className="sr-table app-list-table">
                 <thead>
                   <tr>
                     <th>申请主题 / 编号</th>
@@ -577,28 +572,18 @@ export function RequestWorkspace(props: Props) {
                     : '此历史草稿未关联客户，请重新创建请求。'}
                 </small>
               </label>
-              <label>
-                客户联系人 <em>*</em>
-                <select
-                  disabled={readonly || !draft.customerId}
-                  value={draft.contactId}
-                  onChange={(e) => updateDraft({ contactId: e.target.value })}
-                >
-                  <option value="">请选择联系人</option>
-                  {props.contacts
-                    .filter(
-                      (c) =>
-                        c.customerId === draft.customerId &&
-                        (c.status === '启用' || c.id === draft.contactId),
-                    )
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                        {c.status !== '启用' ? '（已停用）' : ''}
-                      </option>
-                    ))}
-                </select>
-              </label>
+              <RequestContactField
+                id="sr-request-contact"
+                contacts={props.contacts.filter(
+                  (c) =>
+                    c.customerId === draft.customerId &&
+                    (c.status === '启用' || c.id === draft.contactId),
+                )}
+                value={draft.contactId}
+                onChange={(contactId) => updateDraft({ contactId })}
+                disabled={busy || !draft.customerId}
+                readonly={readonly}
+              />
               <label htmlFor="sr-owner">
                 发起人
                 <Input id="sr-owner" value={draft.owner} disabled />
@@ -808,6 +793,7 @@ export function RequestWorkspace(props: Props) {
                 aria-describedby="sr-create-customer-hint"
                 onChange={(e) => {
                   setCreateCustomer(e.target.value);
+                  setCreateContact('');
                   setError('');
                 }}
               >
@@ -827,6 +813,28 @@ export function RequestWorkspace(props: Props) {
                 创建后不可修改客户
               </span>
             </label>
+            <RequestContactField
+              id="sr-create-contact"
+              contacts={createContacts}
+              value={createContact}
+              disabled={busy || !createCustomer || createContacts.length === 0}
+              onChange={(contactId) => {
+                setCreateContact(contactId);
+                setError('');
+              }}
+              placeholder={
+                !createCustomer
+                  ? '请先选择客户'
+                  : createContacts.length === 0
+                    ? '该客户暂无可用联系人'
+                    : '请选择联系人'
+              }
+              hint={
+                createCustomer && createContacts.length === 0
+                  ? '请先在客户资料中维护已启用的联系人。'
+                  : undefined
+              }
+            />
           </div>
           {error && (
             <p className="sr-error" role="alert">
