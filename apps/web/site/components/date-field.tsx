@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { CalendarDays } from 'lucide-react';
@@ -13,17 +13,25 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 
-export function RequestServiceDate({
+export function DateField({
+  id,
+  label = '日期',
   value,
   onChange,
   readonly = false,
   disabled = false,
+  required = false,
 }: {
+  id?: string;
+  label?: string;
   value: string;
   onChange: (value: string) => void;
   readonly?: boolean;
   disabled?: boolean;
+  required?: boolean;
 }) {
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
   const [open, setOpen] = useState(false);
   const parsed = value ? parseISO(value) : undefined;
   const selected = parsed && isValid(parsed) ? parsed : undefined;
@@ -35,17 +43,23 @@ export function RequestServiceDate({
 
   return (
     <div className="sr-service-date-field">
-      <label htmlFor="sr-expected-service-date">期望服务日期</label>
+      <label htmlFor={fieldId}>
+        <span>
+          {label}
+          {required ? (
+            <>
+              {' '}
+              <em>*</em>
+            </>
+          ) : null}
+        </span>
+      </label>
       {readonly ? (
-        <Input
-          id="sr-expected-service-date"
-          value={value || '未填写'}
-          readOnly
-        />
+        <Input id={fieldId} value={value || '未填写'} readOnly />
       ) : (
         <Popover open={open && !disabled} onOpenChange={setOpen}>
           <PopoverTrigger
-            id="sr-expected-service-date"
+            id={fieldId}
             disabled={disabled}
             render={<Button type="button" variant="outline" />}
             className="sr-service-date-trigger"
@@ -57,7 +71,7 @@ export function RequestServiceDate({
           <PopoverContent
             align="start"
             className="sr-service-date-popover"
-            aria-label="选择期望服务日期"
+            aria-label={'选择' + label}
           >
             <Calendar
               mode="single"

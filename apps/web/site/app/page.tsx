@@ -1,6 +1,26 @@
 'use client';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { CatalogHistory } from '@/components/catalog-history';
+import {
+  resolveOperationActor,
+  operationIdentities,
+  ensureLocalInternalUsers,
+  fixedIdentityRoles,
+} from '@/lib/internal-users';
+import {
+  resolvePortalContext,
+  portalSwitchIdentities,
+  type PortalContext,
+} from '@/lib/portal-context';
+import type { OperationActor } from '@/lib/request-operations';
+import {
+  ensurePartnerSamples,
+  samplePartners,
+  samplePartnerUsers,
+  type Partner,
+  type PartnerUser,
+} from '@/lib/partner-directory';
+import { migrateRoleLabel } from '@/lib/request-operations';
 
 import { useEffect, useMemo, useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
@@ -44,12 +64,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { DateField } from '@/components/date-field';
 import {
   readLocal,
   saveLocal,
   type InternalUser,
 } from '@/lib/service-requests';
 import { businessObjectProducts } from '@/lib/product-dictionary';
+import {
+  serviceCertificationOptions,
+  catalogCertificationOptions,
+  certificationUsers,
+  createServiceCertification,
+  ensureCertificationSamples,
+  type ServiceCertification,
+} from '@/lib/service-certifications';
 import {
   RequestWorkspace,
   RequestCatalogSettings,
@@ -73,12 +102,14 @@ type ReferenceTab =
   | 'contacts'
   | 'assets'
   | 'business-objects'
-  | 'users';
+  | 'users'
+  | 'partners'
+  | 'partner-users'
+  | 'service-certifications';
 type AssetStatus = '启用' | '停用' | '使用中' | '已使用';
 type MasterDataStatus = '启用' | '停用';
 type ResponsibleTeam = (typeof responsibleTeams)[number];
 type BusinessObjectProduct = (typeof businessObjectProducts)[number];
-type RoleName = (typeof roles)[number];
 type ServiceCategory = (typeof serviceCategories)[number];
 type CatalogForm = {
   category: ServiceCategory;
@@ -94,7 +125,6 @@ type CatalogForm = {
   internalNote: string;
 };
 
-const roles = ['系统管理员', '销售', '项目经理', '服务工程师', '客户'] as const;
 const responsibleTeams = ['金融', '商业', '港澳', '其他'] as const;
 const serviceCategories = [
   '产品实施交付',
@@ -317,7 +347,7 @@ const initialBusinessObjects: BusinessObject[] = [
   },
 ];
 
-const initialUsers: User[] = [
+const initialUsers: User[] = ensureLocalInternalUsers([
   {
     id: 'USR-001',
     name: '王琪',
@@ -353,7 +383,7 @@ const initialUsers: User[] = [
     department: '客户成功部',
     status: '启用',
   },
-];
+]);
 
 function normalizeBusinessObjects(
   records: StoredBusinessObject[],
@@ -379,12 +409,14 @@ const referenceTabs: Array<{
   { value: 'contacts', label: '联系人', icon: ContactRound },
   { value: 'assets', label: '服务资产', icon: Server },
   { value: 'business-objects', label: '业务对象', icon: Network },
-  { value: 'users', label: '用户', icon: Users },
+  { value: 'users', label: '内部用户', icon: Users },
+  { value: 'partners', label: '合作伙伴', icon: Building2 },
+  { value: 'partner-users', label: '合作伙伴用户', icon: ContactRound },
+  { value: 'service-certifications', label: '服务认证', icon: ClipboardList },
 ];
 
 const COPY = {
   appName: '服务管理中心',
-  workspace: '北京志凌海纳',
   catalogTitle: '服务目录',
   catalogDescription: '统一维护可交付服务的范围、计价规则与服务约束。',
 };
@@ -442,10 +474,12 @@ function StatusCapsule({ status }: { status: ServiceStatus }) {
 }
 
 function SideNavigation({
+  portal,
   activeView,
   onSelect,
   onNavigate,
 }: {
+  portal: PortalContext;
   activeView: ViewKey;
   onSelect: (view: ViewKey) => void;
   onNavigate?: () => void;
@@ -453,51 +487,63 @@ function SideNavigation({
   return (
     <aside className="app-sidebar" aria-label="主导航">
       <div className="workspace-switcher">
-        <strong>{COPY.workspace}</strong>
+        <strong
+          title={portal.organizationName.replace(/（模拟）|\(模拟\)/g, '')}
+        >
+          {portal.organizationName.replace(/（模拟）|\(模拟\)/g, '')}
+        </strong>
       </div>
 
       <nav className="sidebar-groups">
-        {navigation.map((item) => (
-          <div className="sidebar-group" key={item.label}>
-            <button
-              type="button"
-              className="sidebar-item"
-              data-active={activeView === item.key || undefined}
-              aria-current={activeView === item.key ? 'page' : undefined}
-              onClick={() => {
-                onSelect(item.key);
-                onNavigate?.();
-              }}
-            >
-              <item.icon aria-hidden="true" />
-              <span>{item.label}</span>
-            </button>
-          </div>
-        ))}
+        {navigation
+          .filter((item) => portal.views.includes(item.key))
+          .map((item) => (
+            <div className="sidebar-group" key={item.label}>
+              <button
+                type="button"
+                className="sidebar-item"
+                data-active={activeView === item.key || undefined}
+                aria-current={activeView === item.key ? 'page' : undefined}
+                onClick={() => {
+                  onSelect(item.key);
+                  onNavigate?.();
+                }}
+              >
+                <item.icon aria-hidden="true" />
+                <span>{item.label}</span>
+              </button>
+            </div>
+          ))}
       </nav>
     </aside>
   );
 }
 
 function Header({
-  currentRole,
-  onRoleChange,
+  portal,
+  identitySources,
+  currentActor,
+  identities,
+  onUserChange,
   onOpenMenu,
 }: {
-  currentRole: RoleName;
-  onRoleChange: (role: RoleName) => void;
+  portal: PortalContext;
+  identitySources: Parameters<typeof resolvePortalContext>[1];
+  currentActor: OperationActor;
+  identities: OperationActor[];
+  onUserChange: (id: string) => void;
   onOpenMenu: () => void;
 }) {
   return (
     <header className="topbar">
-      <div className="topbar-brand" aria-label="SmartX 服务管理中心">
+      <div className="topbar-brand" aria-label={`SmartX ${portal.title}`}>
         {/* oxlint-disable-next-line next/no-img-element -- using the exact SmartX CDN wordmark from the reference console */}
         <img
           src="https://cdn.smartx.com/partner-connect/navigation/smartx-badge-on-light-horizontal.svg"
           alt="SmartX"
         />
         <span className="topbar-brand-divider" aria-hidden="true" />
-        <strong>服务管理中心</strong>
+        <strong>{portal.title}</strong>
       </div>
       <Button
         className="mobile-menu"
@@ -529,11 +575,23 @@ function Header({
               <button
                 className="user-menu role-switcher"
                 type="button"
-                aria-label={`当前角色：${currentRole}，切换角色`}
+                aria-label={`当前用户：${currentActor.name || '未选择'}，切换身份`}
               />
             }
           >
-            <span>{currentRole}</span>
+            <span
+              title={
+                currentActor.name
+                  ? `${currentActor.name} · ${currentActor.role}`
+                  : '请选择用户'
+              }
+            >
+              {currentActor.name
+                ? currentActor.name === currentActor.role
+                  ? currentActor.name
+                  : `${currentActor.name} · ${currentActor.role}`
+                : '请选择用户'}
+            </span>
             <ChevronDown aria-hidden="true" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -542,17 +600,21 @@ function Header({
             sideOffset={6}
           >
             <DropdownMenuRadioGroup
-              value={currentRole}
-              onValueChange={(value) => onRoleChange(value as RoleName)}
+              value={currentActor.id}
+              onValueChange={onUserChange}
             >
-              <DropdownMenuLabel>切换角色</DropdownMenuLabel>
-              {roles.map((role) => (
+              <DropdownMenuLabel>切换身份</DropdownMenuLabel>
+              {portalSwitchIdentities(
+                identities,
+                currentActor.id,
+                identitySources,
+              ).map((identity) => (
                 <DropdownMenuRadioItem
                   className="role-menu-item"
-                  key={role}
-                  value={role}
+                  key={identity.id}
+                  value={identity.id}
                 >
-                  {role}
+                  {`${identity.name} · ${resolvePortalContext(identity, identitySources).organizationName.replace(/（模拟）|\(模拟\)/g, '')} · ${identity.role}`}
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
@@ -581,11 +643,13 @@ function MultiChoiceField({
   options,
   values,
   onChange,
+  exclusiveOption,
 }: {
   label: string;
   options: string[];
   values: string[];
   onChange: (values: string[]) => void;
+  exclusiveOption?: string;
 }) {
   return (
     <fieldset className="choice-fieldset">
@@ -601,7 +665,14 @@ function MultiChoiceField({
               onChange={(event) =>
                 onChange(
                   event.target.checked
-                    ? [...values, option]
+                    ? option === exclusiveOption
+                      ? [option]
+                      : [
+                          ...values.filter(
+                            (value) => value !== exclusiveOption,
+                          ),
+                          option,
+                        ]
                     : values.filter((value) => value !== option),
                 )
               }
@@ -615,7 +686,7 @@ function MultiChoiceField({
 }
 
 export default function Home() {
-  const [activeView, setActiveView] = useState<ViewKey>('requests');
+  const [selectedView, setActiveView] = useState<ViewKey>('requests');
   const [requestCreateToken, setRequestCreateToken] = useState(0);
   const [serviceRecords, setServiceRecords] = useState<Service[]>(services);
   const [query, setQuery] = useState('');
@@ -639,7 +710,6 @@ export default function Home() {
     return () => window.removeEventListener('catalog-version-saved', reload);
   }, []);
   const [saved, setSaved] = useState(false);
-  const [currentRole, setCurrentRole] = useState<RoleName>('系统管理员');
   const [catalogForm, setCatalogForm] = useState<CatalogForm>(emptyCatalogForm);
   const [formError, setFormError] = useState('');
   const [detailServiceId, setDetailServiceId] = useState<string | null>(null);
@@ -651,6 +721,32 @@ export default function Home() {
     initialBusinessObjects,
   );
   const [users, setUsers] = useState<User[]>(initialUsers);
+  const [partners, setPartners] = useState<Partner[]>(samplePartners);
+  const [partnerUsers, setPartnerUsers] =
+    useState<PartnerUser[]>(samplePartnerUsers);
+  const [serviceCertifications, setServiceCertifications] = useState<
+    ServiceCertification[]
+  >(() =>
+    ensureCertificationSamples(
+      [],
+      initialUsers,
+      samplePartnerUsers,
+      samplePartners,
+    ),
+  );
+  const [currentUserId, setCurrentUserId] = useState('');
+  const identitySources = { contacts, customers, partnerUsers, partners };
+  const identities = operationIdentities(users, identitySources);
+  const currentActor = resolveOperationActor(
+    users,
+    currentUserId,
+    identitySources,
+  );
+  const currentRole = currentActor.role;
+  const portal = resolvePortalContext(currentActor, identitySources);
+  const activeView = portal.views.includes(selectedView)
+    ? selectedView
+    : (portal.views[0] ?? 'requests');
   const [referenceCreateOpen, setReferenceCreateOpen] = useState(false);
   const [referenceForm, setReferenceForm] = useState<Record<string, string>>(
     {},
@@ -673,6 +769,9 @@ export default function Home() {
         assets: Asset[];
         businessObjects: StoredBusinessObject[];
         users?: User[];
+        partners?: Partner[];
+        partnerUsers?: PartnerUser[];
+        serviceCertifications?: ServiceCertification[];
       };
     }>('references')
       .then((records) => {
@@ -701,11 +800,28 @@ export default function Home() {
           setCustomers(snapshot.customers);
           setContacts(snapshot.contacts);
           setAssets(snapshot.assets);
+          const partnerDirectory = ensurePartnerSamples(
+            Array.isArray(snapshot.partners) ? snapshot.partners : [],
+            Array.isArray(snapshot.partnerUsers) ? snapshot.partnerUsers : [],
+          );
+          setPartners(partnerDirectory.partners);
+          setPartnerUsers(partnerDirectory.partnerUsers);
           setBusinessObjects(
             normalizeBusinessObjects(snapshot.businessObjects),
           );
-          setUsers(
+          const restoredUsers = ensureLocalInternalUsers(
             Array.isArray(snapshot.users) ? snapshot.users : initialUsers,
+          );
+          setUsers(restoredUsers);
+          setServiceCertifications(
+            ensureCertificationSamples(
+              Array.isArray(snapshot.serviceCertifications)
+                ? snapshot.serviceCertifications
+                : [],
+              restoredUsers,
+              partnerDirectory.partnerUsers,
+              partnerDirectory.partners,
+            ),
           );
         }
         setReferencesReady(true);
@@ -735,6 +851,9 @@ export default function Home() {
           assets,
           businessObjects,
           users,
+          partners,
+          partnerUsers,
+          serviceCertifications,
         },
       })
         .then(() => setReferenceStorageError(''))
@@ -754,6 +873,9 @@ export default function Home() {
     assets,
     businessObjects,
     users,
+    partners,
+    partnerUsers,
+    serviceCertifications,
   ]);
 
   const generatedCode = useMemo(() => {
@@ -771,7 +893,20 @@ export default function Home() {
     setCreateOpen(true);
   }
 
+  function switchIdentity(id: string) {
+    if (!identities.some((identity) => identity.id === id)) return;
+    setCurrentUserId(id);
+    setActiveView('requests');
+    setDetailServiceId(null);
+    setCreateOpen(false);
+    setReferenceCreateOpen(false);
+    setMobileNavOpen(false);
+    setQuery('');
+    setRequestCreateToken(0);
+  }
+
   function selectView(view: ViewKey) {
+    if (!portal.views.includes(view)) return;
     setActiveView(view);
     setDetailServiceId(null);
     setQuery('');
@@ -790,6 +925,24 @@ export default function Home() {
   function saveReferenceRecord() {
     const customerId = referenceForm.customerId ?? '';
     const nextNumber = (count: number) => String(count + 1).padStart(3, '0');
+    if (referenceTab === 'service-certifications') {
+      try {
+        const record = createServiceCertification(
+          referenceForm,
+          serviceCertifications,
+          users,
+          partnerUsers,
+          partners,
+        );
+        setServiceCertifications((records) => [...records, record]);
+      } catch (error) {
+        return setReferenceFormError(
+          error instanceof Error
+            ? error.message
+            : '服务认证创建失败，请检查填写内容。',
+        );
+      }
+    }
 
     if (referenceTab === 'customers') {
       if (
@@ -908,6 +1061,60 @@ export default function Home() {
       ]);
     }
 
+    if (referenceTab === 'partners') {
+      const name = (referenceForm.name ?? '').trim();
+      if (
+        !name ||
+        name.length > 120 ||
+        partners.some((record) => record.name === name)
+      )
+        return setReferenceFormError('请填写唯一的合作伙伴名称，最多 120 字。');
+      setPartners((records) => [
+        ...records,
+        {
+          id: `PAR-${nextNumber(records.length)}`,
+          name,
+          status: '启用',
+        },
+      ]);
+    }
+    if (referenceTab === 'partner-users') {
+      const name = (referenceForm.name ?? '').trim();
+      const email = (referenceForm.email ?? '').trim().toLowerCase();
+      const phone = (referenceForm.phone ?? '').replace(/\s/g, '');
+      const partnerId = referenceForm.partnerId ?? '';
+      if (
+        !partners.some(
+          (partner) => partner.id === partnerId && partner.status === '启用',
+        )
+      )
+        return setReferenceFormError(
+          '请选择已启用的合作伙伴；如无选项，请先新建合作伙伴。',
+        );
+      if (
+        !name ||
+        name.length > 80 ||
+        !/^1\d{10}$/.test(phone) ||
+        email.length > 254 ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+        partnerUsers.some((record) => record.email.toLowerCase() === email)
+      )
+        return setReferenceFormError(
+          '请填写姓名（最多 80 字）、11 位手机号和唯一的有效邮箱。',
+        );
+      setPartnerUsers((records) => [
+        ...records,
+        {
+          id: `PUS-${nextNumber(records.length)}`,
+          name,
+          partnerId,
+          phone,
+          email,
+          status: '启用',
+        },
+      ]);
+    }
+
     setReferenceCreateOpen(false);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2600);
@@ -916,7 +1123,7 @@ export default function Home() {
   useEffect(() => {
     const context = (document as Document & { modelContext?: WebMcpContext })
       .modelContext;
-    if (!context?.registerTool) return;
+    if (!context?.registerTool || currentRole !== 'SmartX 系统管理员') return;
 
     const lifecycle = new AbortController();
     const register = (tool: Parameters<WebMcpContext['registerTool']>[0]) => {
@@ -1012,7 +1219,7 @@ export default function Home() {
     });
 
     return () => lifecycle.abort();
-  }, []);
+  }, [currentRole]);
 
   const filteredServices = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -1074,7 +1281,7 @@ export default function Home() {
       updatedAt: now
         .toLocaleString('zh-CN', { hour12: false })
         .replaceAll('/', '-'),
-      owner: editingService?.owner ?? currentRole,
+      owner: editingService?.owner ?? currentActor.name,
       description: catalogForm.description.trim(),
     };
     try {
@@ -1095,7 +1302,11 @@ export default function Home() {
 
   return (
     <div className="app-shell">
-      <SideNavigation activeView={activeView} onSelect={selectView} />
+      <SideNavigation
+        portal={portal}
+        activeView={activeView}
+        onSelect={selectView}
+      />
 
       {mobileNavOpen ? (
         <div className="mobile-nav-layer">
@@ -1116,6 +1327,7 @@ export default function Home() {
               <X />
             </Button>
             <SideNavigation
+              portal={portal}
               activeView={activeView}
               onSelect={selectView}
               onNavigate={() => setMobileNavOpen(false)}
@@ -1126,8 +1338,11 @@ export default function Home() {
 
       <div className="app-main">
         <Header
-          currentRole={currentRole}
-          onRoleChange={setCurrentRole}
+          portal={portal}
+          identitySources={identitySources}
+          currentActor={currentActor}
+          identities={referencesReady ? identities : []}
+          onUserChange={switchIdentity}
           onOpenMenu={() => setMobileNavOpen(true)}
         />
         <main className="content-area">
@@ -1149,7 +1364,8 @@ export default function Home() {
               </h1>
               {activeView === 'reference-data' ? (
                 <p>
-                  维护 Demo 流程中引用的客户、联系人、服务资产、业务对象与用户。
+                  维护 Demo
+                  流程中引用的客户、联系人、服务资产、业务对象、内部用户、合作伙伴与合作伙伴用户。
                 </p>
               ) : null}
             </div>
@@ -1185,15 +1401,29 @@ export default function Home() {
           </section>
 
           {activeView === 'requests' ? (
-            referencesReady ? (
+            referencesReady && portal.views.includes('requests') ? (
               <RequestFieldsContext.Provider value={requestFields}>
                 <RequestWorkspace
+                  key={`${currentActor.id}:${portal.organizationId}`}
                   services={serviceRecords}
                   customers={customers}
                   contacts={contacts}
                   businessObjects={businessObjects}
                   users={users.filter((user) => user.status === '启用')}
+                  assets={assets}
                   currentRole={currentRole}
+                  currentActor={currentActor}
+                  identityDirectory={[...users, ...contacts, ...partnerUsers]}
+                  currentCustomerId={portal.type === 'customer' ? portal.organizationId : undefined}
+                  partnerCollaborators={partnerUsers.filter(
+                    (person) =>
+                      person.status === '启用' &&
+                      partners.some(
+                        (partner) =>
+                          partner.id === person.partnerId &&
+                          partner.status === '启用',
+                      ),
+                  )}
                   createToken={requestCreateToken}
                 />
               </RequestFieldsContext.Provider>
@@ -1277,6 +1507,30 @@ export default function Home() {
               businessObjects={businessObjects}
               users={users}
               onCreate={openReferenceCreation}
+              partners={partners}
+              partnerUsers={partnerUsers}
+              serviceCertifications={serviceCertifications}
+              onDisableCertification={(id) =>
+                setServiceCertifications((records) =>
+                  records.map((record) =>
+                    record.id === id ? { ...record, status: '停用' } : record,
+                  ),
+                )
+              }
+              onDisablePartner={(id) =>
+                setPartners((records) =>
+                  records.map((record) =>
+                    record.id === id ? { ...record, status: '停用' } : record,
+                  ),
+                )
+              }
+              onDisablePartnerUser={(id) =>
+                setPartnerUsers((records) =>
+                  records.map((record) =>
+                    record.id === id ? { ...record, status: '停用' } : record,
+                  ),
+                )
+              }
               onDisableCustomer={(id) =>
                 setCustomers((records) =>
                   records.map((record) =>
@@ -1468,7 +1722,8 @@ export default function Home() {
               />
               <MultiChoiceField
                 label="认证要求"
-                options={['SMTX OS 认证', 'CloudTower 认证', '无认证要求']}
+                exclusiveOption="无认证要求"
+                options={catalogCertificationOptions}
                 values={catalogForm.certifications}
                 onChange={(certifications) =>
                   setCatalogForm((form) => ({ ...form, certifications }))
@@ -1547,6 +1802,9 @@ export default function Home() {
         onOpenChange={setReferenceCreateOpen}
         activeTab={referenceTab}
         customers={customers}
+        partners={partners}
+        users={users}
+        partnerUsers={partnerUsers}
         form={referenceForm}
         setForm={setReferenceForm}
         error={referenceFormError}
@@ -1696,7 +1954,7 @@ function CatalogView(props: CatalogViewProps) {
                     <td>
                       <div className="updated-cell">
                         <span>{service.updatedAt.split(/[T ]/)[0]}</span>
-                        <small>{service.owner}</small>
+                        <small>{migrateRoleLabel(service.owner)}</small>
                       </div>
                     </td>
                     <td>
@@ -1850,7 +2108,7 @@ function CatalogDetail({
             <dl>
               <div>
                 <dt>创建人</dt>
-                <dd>{service.owner}</dd>
+                <dd>{migrateRoleLabel(service.owner)}</dd>
               </div>
               <div>
                 <dt>创建时间</dt>
@@ -1858,7 +2116,7 @@ function CatalogDetail({
               </div>
               <div>
                 <dt>上次修改人</dt>
-                <dd>{service.owner}</dd>
+                <dd>{migrateRoleLabel(service.owner)}</dd>
               </div>
               <div>
                 <dt>上次修改时间</dt>
@@ -1888,6 +2146,12 @@ type ReferenceDataViewProps = {
   assets: Asset[];
   businessObjects: BusinessObject[];
   users: User[];
+  partners: Partner[];
+  partnerUsers: PartnerUser[];
+  serviceCertifications: ServiceCertification[];
+  onDisableCertification: (id: string) => void;
+  onDisablePartner: (id: string) => void;
+  onDisablePartnerUser: (id: string) => void;
   onCreate: () => void;
   onDisableCustomer: (id: string) => void;
   onDisableContact: (id: string) => void;
@@ -1920,6 +2184,9 @@ function DisableRecordAction({
 }
 
 function ReferenceDataView(props: ReferenceDataViewProps) {
+  const partnerNames = new Map(
+    props.partners.map((partner) => [partner.id, partner.name]),
+  );
   const customerNames = new Map(
     props.customers.map((customer) => [customer.id, customer.name]),
   );
@@ -1931,6 +2198,9 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
     assets: props.assets.length,
     'business-objects': props.businessObjects.length,
     users: props.users.length,
+    partners: props.partners.length,
+    'partner-users': props.partnerUsers.length,
+    'service-certifications': props.serviceCertifications.length,
   };
 
   return (
@@ -2156,6 +2426,173 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
           </table>
         ) : null}
 
+        {props.activeTab === 'partners' ? (
+          <table className="reference-table app-list-table">
+            <thead>
+              <tr>
+                <th>合作伙伴名称</th>
+                <th>状态</th>
+                <th>记录编号</th>
+                <th className="actions-column">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {props.partners.length === 0 ? (
+                <tr>
+                  <td colSpan={4}>暂无合作伙伴，点击“新建合作伙伴”添加。</td>
+                </tr>
+              ) : (
+                props.partners.map((record) => (
+                  <tr key={record.id}>
+                    <td>
+                      <strong>{record.name}</strong>
+                    </td>
+                    <td>
+                      <span
+                        className="reference-status"
+                        data-status={record.status}
+                      >
+                        {record.status}
+                      </span>
+                    </td>
+                    <td>
+                      <code>{record.id}</code>
+                    </td>
+                    <td>
+                      <DisableRecordAction
+                        isDisabled={record.status === '停用'}
+                        label={`合作伙伴 ${record.name}`}
+                        onDisable={() => props.onDisablePartner(record.id)}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        ) : null}
+
+        {props.activeTab === 'partner-users' ? (
+          <table className="reference-table app-list-table">
+            <thead>
+              <tr>
+                <th>姓名</th>
+                <th>所属合作伙伴</th>
+                <th>手机号</th>
+                <th>邮箱</th>
+                <th>状态</th>
+                <th>记录编号</th>
+                <th className="actions-column">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {props.partnerUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    暂无合作伙伴用户，请先维护合作伙伴，再添加用户。
+                  </td>
+                </tr>
+              ) : (
+                props.partnerUsers.map((record) => (
+                  <tr key={record.id}>
+                    <td>
+                      <strong>{record.name}</strong>
+                    </td>
+                    <td>{partnerNames.get(record.partnerId) ?? '—'}</td>
+                    <td>{record.phone}</td>
+                    <td>{record.email}</td>
+                    <td>
+                      <span
+                        className="reference-status"
+                        data-status={record.status}
+                      >
+                        {record.status}
+                      </span>
+                    </td>
+                    <td>
+                      <code>{record.id}</code>
+                    </td>
+                    <td>
+                      <DisableRecordAction
+                        isDisabled={record.status === '停用'}
+                        label={`合作伙伴用户 ${record.name}`}
+                        onDisable={() => props.onDisablePartnerUser(record.id)}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        ) : null}
+
+        {props.activeTab === 'service-certifications' ? (
+          <table className="reference-table app-list-table">
+            <thead>
+              <tr>
+                <th>认证内容</th>
+                <th>用户类型</th>
+                <th>认证用户</th>
+                <th>到期日</th>
+                <th>状态</th>
+                <th>记录编号</th>
+                <th className="actions-column">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {props.serviceCertifications.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>暂无服务认证，点击“新建服务认证”添加。</td>
+                </tr>
+              ) : (
+                props.serviceCertifications.map((record) => {
+                  const directory =
+                    record.holderType === 'internal'
+                      ? props.users
+                      : props.partnerUsers;
+                  const userName =
+                    directory.find((person) => person.id === record.userId)
+                      ?.name ?? record.userName;
+                  return (
+                    <tr key={record.id}>
+                      <td>
+                        <strong>{record.certification}</strong>
+                      </td>
+                      <td>
+                        {record.holderType === 'internal'
+                          ? '内部用户'
+                          : '合作伙伴用户'}
+                      </td>
+                      <td>{userName}</td>
+                      <td>{record.expiresOn}</td>
+                      <td>
+                        <span
+                          className="reference-status"
+                          data-status={record.status}
+                        >
+                          {record.status}
+                        </span>
+                      </td>
+                      <td>
+                        <code>{record.id}</code>
+                      </td>
+                      <td>
+                        <DisableRecordAction
+                          isDisabled={record.status === '停用'}
+                          label={`服务认证 ${userName} ${record.certification}`}
+                          onDisable={() =>
+                            props.onDisableCertification(record.id)
+                          }
+                        />
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        ) : null}
+
         {props.activeTab === 'users' ? (
           <table className="reference-table app-list-table">
             <thead>
@@ -2163,6 +2600,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                 <th>姓名</th>
                 <th>邮箱</th>
                 <th>部门</th>
+                <th>角色</th>
                 <th>状态</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
@@ -2176,6 +2614,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   </td>
                   <td>{record.email}</td>
                   <td>{record.department}</td>
+                  <td>{fixedIdentityRoles[record.id] ?? '—'}</td>
                   <td>
                     <span
                       className="reference-status"
@@ -2190,7 +2629,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={`用户 ${record.name}`}
+                      label={`内部用户 ${record.name}`}
                       onDisable={() => props.onDisableUser(record.id)}
                     />
                   </td>
@@ -2209,6 +2648,9 @@ type ReferenceCreateDialogProps = {
   onOpenChange: (open: boolean) => void;
   activeTab: ReferenceTab;
   customers: Customer[];
+  partners: Partner[];
+  users: User[];
+  partnerUsers: PartnerUser[];
   form: Record<string, string>;
   setForm: Dispatch<SetStateAction<Record<string, string>>>;
   error: string;
@@ -2455,6 +2897,85 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
               </p>
             </>
           ) : null}
+          {props.activeTab === 'partners' ? (
+            <label htmlFor="partner-name">
+              <span>
+                合作伙伴名称 <em>*</em>
+              </span>
+              <Input
+                id="partner-name"
+                maxLength={120}
+                value={props.form.name ?? ''}
+                onChange={(event) => update('name', event.target.value)}
+                placeholder="请输入合作伙伴名称"
+              />
+            </label>
+          ) : null}
+          {props.activeTab === 'partner-users' ? (
+            <>
+              <label htmlFor="partner-user-name">
+                <span>
+                  姓名 <em>*</em>
+                </span>
+                <Input
+                  id="partner-user-name"
+                  maxLength={80}
+                  value={props.form.name ?? ''}
+                  onChange={(event) => update('name', event.target.value)}
+                  placeholder="请输入合作伙伴用户姓名"
+                />
+              </label>
+              <label htmlFor="partner-user-partner">
+                <span>
+                  所属合作伙伴 <em>*</em>
+                </span>
+                <select
+                  id="partner-user-partner"
+                  value={props.form.partnerId ?? ''}
+                  onChange={(event) => update('partnerId', event.target.value)}
+                >
+                  <option value="">请选择合作伙伴</option>
+                  {props.partners
+                    .filter((partner) => partner.status === '启用')
+                    .map((partner) => (
+                      <option key={partner.id} value={partner.id}>
+                        {partner.name}
+                      </option>
+                    ))}
+                </select>
+                {!props.partners.some(
+                  (partner) => partner.status === '启用',
+                ) ? (
+                  <span>暂无已启用的合作伙伴，请先在“合作伙伴”中创建。</span>
+                ) : null}
+              </label>
+              <label htmlFor="partner-user-phone">
+                <span>
+                  手机号 <em>*</em>
+                </span>
+                <Input
+                  id="partner-user-phone"
+                  type="tel"
+                  value={props.form.phone ?? ''}
+                  onChange={(event) => update('phone', event.target.value)}
+                  placeholder="请输入 11 位手机号"
+                />
+              </label>
+              <label htmlFor="partner-user-email">
+                <span>
+                  邮箱 <em>*</em>
+                </span>
+                <Input
+                  id="partner-user-email"
+                  type="email"
+                  maxLength={254}
+                  value={props.form.email ?? ''}
+                  onChange={(event) => update('email', event.target.value)}
+                  placeholder="例如：name@example.com"
+                />
+              </label>
+            </>
+          ) : null}
           {props.activeTab === 'users' ? (
             <>
               <label htmlFor="user-name">
@@ -2465,7 +2986,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   id="user-name"
                   value={props.form.name ?? ''}
                   onChange={(event) => update('name', event.target.value)}
-                  placeholder="请输入用户姓名"
+                  placeholder="请输入内部用户姓名"
                 />
               </label>
               <label htmlFor="user-email">
@@ -2491,6 +3012,79 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   placeholder="例如：技术服务部"
                 />
               </label>
+            </>
+          ) : null}
+          {props.activeTab === 'service-certifications' ? (
+            <>
+              <label htmlFor="certification-content">
+                <span>
+                  认证内容 <em>*</em>
+                </span>
+                <select
+                  id="certification-content"
+                  value={props.form.certification ?? ''}
+                  onChange={(event) =>
+                    update('certification', event.target.value)
+                  }
+                >
+                  <option value="">请选择认证内容</option>
+                  {serviceCertificationOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label htmlFor="certification-holder-type">
+                <span>
+                  用户类型 <em>*</em>
+                </span>
+                <select
+                  id="certification-holder-type"
+                  value={props.form.holderType ?? ''}
+                  onChange={(event) =>
+                    props.setForm((form) => ({
+                      ...form,
+                      holderType: event.target.value,
+                      userId: '',
+                    }))
+                  }
+                >
+                  <option value="">请选择用户类型</option>
+                  <option value="internal">内部用户</option>
+                  <option value="partner">合作伙伴用户</option>
+                </select>
+              </label>
+              <label htmlFor="certification-user">
+                <span>
+                  认证用户 <em>*</em>
+                </span>
+                <select
+                  id="certification-user"
+                  disabled={!props.form.holderType}
+                  value={props.form.userId ?? ''}
+                  onChange={(event) => update('userId', event.target.value)}
+                >
+                  <option value="">请选择已启用用户</option>
+                  {certificationUsers(
+                    props.form.holderType,
+                    props.users,
+                    props.partnerUsers,
+                    props.partners,
+                  ).map((person) => (
+                    <option key={person.id} value={person.id}>
+                      {person.name} · {person.email}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <DateField
+                id="certification-expires-on"
+                label="到期日"
+                required
+                value={props.form.expiresOn ?? ''}
+                onChange={(date) => update('expiresOn', date)}
+              />
             </>
           ) : null}
           {props.error ? (

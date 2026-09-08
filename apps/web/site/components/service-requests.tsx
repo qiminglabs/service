@@ -21,7 +21,10 @@ import type { RequestField } from '@/components/request-field-settings';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
 import { RequestContactField } from '@/components/request-contact-field';
 import { RequestStatusProgress } from '@/components/request-status-progress';
-import { RequestServiceDate } from '@/components/request-service-date';
+import { DateField } from '@/components/date-field';
+import { RequestOperationsTabs } from '@/components/request-operations';
+import { appendActivity, isInternal, migrateRoleLabel } from '@/lib/request-operations';
+import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import {
   RequestExternalCollaborators,
   RequestInternalInfo,
@@ -45,6 +48,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  canAccessRequest,
+  canCreateRequest,
+  requestCreationAccessIssue,
   checkFile,
   requestCreationIssue,
   requestStatuses,
@@ -87,7 +93,12 @@ type Props = {
   contacts: ContactRef[];
   businessObjects: ObjectRef[];
   users: InternalUser[];
+  assets: RequestAsset[];
   currentRole: string;
+  currentActor: OperationActor;
+  identityDirectory: { id: string; name: string }[];
+  currentCustomerId?: string;
+  partnerCollaborators: { id: string; name: string; phone: string; email: string; status: string }[];
   createToken: number;
 };
 const dateLabel = (value: string) =>
@@ -128,6 +139,9 @@ function configForEditing(
 }
 
 export function RequestWorkspace(props: Props) {
+  const access = { actor: props.currentActor, directory: props.identityDirectory, customerId: props.currentCustomerId };
+  const customerPortal = props.currentActor.role === '客户';
+  const canCreate = canCreateRequest(access);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [configs, setConfigs] = useState<RequestConfig[]>([]);
   const [ready, setReady] = useState(false);
@@ -139,7 +153,8 @@ export function RequestWorkspace(props: Props) {
   const [draft, setDraft] = useState<ServiceRequest | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
-  const [createCustomer, setCreateCustomer] = useState('');
+  const [selectedCustomer, setCreateCustomer] = useState('');
+  const createCustomer = customerPortal ? (props.currentCustomerId ?? '') : selectedCustomer;
   const [createContact, setCreateContact] = useState('');
   const createContacts = props.contacts.filter(
     (contact) =>
@@ -168,9 +183,9 @@ export function RequestWorkspace(props: Props) {
       readLocal<RequestConfig>('configs'),
     ])
       .then(([records, settings]) => {
-        setRequests(
-          records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-        );
+        const visible = records.filter((record) => canAccessRequest(record, access));
+        setRequests(visible.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+        setDraft((current) => current && !visible.some((record) => record.id === current.id) ? null : current);
         setConfigs(settings.map(normalizeRequestConfig));
         setReady(true);
         setError('');
@@ -180,14 +195,18 @@ export function RequestWorkspace(props: Props) {
       });
   }
   useEffect(() => {
-    void load();
+    let active = true;
+    const refresh = () => { if (active) void load(); };
+    refresh();
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
   }, []);
   useEffect(() => {
-    if (props.createToken > handledToken.current) {
+    if (canCreate && props.createToken > handledToken.current) {
       handledToken.current = props.createToken;
       setCreateTitle('');
       setCreateCustomer('');
-      setCreateContact('');
+      setCreateContact(customerPortal ? props.currentActor.id : '');
       setCreateOpen(true);
     }
   }, [props.createToken]);
@@ -199,9 +218,9 @@ export function RequestWorkspace(props: Props) {
     setError('');
     const next = { ...record, updatedAt: new Date().toISOString() };
     try {
-      await saveLocal('requests', next);
-      setRequests((old) => [next, ...old.filter((r) => r.id !== next.id)]);
-      setDraft(next);
+      await saveLocal('requests', next, access);
+      setRequests((old) => [next, ...old.filter((r) => r.id !== next.id)].filter((record) => canAccessRequest(record, access)));
+      setDraft(canAccessRequest(next, access) ? next : null);
       setNotice(message);
       return true;
     } catch (error) {
@@ -215,14 +234,15 @@ export function RequestWorkspace(props: Props) {
     }
   }
   async function createDraft() {
-    if (!ready || busy) return;
+    if (!ready || busy || !canCreate) return;
     const record = newRequest(
       createTitle,
       createCustomer,
-      props.currentRole,
+      props.currentActor.name || props.currentRole,
       createContact,
+      props.currentActor.id,
     );
-    const issue = requestCreationIssue(record, props);
+    const issue = requestCreationAccessIssue(record, access) ?? requestCreationIssue(record, props);
     if (issue) {
       setError(issue);
       return;
@@ -320,6 +340,7 @@ export function RequestWorkspace(props: Props) {
   const completeCount =
     draft?.items.filter((item) => !itemIssues(item).length).length ?? 0;
   const filtered = requests.filter((record) => {
+    if (!canAccessRequest(record, access)) return false;
     const customer =
       props.customers.find((c) => c.id === record.customerId)?.name ?? '';
     return (
@@ -344,6 +365,17 @@ export function RequestWorkspace(props: Props) {
   ) {
     setDraft((record) => (record ? { ...record, ...patch } : record));
     setNotice('有未保存的修改');
+  }
+
+  function updateCollaborators(patch: Partial<Pick<ServiceRequest, 'externalCollaborators' | 'internalParticipants'>>) {
+    if (!draft || busy || !isInternal(props.currentRole)) return;
+    if (!props.currentActor.id) { setError('请先在右上角选择一个启用的内部用户。'); return; }
+    if (!readonly) { updateDraft(patch); return; }
+    const external = 'externalCollaborators' in patch;
+    const before = external ? (draft.externalCollaborators ?? []).map(p => p.name) : (draft.internalParticipants ?? []).map(p => p.name);
+    const after = external ? (patch.externalCollaborators ?? []).map(p => p.name) : (patch.internalParticipants ?? []).map(p => p.name);
+    const detail = `变更前：${before.join('、') || '无'}；变更后：${after.join('、') || '无'}`;
+    void persist(appendActivity({ ...draft, ...patch }, props.currentActor, '协作', external ? '更新外部协作人' : '更新内部协作人', detail), '协作人已保存');
   }
 
   const feedback = (
@@ -395,18 +427,18 @@ export function RequestWorkspace(props: Props) {
                 ))}
               </select>
             </div>
-            <Button
+            {canCreate && <Button
               disabled={!ready || busy}
               onClick={() => {
                 setCreateTitle('');
                 setCreateCustomer('');
-                setCreateContact('');
+                setCreateContact(customerPortal ? props.currentActor.id : '');
                 setCreateOpen(true);
               }}
             >
               <Plus size={16} />
               新建服务请求
-            </Button>
+            </Button>}
           </div>
           <section className="sr-panel">
             <div className="sr-table-scroll">
@@ -455,7 +487,7 @@ export function RequestWorkspace(props: Props) {
                       </td>
                       <td>
                         {dateLabel(record.updatedAt)}
-                        <small>{record.owner}</small>
+                        <small>{migrateRoleLabel(record.owner)}</small>
                       </td>
                       <td>
                         <Button
@@ -571,8 +603,30 @@ export function RequestWorkspace(props: Props) {
               </p>
             </section>
           )}
-          <div className="sr-detail-layout">
-            <div className="sr-detail-main">
+              <RequestOperationsTabs key={draft.id} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
+            <aside className="sr-collaboration-column" aria-label="协作人">
+              <RequestExternalCollaborators
+                contacts={[...props.contacts.filter(
+                  (contact) => contact.customerId === draft.customerId && contact.status === '启用',
+                ), ...props.partnerCollaborators.map((person) => ({ ...person, customerId: draft.customerId }))]}
+                value={draft.externalCollaborators ?? []}
+                readonly={!isInternal(props.currentRole)}
+                busy={busy}
+                onChange={(externalCollaborators) =>
+                  updateCollaborators({ externalCollaborators })
+                }
+              />
+              {isInternal(props.currentRole) && <RequestInternalInfo
+                users={props.users}
+                value={draft.internalParticipants ?? []}
+                readonly={false}
+                busy={busy}
+                onChange={(internalParticipants) =>
+                  updateCollaborators({ internalParticipants })
+                }
+              />}
+            </aside>
+              }>
               <section className="sr-panel">
                 <div className="sr-panel-heading">
                   <h3>基本信息</h3>
@@ -616,7 +670,9 @@ export function RequestWorkspace(props: Props) {
                     disabled={busy || !draft.customerId}
                     readonly={readonly}
                   />
-                  <RequestServiceDate
+                  <DateField
+                    id="sr-expected-service-date"
+                    label="期望服务日期"
                     value={draft.expectedServiceDate ?? ''}
                     readonly={readonly}
                     disabled={busy}
@@ -643,7 +699,7 @@ export function RequestWorkspace(props: Props) {
                     <h3>
                       申请项 <span>{draft.items.length}</span>
                     </h3>
-                    <p>点击申请项中的材料入口，在弹窗中填写或上传。</p>
+                    <p>{readonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
                   </div>
                   {!readonly && (
                     <Button
@@ -799,37 +855,11 @@ export function RequestWorkspace(props: Props) {
                   </div>
                   <div>
                     <dt>创建人</dt>
-                    <dd>{draft.createdBy ?? draft.owner ?? '—'}</dd>
+                    <dd>{migrateRoleLabel(draft.createdBy ?? draft.owner ?? '—')}</dd>
                   </div>
                 </dl>
               </section>
-            </div>
-            <aside className="sr-collaboration-column" aria-label="协作人">
-              <RequestExternalCollaborators
-                contacts={props.contacts.filter(
-                  (contact) =>
-                    contact.customerId === draft.customerId &&
-                    contact.id !== draft.contactId &&
-                    contact.status === '启用',
-                )}
-                value={draft.externalCollaborators ?? []}
-                readonly={readonly}
-                busy={busy}
-                onChange={(externalCollaborators) =>
-                  updateDraft({ externalCollaborators })
-                }
-              />
-              <RequestInternalInfo
-                users={props.users}
-                value={draft.internalParticipants ?? []}
-                readonly={readonly}
-                busy={busy}
-                onChange={(internalParticipants) =>
-                  updateDraft({ internalParticipants })
-                }
-              />
-            </aside>
-          </div>
+              </RequestOperationsTabs>
         </>
       )}
 
@@ -853,7 +883,7 @@ export function RequestWorkspace(props: Props) {
         />
       )}
       <Dialog
-        open={createOpen}
+        open={canCreate && createOpen}
         onOpenChange={(open) => {
           if (!busy) setCreateOpen(open);
         }}
@@ -877,7 +907,7 @@ export function RequestWorkspace(props: Props) {
                 placeholder="填写本次申请主题"
               />
             </label>
-            <label>
+            {!customerPortal && <label>
               客户 <em>*</em>
               <select
                 required
@@ -905,7 +935,7 @@ export function RequestWorkspace(props: Props) {
               >
                 创建后不可修改客户
               </span>
-            </label>
+            </label>}
             <RequestContactField
               id="sr-create-contact"
               contacts={createContacts}
@@ -943,7 +973,7 @@ export function RequestWorkspace(props: Props) {
               取消
             </Button>
             <Button
-              disabled={!ready || busy}
+              disabled={!ready || busy || !canCreate}
               onClick={() => void createDraft()}
             >
               {busy ? '正在保存…' : '创建草稿'}
@@ -1157,7 +1187,7 @@ export function RequestWorkspace(props: Props) {
             <DialogTitle>确认提交服务请求</DialogTitle>
             <DialogDescription>
               共 {draft?.items.length}{' '}
-              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 PMO
+              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX 员工
               核查材料、服务范围和依据。这不是客户对计费的确认。
             </DialogDescription>
           </DialogHeader>
@@ -1185,12 +1215,12 @@ export function RequestWorkspace(props: Props) {
                 }
                 if (
                   await persist(
-                    {
+                    appendActivity({
                       ...draft,
                       status: '待评估',
                       submittedAt: new Date().toISOString(),
-                    },
-                    '已提交，等待 PMO 评估',
+                    }, props.currentActor, '提交', '提交服务请求', '请求进入待评估，基本信息和申请项已锁定'),
+                    '已提交，等待 SmartX 员工评估',
                   )
                 ) {
                   setSubmitOpen(false);

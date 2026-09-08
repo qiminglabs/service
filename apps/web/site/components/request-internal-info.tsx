@@ -5,6 +5,7 @@ import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { fixedIdentityRoles } from '@/lib/internal-users';
 import {
   Dialog,
   DialogTrigger,
@@ -266,19 +267,27 @@ export function RequestInternalInfo({
   return (
     <CollaboratorCard
       title="内部协作人"
-      description="搜索主数据中的用户，勾选后确认添加。"
+      description="搜索主数据中的内部用户，勾选后确认添加。"
       placeholder="搜索姓名、邮箱或部门"
       options={available.map((user) => ({
         id: user.id,
         name: user.name,
-        details: [user.department, user.email].filter(Boolean).join(' · '),
+        details: [fixedIdentityRoles[user.id], user.department, user.email]
+          .filter(Boolean)
+          .join(' · '),
       }))}
       selected={value.map((person) => {
         const user = users.find((entry) => entry.id === person.userId);
         return {
           id: person.userId,
           name: person.name,
-          details: [user?.department, user?.email].filter(Boolean).join(' · '),
+          details: [
+            fixedIdentityRoles[person.userId],
+            user?.department,
+            user?.email,
+          ]
+            .filter(Boolean)
+            .join(' · '),
         };
       })}
       readonly={readonly}

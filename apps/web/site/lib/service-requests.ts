@@ -1,3 +1,5 @@
+import type { OperationActor, RequestOperations } from './request-operations';
+
 export type CatalogService = {
   id: string;
   name: string;
@@ -201,6 +203,7 @@ export function reconcileExternalCollaborators(
 export const requestStatuses = [
   '草稿',
   '待评估',
+  '待确认',
   '待受理',
   '已转工单',
   '已取消',
@@ -235,6 +238,7 @@ export type ServiceRequest = {
   expectedServiceDate?: string;
   owner: string;
   createdBy?: string;
+  createdById?: string;
   externalCollaborators?: ExternalCollaborator[];
   internalParticipants?: InternalParticipant[];
   status: RequestStatus;
@@ -242,6 +246,7 @@ export type ServiceRequest = {
   updatedAt: string;
   submittedAt?: string;
   items: RequestItem[];
+  operations?: RequestOperations;
 };
 export function itemSummary(item: RequestItem): string {
   const fields = [
@@ -274,6 +279,7 @@ export function newRequest(
   customerId: string,
   owner: string,
   contactId = '',
+  createdById?: string,
 ): ServiceRequest {
   const now = new Date().toISOString();
   return {
@@ -285,6 +291,7 @@ export function newRequest(
     expectedServiceDate: '',
     owner,
     createdBy: owner,
+    ...(createdById ? { createdById } : {}),
     externalCollaborators: [],
     internalParticipants: [],
     status: '草稿',
@@ -304,14 +311,57 @@ export function requestIdentityIssue(
       (existing.createdBy ?? existing.owner) !==
         (record.createdBy ?? record.owner) ||
       existing.createdAt !== record.createdAt
+      || existing.createdById !== record.createdById
     )
       return '创建人和创建时间不支持修改。';
+    if (existing.status !== '草稿') {
+      if (record.status === '草稿') return '已提交请求不能直接变回草稿。';
+      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'items'] as const;
+      if (frozen.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
+        return '提交后基本信息和申请项只读，不支持修改。';
+      const history = existing.operations?.activities ?? [];
+      if (history.some((event, index) => JSON.stringify(event) !== JSON.stringify(record.operations?.activities[index])))
+        return '已记录的活动不支持修改或删除。';
+    }
     return requestParticipantsIssue(record.internalParticipants);
   }
   if (!record.title.trim()) return '请填写服务请求名称。';
   if (!record.customerId.trim()) return '请选择客户。';
   if (!record.contactId?.trim()) return '请选择客户联系人。';
   return requestParticipantsIssue(record.internalParticipants);
+}
+export type RequestAccessContext = {
+  actor: OperationActor;
+  directory: { id: string; name: string }[];
+  customerId?: string;
+};
+
+export function canCreateRequest({ actor, customerId }: RequestAccessContext): boolean {
+  if (!actor.id) return false;
+  if (actor.role === '客户') return Boolean(customerId);
+  return ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 员工', 'SmartX 服务工程师'].includes(actor.role);
+}
+
+export function requestCreationAccessIssue(record: ServiceRequest, access: RequestAccessContext): string | null {
+  if (!canCreateRequest(access)) return '当前身份不能创建服务请求。';
+  if (record.createdById !== access.actor.id) return '创建人必须是当前身份。';
+  if (access.actor.role === '客户' && record.customerId !== access.customerId) return '只能为当前所属客户创建服务请求。';
+  return null;
+}
+
+export function canAccessRequest(record: ServiceRequest, { actor, directory }: RequestAccessContext): boolean {
+  if (!actor.id) return false;
+  if (actor.role === 'SmartX 系统管理员' || actor.role === 'SmartX 项目经理') return true;
+  if (record.createdById === actor.id) return true;
+  if (actor.role === '客户' && record.contactId === actor.id) return true;
+  if (record.internalParticipants?.some((person) => person.userId === actor.id)
+    || record.externalCollaborators?.some((person) => person.contactId === actor.id)) return true;
+  if (record.createdById) return false;
+  // Legacy records stored a display name. Ambiguous names and old role labels
+  // cannot establish ownership; administrators and project managers can still see these records.
+  const creator = record.createdBy ?? record.owner;
+  const matches = new Set(directory.filter((person) => person.name === creator).map((person) => person.id));
+  return matches.size === 1 && matches.has(actor.id);
 }
 export function requestCreationIssue(
   record: ServiceRequest,
@@ -610,6 +660,7 @@ export async function readLocal<T>(
 export async function saveLocal(
   store: 'requests' | 'configs' | 'references',
   record: ServiceRequest | RequestConfig | { id: string; payload: unknown },
+  access?: RequestAccessContext,
 ): Promise<void> {
   const db = await openDatabase();
   try {
@@ -620,6 +671,18 @@ export async function saveLocal(
         const serviceRequest = record as ServiceRequest;
         const current = records.get(serviceRequest.id);
         current.onsuccess = () => {
+          const creationIssue = access && !current.result ? requestCreationAccessIssue(serviceRequest, access) : null;
+          if (creationIssue) {
+            reject(new RequestIdentityError(creationIssue));
+            transaction.abort();
+            return;
+          }
+          if (access && (!canAccessRequest(current.result ?? serviceRequest, access)
+            || (!current.result && serviceRequest.createdById !== access.actor.id))) {
+            reject(new RequestIdentityError('无权访问此服务请求。'));
+            transaction.abort();
+            return;
+          }
           const issue = requestIdentityIssue(serviceRequest, current.result);
           if (issue) {
             reject(new RequestIdentityError(issue));
