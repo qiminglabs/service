@@ -31,7 +31,7 @@ export type RequestActivity = {
   at: string;
   actor: string;
   actorId: string;
-  category: '协作' | '会议' | '工时' | '评估' | '审批' | '服务依据' | '提交';
+  category: '受理' | '协作' | '会议' | '工时' | '评估' | '审批' | '服务依据' | '提交';
   title: string;
   detail: string;
 };
@@ -144,6 +144,7 @@ export type RequestEvaluation = {
   decisionNote?: string;
 };
 export type RequestOperations = {
+  projectCreation?: import('./request-projects').ProjectCreation;
   supplements?: import('./request-supplements').RequestSupplement[];
   customerDecisions?: import('./request-customer-decision').CustomerDecision[];
   assessment?: Assessment;
@@ -347,7 +348,7 @@ export function applyRequestAction(
     throw new Error('请选择内部操作人。');
   if (record.status === '草稿' && !['meeting-attachments-add', 'meeting-attachment-delete'].includes(action.type))
     throw new Error('提交申请后才能使用内部工作模块。');
-  if (['已取消', '已转工单'].includes(record.status))
+  if (['已取消', '已转服务项目'].includes(record.status))
     throw new Error('当前请求已结束，仅可查看历史记录。');
   const ops = structuredClone(operationsOf(record));
   let status = record.status;
@@ -811,6 +812,6 @@ export function requestReturnNotice(record: ServiceRequest): { title: string; re
 
 export function canRecordWorklog(record: ServiceRequest, actor: OperationActor): boolean {
   return Boolean(actor.id) && isInternal(actor.role)
-    && !['草稿', '已取消', '已转工单'].includes(record.status)
+    && !['草稿', '已取消', '已转服务项目'].includes(record.status)
     && (actor.role === 'SmartX 项目经理' || Boolean(record.internalParticipants?.some(person => person.userId === actor.id)));
 }

@@ -22,6 +22,8 @@ import { RequestMaterialDialog } from '@/components/request-material-dialog';
 import { RequestContactField } from '@/components/request-contact-field';
 import { RequestStatusProgress } from '@/components/request-status-progress';
 import { DateField } from '@/components/date-field';
+import { RequestProjectDialog, RequestProjects } from '@/components/request-projects';
+import { canCreateServiceProjects } from '@/lib/request-projects';
 import { RequestOperationsTabs } from '@/components/request-operations';
 import { emptyAssessment, applyAssessmentAction, isProjectManager, repairCustomerRequestApprover } from '@/lib/request-assessment';
 import { operationIdentities } from '@/lib/internal-users';
@@ -183,6 +185,7 @@ export function RequestWorkspace(props: Props) {
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [returnDraftOpen, setReturnDraftOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
   const [returnDraftReason, setReturnDraftReason] = useState('');
   const [showIssues, setShowIssues] = useState(false);
   const handledToken = useRef(0);
@@ -588,6 +591,7 @@ export function RequestWorkspace(props: Props) {
               </p>
             </div>
             <div className="detail-actions">
+              {canCreateServiceProjects(draft, props.currentActor) && <Button className="ct-button ct-button--primary" disabled={busy} onClick={() => setProjectOpen(true)}><Plus size={16} />创建服务项目</Button>}
               {draft.status === '待评估' && isProjectManager(props.currentActor) && (!draft.operations?.assessment?.managerId || draft.operations.assessment.managerId === props.currentActor.id) && (
                 <Button variant="outline" className="ct-button ct-button--ordinary" disabled={busy} onClick={() => { setError(''); setReturnDraftReason(''); setReturnDraftOpen(true); }}>退回草稿</Button>
               )}
@@ -657,6 +661,7 @@ export function RequestWorkspace(props: Props) {
               />}
             </aside>
               }>
+              {isInternal(props.currentActor.role) && <RequestProjects record={draft} />}
               {returnNotice && <section className="sr-panel sr-ops-panel" role="status">
                 <div className="sr-ops-heading"><div>
                   <h3>{returnNotice.title}</h3>
@@ -1211,6 +1216,8 @@ export function RequestWorkspace(props: Props) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {projectOpen && draft && <RequestProjectDialog objects={props.businessObjects} key={`${draft.id}:${props.currentActor.id}`} record={draft} actor={props.currentActor} busy={busy} save={persist} close={() => setProjectOpen(false)} />}
 
       <Dialog open={returnDraftOpen} onOpenChange={open => { if (!busy) setReturnDraftOpen(open); }}>
         <DialogContent className="sr-ops-dialog" showCloseButton={!busy}>

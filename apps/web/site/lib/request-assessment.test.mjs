@@ -221,7 +221,7 @@ test('待评估项目经理退回草稿，释放资产、失效特批、保留�
   const action = { type: 'return-draft', reason: '请补充客户环境材料' };
   for (const actor of [sales, boss, engineer])
     assert.throws(() => act(original, action, actor), /项目经理/);
-  for (const status of ['草稿', '待确认', '待受理', '已转工单', '已取消'])
+  for (const status of ['草稿', '待确认', '待受理', '已转服务项目', '已取消'])
     assert.throws(() => act({ ...original, status }, action), /待评估/);
   assert.throws(() => act(original, { ...action, reason: ' ' }), /退回原因/);
   const returned = act(original, action);

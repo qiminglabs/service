@@ -165,7 +165,7 @@ test('活动追加式保存，不能改写或删除历史', () => {
   );
 });
 test('草稿、终态和客户角色不能操作内部模块', () => {
-  for (const status of ['草稿', '已取消', '已转工单'])
+  for (const status of ['草稿', '已取消', '已转服务项目'])
     assert.throws(() =>
       act(
         { ...request(), status },
@@ -585,5 +585,5 @@ test('项目经理不加入协作人即可录入和编辑自己的工时，其�
   const edited = applyRequestAction(next, { ...action, type: 'worklog-edit', id: next.operations.worklogs[0].id, endTime: '10:30' }, pm, assets, now);
   assert.equal(edited.operations.worklogs[0].hours, 1.5);
   assert.throws(() => applyRequestAction(r, action, engineer, assets, now), /协作人/);
-  for (const status of ['草稿', '已取消', '已转工单']) assert.throws(() => applyRequestAction({ ...r, status }, action, pm, assets, now));
+  for (const status of ['草稿', '已取消', '已转服务项目']) assert.throws(() => applyRequestAction({ ...r, status }, action, pm, assets, now));
 });

@@ -24,7 +24,7 @@ export function RequestStatusProgress({ status }: { status: RequestStatus }) {
                 {cancelled ? (
                   <Square size={13} />
                 ) : step.state === 'complete' ||
-                  (step.state === 'current' && step.label === '已转工单') ? (
+                  (step.state === 'current' && step.label === '已转服务项目') ? (
                   <Check size={16} />
                 ) : (
                   index + 1

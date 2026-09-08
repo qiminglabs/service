@@ -1,3 +1,4 @@
+import { projectCreationSaveIssue } from './request-projects.ts';
 import { isInternal } from './request-operations.ts';
 import { supplementSaveIssue } from './request-supplements.ts';
 import { customerDecisionIssue } from './request-customer-decision.ts';
@@ -258,13 +259,19 @@ export const requestStatuses = [
   '待评估',
   '待确认',
   '待受理',
-  '已转工单',
+  '已转服务项目',
   '已取消',
 ] as const;
 export type RequestStatus = (typeof requestStatuses)[number];
+// Normalize legacy local records at the storage boundary without changing their data.
+export function normalizeStoredRequest(
+  record: ServiceRequest | (Omit<ServiceRequest, 'status'> & { status: '已转工单' }),
+): ServiceRequest {
+  return record.status === '已转工单' ? { ...record, status: '已转服务项目' } : record;
+}
 export function requestStatusTone(status: RequestStatus) {
   if (status === '已取消') return 'cancelled';
-  if (status === '已转工单') return 'green';
+  if (status === '已转服务项目') return 'green';
   return status === '草稿' ? 'muted' : 'blue';
 }
 export function requestProgressSteps(status: RequestStatus) {
@@ -301,6 +308,22 @@ export type ServiceRequest = {
   items: RequestItem[];
   operations?: RequestOperations;
 };
+export function itemDisplayFields(item: RequestItem, names: Record<string, string> = {}, objects: Pick<ObjectRef, 'id' | 'name'>[] = []): { key: string; label: string; value: string }[] {
+  const display = (raw: string | undefined) => {
+    const value = (raw ?? '').trim();
+    if (value.startsWith('[')) {
+      try {
+        const values: unknown = JSON.parse(value);
+        if (Array.isArray(values)) return values.filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()).join('、') || '未填写';
+      } catch { /* Preserve legacy text. */ }
+    }
+    return value || '未填写';
+  };
+  const keys = [...new Set(['method', ...item.config.fields])].filter(key => key !== 'description' && key !== 'businessObjects');
+  const fields = keys.map(key => ({ key, label: names[key] || item.config.fieldNames?.[key] || fieldLabels[key] || (key === 'method' ? '服务方式' : key), value: display(key === 'method' ? item.method : item.values[key]) }));
+  if (businessObjectsEnabled(item.config)) fields.push({ key: 'businessObjects', label: names.businessObjects || '业务对象', value: item.businessObjectIds.map(id => objects.find(object => object.id === id)?.name || id).join('、') || '未关联' });
+  return fields;
+}
 export function itemSummary(item: RequestItem): string {
   const fields = [
     ['服务方式', item.method],
@@ -428,7 +451,7 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory, cus
   if (!actor.id) return false;
   if (actor.role === 'SmartX 系统管理员' || actor.role === 'SmartX 项目经理') return true;
   if (record.createdById === actor.id) return true;
-  const reachedCustomerConfirmation = ['待确认', '待受理', '已转工单'].includes(record.status)
+  const reachedCustomerConfirmation = ['待确认', '待受理', '已转服务项目'].includes(record.status)
     || Boolean(record.operations?.assessment?.confirmation)
     || Boolean(record.operations?.customerDecisions?.length)
     || Boolean(record.operations?.assessmentHistory?.some(assessment => assessment.confirmation))
@@ -752,7 +775,7 @@ export async function readLocal<T>(
     return await new Promise((resolve, reject) => {
       const transaction = db.transaction(store, 'readonly');
       const request = transaction.objectStore(store).getAll();
-      transaction.oncomplete = () => resolve(request.result as T[]);
+      transaction.oncomplete = () => resolve((store === 'requests' ? request.result.map(normalizeStoredRequest) : request.result) as T[]);
       transaction.onabort = () => reject(transaction.error);
       transaction.onerror = () => reject(transaction.error);
     });
@@ -771,40 +794,41 @@ export async function saveLocal(
       const transaction = db.transaction(store === 'requests' ? ['requests', 'references'] : store, 'readwrite');
       const records = transaction.objectStore(store);
       if (store === 'requests') {
-        const serviceRequest = record as ServiceRequest;
+        const serviceRequest = normalizeStoredRequest(record as ServiceRequest);
         const current = records.get(serviceRequest.id);
         current.onsuccess = () => {
-          const creationIssue = access && !current.result ? requestCreationAccessIssue(serviceRequest, access) : null;
+          const previous = current.result ? normalizeStoredRequest(current.result) : undefined;
+          const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, access) : null;
           if (creationIssue) {
             reject(new RequestIdentityError(creationIssue));
             transaction.abort();
             return;
           }
-          if (access && (!canAccessRequest(current.result ?? serviceRequest, access)
-            || (!current.result && serviceRequest.createdById !== access.actor.id))) {
+          if (access && (!canAccessRequest(previous ?? serviceRequest, access)
+            || (!previous && serviceRequest.createdById !== access.actor.id))) {
             reject(new RequestIdentityError('无权访问此服务请求。'));
             transaction.abort();
             return;
           }
-          const decisionIssue = current.result ? customerDecisionIssue(serviceRequest, current.result, access?.actor, access?.customerId) : null;
-          const supplementIssue = supplementSaveIssue(serviceRequest, current.result ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId);
-          const issue = supplementIssue ?? decisionIssue ?? (access ? customerCollaborationIssue(serviceRequest, current.result ?? { ...serviceRequest, externalCollaborators: [] }, access) : null)
-            ?? requestIdentityIssue(serviceRequest, current.result, access?.actor);
+          const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
+          const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId);
+          const projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor);
+          const issue = projectIssue ?? supplementIssue ?? decisionIssue ?? (access ? customerCollaborationIssue(serviceRequest, previous ?? { ...serviceRequest, externalCollaborators: [] }, access) : null)
+            ?? requestIdentityIssue(serviceRequest, previous, access?.actor);
           if (issue) {
             reject(new RequestIdentityError(issue));
             transaction.abort();
           } else {
-            const previous = current.result as ServiceRequest | undefined;
             const changedPlan = JSON.stringify(currentPlan(serviceRequest)) !== JSON.stringify(previous ? currentPlan(previous) : undefined);
             const startingConfirmation = serviceRequest.operations?.assessment?.confirmation && !previous?.operations?.assessment?.confirmation;
-            if (!changedPlan && !startingConfirmation) { records.put(record); return; }
+            if (!changedPlan && !startingConfirmation) { records.put(serviceRequest); return; }
             const all = records.getAll();
             all.onsuccess = () => {
               const workspace = transaction.objectStore('references').get('workspace');
               workspace.onsuccess = () => {
-                const lockIssue = assessmentLockIssue(serviceRequest, all.result, workspace.result?.payload?.assets ?? []);
+                const lockIssue = assessmentLockIssue(serviceRequest, all.result.map(normalizeStoredRequest), workspace.result?.payload?.assets ?? []);
                 if (lockIssue) { reject(new RequestIdentityError(lockIssue)); transaction.abort(); }
-                else records.put(record);
+                else records.put(serviceRequest);
               };
             };
           }

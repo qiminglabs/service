@@ -183,7 +183,7 @@ test('所有非终止请求阶段均支持各会议状态上传和删除附件�
       assert.equal(next.status, status);
       const removed = act(next, { type: 'meeting-attachment-delete', id: meeting.id, fileId: 'new' });
       assert.equal(meetingAttachments(removed.operations.meetings[0]).length, 0);
-      for (const closed of ['已转工单', '已取消']) {
+      for (const closed of ['已转服务项目', '已取消']) {
         assert.throws(() => act({ ...next, status: closed }, { type: 'meeting-attachments-add', id: meeting.id, files: [file('other')] }), /已结束/);
         assert.throws(() => act({ ...next, status: closed }, { type: 'meeting-attachment-delete', id: meeting.id, fileId: 'new' }), /已结束/);
       }

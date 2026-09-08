@@ -15,7 +15,7 @@ test('客户和内部人员在草稿、待评估可提交，其他状态及跨�
       assert.equal(record.operations, undefined);
     }
   }
-  for (const status of ['待确认', '待受理', '已转工单', '已取消']) assert.throws(() => addSupplement({ ...request, status }, pm, 'c', input(pm)));
+  for (const status of ['待确认', '待受理', '已转服务项目', '已取消']) assert.throws(() => addSupplement({ ...request, status }, pm, 'c', input(pm)));
   assert.throws(() => addSupplement(request, customer, 'other', input(customer)));
 });
 test('内部资料不出现在客户记录或计数中，客户不能发布仅内部可见内容', () => {

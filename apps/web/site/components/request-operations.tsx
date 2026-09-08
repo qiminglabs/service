@@ -148,7 +148,7 @@ export function RequestOperationsTabs({
   const [voidWorklog, setVoidWorklog] = useState(false);
   const role = actor.role;
   const ops = operationsOf(record);
-  const closed = ['已取消', '已转工单'].includes(record.status);
+  const closed = ['已取消', '已转服务项目'].includes(record.status);
   const editable = !closed && !busy && Boolean(actor.id);
   const canLog = editable && canRecordWorklog(record, actor);
   const activeLogs = ops.worklogs.filter((w) => !w.voidedAt);
@@ -187,11 +187,7 @@ export function RequestOperationsTabs({
     ['overview', '申请信息', null],
     ['supplements', '补充信息', visibleSupplements(record, actor).length],
     ['meetings', '会议', ops.meetings.length],
-    [
-      'evaluations',
-      '评估',
-      (ops.assessment?.rounds.length ?? 0) + ops.evaluations.length,
-    ],
+    ['evaluations', '评估', null],
     ['worklogs', '工时', activeLogs.length],
     ['activity', '活动', activities.length],
   ] as const;
@@ -483,6 +479,7 @@ export function RequestOperationsTabs({
                   >
                     {[
                       '全部',
+                      '受理',
                       '审批',
                       '评估',
                       '协作',

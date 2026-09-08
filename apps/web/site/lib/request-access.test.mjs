@@ -238,7 +238,7 @@ test('客户发起请求自动加入启用的客户所有人，内部发起仍�
 test('进入客户确认后当前客户联系人可见，拒绝退回后保留；前期及无关联系人不可见', () => {
   const context = { ...access, actor: { id: 'contact1', name: '客户联系人', role: '客户' }, customerId: 'c1', contacts: [{ id: 'contact1', name: '客户联系人', customerId: 'c1', status: '启用' }] };
   for (const status of ['草稿', '待评估', '已取消']) assert.equal(canAccessRequest({ ...record, status }, context), false);
-  for (const status of ['待确认', '待受理', '已转工单']) {
+  for (const status of ['待确认', '待受理', '已转服务项目']) {
     const next = { ...record, status };
     assert.equal(canAccessRequest(next, context), true);
     assert.equal(canAccessRequest(next, { ...context, customerId: 'c2' }), false);

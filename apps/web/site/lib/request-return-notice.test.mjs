@@ -10,6 +10,6 @@ test('仅退回草稿或取消时显示对应原因，其他状态不泄漏历�
   assert.deepEqual(requestReturnNotice(record), { title: '退回原因', reason: '补充部署材料' });
   assert.equal(requestReturnNotice({ ...record, operations: { ...record.operations, draftReturns: [] } }), null);
   assert.deepEqual(requestReturnNotice({ ...record, status: '已取消' }), { title: '取消原因', reason: '客户终止项目' });
-  for (const status of ['待评估', '待确认', '待受理', '已转工单']) assert.equal(requestReturnNotice({ ...record, status }), null);
+  for (const status of ['待评估', '待确认', '待受理', '已转服务项目']) assert.equal(requestReturnNotice({ ...record, status }), null);
   assert.deepEqual(requestReturnNotice({ status: '已取消' }), { title: '取消原因', reason: '未记录取消原因。' });
 });

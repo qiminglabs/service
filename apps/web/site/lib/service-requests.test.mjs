@@ -15,6 +15,7 @@ import {
   requestIdentityIssue,
   requestCreationIssue,
   requestStatuses,
+  normalizeStoredRequest,
   requestStatusTone,
   requestProgressSteps,
   contactDisplay,
@@ -150,7 +151,7 @@ test('六种请求状态共用定义，待确认位于评估与受理之间，�
     '待评估',
     '待确认',
     '待受理',
-    '已转工单',
+    '已转服务项目',
     '已取消',
   ]);
   for (const [index, status] of requestStatuses.slice(0, 5).entries()) {
@@ -172,7 +173,7 @@ test('六种请求状态共用定义，待确认位于评估与受理之间，�
     { label: '已取消', state: 'current' },
   ]);
   assert.equal(requestStatusTone('已取消'), 'cancelled');
-  assert.equal(requestStatusTone('已转工单'), 'green');
+  assert.equal(requestStatusTone('已转服务项目'), 'green');
   assert.equal(requestStatusTone('草稿'), 'muted');
   assert.equal(requestStatusTone('待确认'), 'blue');
 });
@@ -580,5 +581,38 @@ test('申请说明选填，内部与客户申请均可留空，其他必填校�
       assert.deepEqual(requestIssues(request, { ...refs, audience }), []);
       assert.ok(requestIssues({ ...request, title: '' }, { ...refs, audience }).includes('填写申请主题'));
     }
+  }
+});
+
+test('项目拆分卡片展示配置字段和业务对象，排除需求说明，格式化多选', async () => {
+  const { itemDisplayFields } = await import('./service-requests.ts');
+  const item = {
+    method: '远程', description: '不应展示的需求说明', businessObjectIds: ['object1'],
+    config: { fields: ['edition', 'version', 'nodes', 'custom', 'description', 'businessObjects'], fieldNames: { custom: '部署区域' } },
+    values: { edition: '["企业版","标准版"]', version: '5.0.3', nodes: '0', custom: '华北', description: '不应展示', hidden: '未配置字段' },
+  };
+  const fields = itemDisplayFields(item, {}, [{ id: 'object1', name: '生产集群' }]);
+  assert.deepEqual(fields.map(field => field.key), ['method', 'edition', 'version', 'nodes', 'custom', 'businessObjects']);
+  assert.equal(fields.find(field => field.key === 'edition').value, '企业版、标准版');
+  assert.equal(fields.find(field => field.key === 'nodes').value, '0');
+  assert.equal(fields.find(field => field.key === 'custom').label, '部署区域');
+  assert.equal(fields.find(field => field.key === 'businessObjects').value, '生产集群');
+  assert.equal(itemDisplayFields({ ...item, values: {} })[1].value, '未填写');
+});
+
+
+test('legacy converted requests keep their data and completed progress after status rename', () => {
+  const legacy = { ...newRequest('旧请求', 'c1', '项目经理'), status: '已转工单', operations: { activities: [{ title: '创建服务项目' }] } };
+  const normalized = normalizeStoredRequest(legacy);
+  assert.equal(normalized.status, '已转服务项目');
+  assert.deepEqual(normalized, { ...legacy, status: '已转服务项目' });
+  assert.equal(legacy.status, '已转工单');
+  assert.equal(normalized.operations, legacy.operations);
+  assert.equal(requestStatusTone(normalized.status), 'green');
+  assert.deepEqual(requestProgressSteps(normalized.status).map(step => step.state), ['complete', 'complete', 'complete', 'complete', 'current']);
+  assert.equal(normalizeStoredRequest(normalized), normalized);
+  for (const status of requestStatuses) {
+    const record = { ...normalized, status };
+    assert.equal(normalizeStoredRequest(record), record);
   }
 });
