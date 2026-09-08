@@ -1,4 +1,6 @@
 'use client';
+import { RequestSupplements } from '@/components/request-supplements';
+import { visibleSupplements } from '@/lib/request-supplements';
 import { RequestCustomerConfirmation } from '@/components/request-customer-confirmation';
 
 import { useRef, useState, type ReactNode } from 'react';
@@ -33,6 +35,7 @@ import type {
 } from '@/lib/service-requests';
 import {
   applyRequestAction,
+  canRecordWorklog,
   worklogHours,
   formatWorklogHours,
   isInternal,
@@ -147,9 +150,7 @@ export function RequestOperationsTabs({
   const ops = operationsOf(record);
   const closed = ['已取消', '已转工单'].includes(record.status);
   const editable = !closed && !busy && Boolean(actor.id);
-  const canLog =
-    editable &&
-    Boolean(record.internalParticipants?.some((p) => p.userId === actor.id));
+  const canLog = editable && canRecordWorklog(record, actor);
   const activeLogs = ops.worklogs.filter((w) => !w.voidedAt);
   const activities = [...ops.activities];
   if (record.submittedAt && !activities.some((a) => a.category === '提交'))
@@ -184,29 +185,25 @@ export function RequestOperationsTabs({
   }
   const tabs = [
     ['overview', '申请信息', null],
+    ['supplements', '补充信息', visibleSupplements(record, actor).length],
     ['meetings', '会议', ops.meetings.length],
     [
       'evaluations',
-      '评估记录',
+      '评估',
       (ops.assessment?.rounds.length ?? 0) + ops.evaluations.length,
     ],
-    ['worklogs', '内部工时', activeLogs.length],
+    ['worklogs', '工时', activeLogs.length],
     ['activity', '活动', activities.length],
   ] as const;
-  if (!isInternal(role) || (record.status === '草稿' && !ops.meetings.length))
-    return (
-      <div className="sr-detail-layout">
-        <div className="sr-detail-main">
-          <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
-          {children}
-        </div>
-        {sidebar}
-      </div>
-    );
+  const shownTabs = tabs.filter(([value]) => {
+    if (!isInternal(role)) return ['overview', 'supplements'].includes(value);
+    if (record.status === '草稿') return ['overview', 'supplements', 'meetings'].includes(value);
+    return true;
+  });
   return (
     <div className="sr-ops-workspace">
       <Tabs
-        value={record.status === '草稿' && tab !== 'meetings' ? 'overview' : tab}
+        value={shownTabs.some(([value]) => value === tab) ? tab : 'overview'}
         onValueChange={(v) => {
           setTab(String(v));
           setError('');
@@ -218,7 +215,7 @@ export function RequestOperationsTabs({
           className="sr-ops-tab-list"
           aria-label="服务请求工作区"
         >
-          {tabs.filter(([value]) => record.status !== '草稿' || ['overview', 'meetings'].includes(value)).map(([value, label, count]) => (
+          {shownTabs.map(([value, label, count]) => (
             <TabsTrigger key={value} value={value}>
               {label}
               {count !== null && count > 0 && <span>{count}</span>}
@@ -237,7 +234,13 @@ export function RequestOperationsTabs({
         )}
         <div className="sr-detail-layout">
           <div className="sr-detail-main">
-            <TabsContent value="overview">{children}</TabsContent>
+            <TabsContent value="overview">
+              {!isInternal(role) && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} />}
+              {children}
+            </TabsContent>
+            <TabsContent value="supplements">
+              <RequestSupplements key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
+            </TabsContent>
             <TabsContent value="meetings">
               <section className="sr-panel sr-ops-panel">
                 <div className="sr-ops-heading">
@@ -329,8 +332,8 @@ export function RequestOperationsTabs({
               <section className="sr-panel sr-ops-panel">
                 <div className="sr-ops-heading">
                   <div>
-                    <h3>内部工时</h3>
-                    <p>内部协作人记录自己的实际投入，不等于客户计费人天。</p>
+                    <h3>工时</h3>
+                    <p>项目经理和内部协作人记录自己的实际投入，不等于客户计费人天。</p>
                   </div>
                   <Button
                     disabled={!canLog}
@@ -353,14 +356,10 @@ export function RequestOperationsTabs({
                     label="参与成员"
                     value={`${new Set(activeLogs.map((w) => w.userId)).size} 人`}
                   />
-                  <Summary
-                    label="我的投入"
-                    value={`${formatWorklogHours(activeLogs.filter((w) => w.userId === actor.id).reduce((s, w) => s + w.hours, 0))} 小时`}
-                  />
                 </div>
                 {!canLog && !closed && (
                   <p className="sr-ops-hint">
-                    当前操作人需加入右侧“内部协作人”，才能录入自己的工时。
+                    项目经理可直接录入工时，其他人员需先加入右侧“内部协作人”。
                   </p>
                 )}
                 {!ops.worklogs.length ? (

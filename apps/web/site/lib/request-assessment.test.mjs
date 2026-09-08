@@ -12,7 +12,7 @@ import {
   assessmentLockIssue,
 } from './request-assessment.ts';
 const pm = { id: 'USR-003', name: '赵言', role: 'SmartX 项目经理' };
-const sales = { id: 'USR-001', name: '王琪', role: 'SmartX 员工' };
+const sales = { id: 'USR-001', name: '王琪', role: 'SmartX 销售经理' };
 const boss = { id: 'USR-006', name: '陆明', role: 'SmartX 系统管理员' };
 const engineer = { id: 'USR-004', name: '林澈', role: 'SmartX 服务工程师' };
 const users = [pm, sales, boss, engineer].map((u) => ({

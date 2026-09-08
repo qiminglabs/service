@@ -8,7 +8,7 @@ import {
   meetingTranscript,
 } from './request-operations.ts';
 
-const host = { id: 'u1', name: '主持人', role: 'SmartX 员工' };
+const host = { id: 'u1', name: '主持人', role: 'SmartX 销售经理' };
 const now = '2026-09-08T08:00:00.000Z';
 function act(record, action, actor = host) {
   return applyRequestAction(record, action, actor, [], now);
@@ -88,7 +88,7 @@ test('附件校验空文件、超限、类型和元数据，批量失败不部�
       act(
         r,
         { type: 'meeting-attachments-add', id, files: [file('x')] },
-        { id: 'other', name: '其他人', role: 'SmartX 员工' },
+        { id: 'other', name: '其他人', role: 'SmartX 销售经理' },
       ),
     /主持人/,
   );
@@ -157,7 +157,7 @@ test('按标识删除会议附件，同名文件和转写保留，历史录制�
       act(uploaded, action, {
         id: 'other',
         name: '其他人',
-        role: 'SmartX 员工',
+        role: 'SmartX 销售经理',
       }),
     /主持人/,
   );

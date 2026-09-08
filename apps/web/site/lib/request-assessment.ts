@@ -126,7 +126,7 @@ export function gapApproverOptions(
     {},
   ).filter(
     (user) =>
-      ['SmartX 员工', 'SmartX 系统管理员'].includes(user.role) &&
+      ['SmartX 销售经理', 'SmartX 系统管理员'].includes(user.role) &&
       user.id !== selectedId &&
       user.id !== managerId,
   );
@@ -397,7 +397,7 @@ export function applyAssessmentAction(
       !plan ||
       actor.id !== plan.salesId ||
       !sales ||
-      actor.role !== 'SmartX 员工'
+      actor.role !== 'SmartX 销售经理'
     )
       throw new Error('仅方案指定的销售可发起额度特批。');
     const gap = planGap(plan);
@@ -446,7 +446,7 @@ export function applyAssessmentAction(
     )
       throw new Error('审批已处理或资产方案已变更。');
     if (
-      !['SmartX 员工', 'SmartX 系统管理员'].includes(actor.role) ||
+      !['SmartX 销售经理', 'SmartX 系统管理员'].includes(actor.role) ||
       actor.id !== approval.approverId ||
       actor.id === approval.authorId ||
       actor.id === assessment.managerId

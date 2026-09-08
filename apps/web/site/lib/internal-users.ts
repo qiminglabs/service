@@ -58,10 +58,10 @@ export const localInternalUsers: DirectoryUser[] = [
 export const fixedIdentityRoles: Readonly<Record<string, string>> =
   Object.freeze({
     'USR-006': 'SmartX 系统管理员',
-    'USR-001': 'SmartX 员工',
-    'USR-002': 'SmartX 员工',
-    'USR-005': 'SmartX 员工',
-    'USR-007': 'SmartX 员工',
+    'USR-001': 'SmartX 销售经理',
+    'USR-002': 'SmartX 销售经理',
+    'USR-005': 'SmartX 销售经理',
+    'USR-007': 'SmartX 销售经理',
     'USR-003': 'SmartX 项目经理',
     'USR-004': 'SmartX 服务工程师',
   });

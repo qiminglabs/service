@@ -219,6 +219,7 @@ function mergeImportedServices(storedServices: Service[]): Service[] {
 }
 
 type Customer = {
+  ownerUserId?: string;
   id: string;
   name: string;
   team: ResponsibleTeam;
@@ -942,12 +943,15 @@ export default function Home() {
         !responsibleTeams.includes(referenceForm.team as ResponsibleTeam)
       )
         return setReferenceFormError('请填写客户名并选择负责团队。');
+      if (referenceForm.ownerUserId && !users.some(user => user.id === referenceForm.ownerUserId && user.status === '启用'))
+        return setReferenceFormError('请选择启用的内部用户作为客户所有人。');
       setCustomers((records) => [
         ...records,
         {
           id: `CUS-${nextNumber(records.length)}`,
           name: referenceForm.name.trim(),
           team: referenceForm.team as ResponsibleTeam,
+          ownerUserId: referenceForm.ownerUserId || undefined,
           status: '启用',
         },
       ]);
@@ -1526,6 +1530,10 @@ export default function Home() {
                   ),
                 )
               }
+              onCustomerOwnerChange={(id, ownerUserId) => {
+                if (ownerUserId && !users.some(user => user.id === ownerUserId && user.status === '启用')) return;
+                setCustomers(records => records.map(record => record.id === id ? { ...record, ownerUserId: ownerUserId || undefined } : record));
+              }}
               onDisableCustomer={(id) =>
                 setCustomers((records) =>
                   records.map((record) =>
@@ -2149,6 +2157,7 @@ type ReferenceDataViewProps = {
   onDisablePartner: (id: string) => void;
   onDisablePartnerUser: (id: string) => void;
   onCreate: () => void;
+  onCustomerOwnerChange: (id: string, ownerUserId: string) => void;
   onDisableCustomer: (id: string) => void;
   onDisableContact: (id: string) => void;
   onDisableAsset: (id: string) => void;
@@ -2241,6 +2250,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
               <tr>
                 <th>客户名</th>
                 <th>负责团队</th>
+                <th>客户所有人</th>
                 <th>状态</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
@@ -2253,6 +2263,13 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <strong>{record.name}</strong>
                   </td>
                   <td>{record.team}</td>
+                  <td>
+                    <select aria-label={`${record.name}的客户所有人`} value={record.ownerUserId ?? ''} onChange={event => props.onCustomerOwnerChange(record.id, event.target.value)}>
+                      <option value="">未设置</option>
+                      {props.users.filter(user => user.status === '启用' || user.id === record.ownerUserId).map(user => <option key={user.id} value={user.id} disabled={user.status !== '启用'}>{user.name}{user.status !== '启用' ? '（已停用）' : ''}</option>)}
+                      {record.ownerUserId && !props.users.some(user => user.id === record.ownerUserId) && <option value={record.ownerUserId} disabled>原用户不可用</option>}
+                    </select>
+                  </td>
                   <td>
                     <span
                       className="reference-status"
@@ -2709,6 +2726,13 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   onChange={(event) => update('name', event.target.value)}
                   placeholder="例如：北京星海科技有限公司"
                 />
+              </label>
+              <label htmlFor="customer-owner">
+                <span>客户所有人</span>
+                <select id="customer-owner" value={props.form.ownerUserId ?? ''} onChange={event => update('ownerUserId', event.target.value)}>
+                  <option value="">请选择内部用户</option>
+                  {props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                </select>
               </label>
               <label htmlFor="customer-team">
                 <span>

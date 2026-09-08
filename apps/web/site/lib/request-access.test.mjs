@@ -11,7 +11,7 @@ import {
   requestIdentityIssue,
 } from './service-requests.ts';
 
-const actor = { id: 'u1', name: '王琪', role: 'SmartX 员工' };
+const actor = { id: 'u1', name: '王琪', role: 'SmartX 销售经理' };
 const directory = [actor, { id: 'u2', name: '林澈' }];
 const access = { actor, directory };
 const record = newRequest('请求', 'c1', '林澈', 'contact1', 'u2');
@@ -38,7 +38,7 @@ test('不可见请求不能自行加人，客户不能删除已有协作人或�
   assert.match(customerCollaborationIssue({ ...own, externalCollaborators: [] }, own, context), /不能移除/);
   const empty = { ...own, externalCollaborators: [] };
   for (const contact of [{ ...context.contacts[0], customerId: 'c2' }, { ...context.contacts[0], status: '停用' }]) {
-    assert.match(customerCollaborationIssue(own, empty, { ...context, contacts: [contact] }), /本组织已启用/);
+    assert.match(customerCollaborationIssue(own, empty, { ...context, contacts: [contact] }), /当前客户已启用/);
   }
   assert.equal(canAddExternalCollaborators(own, { ...context, actor: { ...actor, role: '合作伙伴服务工程师' } }), false);
 });
@@ -71,7 +71,7 @@ test('管理员看全部，其他身份仅看本人创建或按编号加入协�
     true,
   );
   for (const role of [
-    'SmartX 员工',
+    'SmartX 销售经理',
     'SmartX 服务工程师',
     '客户',
     '合作伙伴服务工程师',
@@ -191,8 +191,61 @@ test('客户仅作为联系人不可见，成为创建人或协作人后可见',
 
 test('评估方案指定销售和上级可访问请求，无关员工无权访问', () => {
   const record = { ...newRequest('服务申请', 'c1', '客户', 'c'), createdById: 'customer', status: '待评估', operations: { assessment: { tasks: [], plans: [{salesId:'sales'}], approvals: [{approverId:'boss'}] } } };
-  const access = id => ({actor:{id,name:id,role:'SmartX 员工'},directory:[]});
+  const access = id => ({actor:{id,name:id,role:'SmartX 销售经理'},directory:[]});
   assert.equal(canAccessRequest(record,access('sales')),true);
   assert.equal(canAccessRequest(record,access('boss')),true);
   assert.equal(canAccessRequest(record,access('unrelated')),false);
+});
+
+test('内部人员也只能添加当前客户启用联系人，不接受合作伙伴或其他客户联系人', () => {
+  const existing = { ...record, createdById: actor.id };
+  const contacts = [
+    { id: 'valid', name: '当前客户', customerId: 'c1', status: '启用' },
+    { id: 'other', name: '其他客户', customerId: 'c2', status: '启用' },
+    { id: 'inactive', name: '停用联系人', customerId: 'c1', status: '停用' },
+  ];
+  for (const role of ['SmartX 销售经理', 'SmartX 项目经理', 'SmartX 系统管理员', 'SmartX 服务工程师']) {
+    const context = { ...access, actor: { ...actor, role }, contacts };
+    const next = id => ({ ...existing, externalCollaborators: [{ contactId: id, name: '协作人', phone: '', email: '' }] });
+    assert.equal(customerCollaborationIssue(next('valid'), existing, context), null);
+    for (const id of ['other', 'inactive', 'partner-user']) {
+      assert.match(customerCollaborationIssue(next(id), existing, context), /当前客户已启用/);
+    }
+    assert.equal(customerCollaborationIssue(existing, next('partner-user'), context), null);
+  }
+});
+
+test('内部发起请求自动将创建人加入内部协作人，客户发起不添加', () => {
+  for (const role of ['SmartX 系统管理员', 'SmartX 销售经理', 'SmartX 项目经理', 'SmartX 服务工程师']) {
+    const created = newRequest('新请求', 'c1', '创建人姓名', 'contact', 'creator', role);
+    assert.deepEqual(created.internalParticipants, [{ userId: 'creator', name: '创建人姓名' }]);
+    assert.equal(created.createdById, 'creator');
+  }
+  assert.deepEqual(newRequest('客户请求', 'c1', '客户', 'contact', 'customer', '客户').internalParticipants, []);
+  assert.deepEqual(newRequest('旧调用', 'c1', '用户', 'contact', 'creator').internalParticipants, []);
+});
+
+test('客户发起请求自动加入启用的客户所有人，内部发起仍加入本人', () => {
+  const owner = { id: 'owner', name: '客户负责人', status: '启用', department: '销售部', email: 'owner@example.com' };
+  const created = newRequest('客户申请', 'c1', '客户姓名', 'contact', 'customer', '客户', owner);
+  assert.deepEqual(created.internalParticipants, [{ userId: 'owner', name: '客户负责人' }]);
+  assert.equal(created.createdById, 'customer');
+  assert.deepEqual(newRequest('未设置', 'c1', '客户', 'contact', 'customer', '客户').internalParticipants, []);
+  assert.deepEqual(newRequest('已停用', 'c1', '客户', 'contact', 'customer', '客户', { ...owner, status: '停用' }).internalParticipants, []);
+  assert.deepEqual(newRequest('内部申请', 'c1', '销售', 'contact', 'sales', 'SmartX 销售经理', owner).internalParticipants, [{ userId: 'sales', name: '销售' }]);
+});
+
+test('进入客户确认后当前客户联系人可见，拒绝退回后保留；前期及无关联系人不可见', () => {
+  const context = { ...access, actor: { id: 'contact1', name: '客户联系人', role: '客户' }, customerId: 'c1', contacts: [{ id: 'contact1', name: '客户联系人', customerId: 'c1', status: '启用' }] };
+  for (const status of ['草稿', '待评估', '已取消']) assert.equal(canAccessRequest({ ...record, status }, context), false);
+  for (const status of ['待确认', '待受理', '已转工单']) {
+    const next = { ...record, status };
+    assert.equal(canAccessRequest(next, context), true);
+    assert.equal(canAccessRequest(next, { ...context, customerId: 'c2' }), false);
+    assert.equal(canAccessRequest(next, { ...context, actor: { ...context.actor, id: 'other' } }), false);
+    assert.equal(canAccessRequest(next, { ...context, contacts: [{ ...context.contacts[0], status: '停用' }] }), false);
+  }
+  const rejected = { ...record, status: '待评估', operations: { customerDecisions: [{ accepted: false }] } };
+  assert.equal(canAccessRequest(rejected, context), true);
+  assert.equal(canAccessRequest({ ...rejected, status: '已取消' }, context), true);
 });

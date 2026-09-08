@@ -144,6 +144,7 @@ export type RequestEvaluation = {
   decisionNote?: string;
 };
 export type RequestOperations = {
+  supplements?: import('./request-supplements').RequestSupplement[];
   customerDecisions?: import('./request-customer-decision').CustomerDecision[];
   assessment?: Assessment;
   assessmentHistory?: Assessment[];
@@ -166,11 +167,13 @@ export function operationsOf(record: ServiceRequest): RequestOperations {
 }
 export function migrateRoleLabel(value: string): string {
   const legacy: Record<string, string> = {
+    'SmartX 员工': 'SmartX 销售经理',
+    销售经理: 'SmartX 销售经理',
     系统管理员: 'SmartX 系统管理员',
-    销售: 'SmartX 员工',
-    售前: 'SmartX 员工',
-    PMO: 'SmartX 员工',
-    审批人: 'SmartX 员工',
+    销售: 'SmartX 销售经理',
+    售前: 'SmartX 销售经理',
+    PMO: 'SmartX 销售经理',
+    审批人: 'SmartX 销售经理',
     项目经理: 'SmartX 项目经理',
     服务工程师: 'SmartX 服务工程师',
   };
@@ -180,7 +183,7 @@ export function isAdministrator(role: string) {
   return role === 'SmartX 系统管理员';
 }
 export function canEvaluate(role: string) {
-  return ['SmartX 员工', 'SmartX 系统管理员'].includes(role);
+  return ['SmartX 销售经理', 'SmartX 系统管理员'].includes(role);
 }
 export function canApprove(role: string) {
   return canEvaluate(role);
@@ -188,7 +191,7 @@ export function canApprove(role: string) {
 export function isInternal(role: string) {
   return [
     'SmartX 系统管理员',
-    'SmartX 员工',
+    'SmartX 销售经理',
     'SmartX 项目经理',
     'SmartX 服务工程师',
   ].includes(role);
@@ -356,7 +359,7 @@ export function applyRequestAction(
   };
   const requirePmo = () => {
     if (!canEvaluate(actor.role))
-      throw new Error('仅 SmartX 员工或 SmartX 系统管理员可执行此操作。');
+      throw new Error('仅 SmartX 销售经理或 SmartX 系统管理员可执行此操作。');
   };
   const requireAssessment = () => {
     if (record.status !== '待评估')
@@ -535,11 +538,8 @@ export function applyRequestAction(
         (!existing || existing.voidedAt || existing.userId !== actor.id)
       )
         throw new Error('只能编辑自己的有效工时记录。');
-      const person = record.internalParticipants?.find(
-        (p) => p.userId === actor.id,
-      );
-      if (!person)
-        throw new Error('仅当前请求的内部协作人可以录入自己的工时。');
+      if (!canRecordWorklog(record, actor))
+        throw new Error('仅项目经理或当前请求的内部协作人可以录入自己的工时。');
       const d = new Date(action.date + 'T12:00:00');
       if (
         !/^\d{4}-\d{2}-\d{2}$/.test(action.date) ||
@@ -627,7 +627,7 @@ export function applyRequestAction(
           throw new Error('此资产已关联，请勿重复关联。');
       } else {
         if (!canEvaluate(actor.role))
-          throw new Error('特批由 SmartX 员工或 SmartX 系统管理员提交。');
+          throw new Error('特批由 SmartX 销售经理或 SmartX 系统管理员提交。');
         if (
           !action.approverId ||
           !action.approverName ||
@@ -793,4 +793,24 @@ export function applyRequestAction(
     detail,
     now,
   );
+}
+
+export function requestReturnNotice(record: ServiceRequest): { title: string; reason: string } | null {
+  if (record.status === '草稿') {
+    const returned = record.operations?.draftReturns?.at(-1);
+    return returned ? { title: '退回原因', reason: returned.reason.trim() || '未记录退回原因。' } : null;
+  }
+  if (record.status === '已取消') {
+    const cancelled = record.operations?.activities.filter(event =>
+      ['取消服务请求', '服务请求已取消', '取消请求', '已取消'].includes(event.title),
+    ).at(-1);
+    return { title: '取消原因', reason: cancelled?.detail.trim() || '未记录取消原因。' };
+  }
+  return null;
+}
+
+export function canRecordWorklog(record: ServiceRequest, actor: OperationActor): boolean {
+  return Boolean(actor.id) && isInternal(actor.role)
+    && !['草稿', '已取消', '已转工单'].includes(record.status)
+    && (actor.role === 'SmartX 项目经理' || Boolean(record.internalParticipants?.some(person => person.userId === actor.id)));
 }

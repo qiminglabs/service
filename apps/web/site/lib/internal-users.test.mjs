@@ -34,7 +34,7 @@ test('固定身份覆盖全部六种角色，不接受独立角色参数', () =>
     [...new Set(identities.map((u) => u.role))].sort(),
     [
       'SmartX 系统管理员',
-      'SmartX 员工',
+      'SmartX 销售经理',
       'SmartX 项目经理',
       'SmartX 服务工程师',
       '合作伙伴服务工程师',
@@ -43,7 +43,7 @@ test('固定身份覆盖全部六种角色，不接受独立角色参数', () =>
   );
   assert.equal(
     resolveOperationActor(localInternalUsers, 'USR-001', sources).role,
-    'SmartX 员工',
+    'SmartX 销售经理',
   );
   assert.equal(resolveOperationActor(localInternalUsers, '').id, 'USR-006');
   assert.equal(resolveOperationActor(localInternalUsers, 'missing').id, '');
@@ -75,11 +75,13 @@ test('升级旧目录只补齐缺失用户，保留原有姓名、状态、用�
 
 test('旧角色显示迁移不改写真实人名，迁移重复执行结果一致', () => {
   const roles = {
+    'SmartX 员工': 'SmartX 销售经理',
+    销售经理: 'SmartX 销售经理',
     系统管理员: 'SmartX 系统管理员',
-    销售: 'SmartX 员工',
-    售前: 'SmartX 员工',
-    PMO: 'SmartX 员工',
-    审批人: 'SmartX 员工',
+    销售: 'SmartX 销售经理',
+    售前: 'SmartX 销售经理',
+    PMO: 'SmartX 销售经理',
+    审批人: 'SmartX 销售经理',
     项目经理: 'SmartX 项目经理',
     服务工程师: 'SmartX 服务工程师',
   };
@@ -115,7 +117,7 @@ test('旧管理员迁移保留编号状态，外部身份严格来自主数据',
   assert.deepEqual(operationIdentities([]), []);
 });
 
-test('SmartX 员工只保留两名启用身份，其他历史用户停用但不删除', () => {
+test('SmartX 销售经理只保留两名启用身份，其他历史用户停用但不删除', () => {
   const previous = localInternalUsers.map((user) => ({
     ...user,
     status: '启用',
@@ -123,7 +125,7 @@ test('SmartX 员工只保留两名启用身份，其他历史用户停用但不�
   const migrated = ensureLocalInternalUsers(previous);
   assert.deepEqual(
     operationIdentities(migrated)
-      .filter((actor) => actor.role === 'SmartX 员工')
+      .filter((actor) => actor.role === 'SmartX 销售经理')
       .map((actor) => actor.id),
     ['USR-001', 'USR-002'],
   );
@@ -213,13 +215,13 @@ test('切换菜单每种角色仅一人，姓名来自目录，不缩减原始�
   assert.equal(choices.length, 6);
   assert.equal(new Set(choices.map((actor) => actor.role)).size, 6);
   assert.equal(
-    choices.find((actor) => actor.role === 'SmartX 员工').id,
+    choices.find((actor) => actor.role === 'SmartX 销售经理').id,
     'USR-001',
   );
   assert.ok(choices.every((actor) => identities.includes(actor)));
   assert.deepEqual(identities, before);
   assert.equal(
-    identities.filter((actor) => actor.role === 'SmartX 员工').length,
+    identities.filter((actor) => actor.role === 'SmartX 销售经理').length,
     2,
   );
 });
@@ -237,7 +239,7 @@ test('菜单去重保留当前同角色人员，停用后从有效目录取替�
   const remaining = identities.filter((actor) => actor.id !== 'USR-001');
   assert.equal(
     roleSwitchIdentities(remaining, 'USR-001').find(
-      (actor) => actor.role === 'SmartX 员工',
+      (actor) => actor.role === 'SmartX 销售经理',
     ).id,
     'USR-002',
   );
@@ -245,7 +247,7 @@ test('菜单去重保留当前同角色人员，停用后从有效目录取替�
 });
 
 test('员工与管理员承接评估审批，外部身份不可操作内部模块', () => {
-  for (const role of ['SmartX 员工', 'SmartX 系统管理员']) {
+  for (const role of ['SmartX 销售经理', 'SmartX 系统管理员']) {
     assert.equal(canEvaluate(role), true);
     assert.equal(canApprove(role), true);
   }

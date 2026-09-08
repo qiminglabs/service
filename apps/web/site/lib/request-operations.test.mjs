@@ -10,9 +10,9 @@ import {
 } from './request-operations.ts';
 
 const now = '2026-09-08T08:00:00.000Z';
-const pmo = { id: 'u1', name: 'PMO 一', role: 'SmartX 员工' };
-const reviewer = { id: 'u2', name: '审核人', role: 'SmartX 员工' };
-const sales = { id: 'u3', name: '销售一', role: 'SmartX 员工' };
+const pmo = { id: 'u1', name: 'PMO 一', role: 'SmartX 销售经理' };
+const reviewer = { id: 'u2', name: '审核人', role: 'SmartX 销售经理' };
+const sales = { id: 'u3', name: '销售一', role: 'SmartX 销售经理' };
 const engineer = { id: 'u4', name: '工程师', role: 'SmartX 服务工程师' };
 const assets = [
   { id: 'a1', name: '远程人天', customerId: 'c1', status: '启用' },
@@ -264,7 +264,7 @@ test('关联资产校验客户、状态、重复关联与申请项范围', () =>
     () => act(request(), { ...input, itemIds: ['foreign'] }),
     /申请项/,
   );
-  assert.throws(() => act(request(), input, engineer), /SmartX 员工/);
+  assert.throws(() => act(request(), input, engineer), /SmartX 销售经理/);
   assert.throws(() => act(r, input), /重复/);
   assert.throws(
     () => act(request(), input, pmo, [{ ...assets[0], status: '已使用' }]),
@@ -289,7 +289,7 @@ test('特批由销售发起，指定其他人审批，不允许自批或重复�
     approverId: 'u2',
     approverName: '审核人',
   };
-  assert.throws(() => act(request(), input, engineer), /SmartX 员工/);
+  assert.throws(() => act(request(), input, engineer), /SmartX 销售经理/);
   assert.throws(
     () => act(request(), { ...input, approverId: sales.id }, sales),
     /其他内部用户/,
@@ -573,4 +573,17 @@ test('编辑工时原位更新、重新计算且排除原记录，拒绝越权�
   assert.throws(() => act(crowded, edit), /累计/);
   const voided = act(original, { type: 'worklog-void', id, reason: '取消' });
   assert.throws(() => act(voided, edit), /自己的/);
+});
+
+test('项目经理不加入协作人即可录入和编辑自己的工时，其他人员及结束状态仍受限制', () => {
+  const pm = { id: 'pm', name: '项目经理', role: 'SmartX 项目经理' };
+  const r = { ...request(), internalParticipants: [] };
+  const action = { type: 'worklog-add', date: '2026-09-08', startTime: '09:00', endTime: '10:00', category: '技术评估', description: '查看客户材料' };
+  const next = applyRequestAction(r, action, pm, assets, now);
+  assert.equal(next.operations.worklogs[0].userId, pm.id);
+  assert.deepEqual(next.internalParticipants, []);
+  const edited = applyRequestAction(next, { ...action, type: 'worklog-edit', id: next.operations.worklogs[0].id, endTime: '10:30' }, pm, assets, now);
+  assert.equal(edited.operations.worklogs[0].hours, 1.5);
+  assert.throws(() => applyRequestAction(r, action, engineer, assets, now), /协作人/);
+  for (const status of ['草稿', '已取消', '已转工单']) assert.throws(() => applyRequestAction({ ...r, status }, action, pm, assets, now));
 });

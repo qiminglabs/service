@@ -125,6 +125,7 @@ export function RequestAssessment({
   const waiting =
     plan &&
     a.approvals.some((v) => v.planId === plan.id && v.state === '待审批');
+  const currentApprovals = a.approvals.filter(item => item.planId === plan?.id && item.state !== '已失效').slice(-1);
   const editable = record.status === '待评估' && !busy;
   const manager =
     isProjectManager(actor) && (!a.managerId || a.managerId === actor.id);
@@ -197,7 +198,7 @@ export function RequestAssessment({
     <section className="sr-panel sr-assessment">
       <div className="sr-ops-heading">
         <div>
-          <h3>评估记录</h3>
+          <h3>评估</h3>
           <p>由项目经理完成材料评估、核定人天、关联服务依据并发起客户确认。</p>
         </div>
         <div className="sr-assessment-manager">
@@ -245,7 +246,7 @@ export function RequestAssessment({
             <p className="sr-help">等待项目经理查看申请材料并记录评估结论。</p>
           ) : (
             <div className="sr-assessment-rounds">
-              {[...a.rounds].reverse().map((r) => (
+              {a.rounds.slice(-1).map((r) => (
                 <article key={r.id}>
                   <div className="sr-assessment-round-title">
                     <strong>材料评估记录</strong>
@@ -275,45 +276,6 @@ export function RequestAssessment({
               ))}
             </div>
           )}
-        {!!record.operations?.assessmentHistory?.length && (
-          <details className="sr-assessment-legacy">
-            <summary>退回草稿前的评估历史</summary>
-            {record.operations.assessmentHistory.map((h, i) => (
-              <article key={i}>
-                <h4>第 {i + 1} 次提交</h4>
-                {h.rounds.map((r) => (
-                  <p key={r.id}>
-                    {r.author} · {r.outcome} · {r.opinion}
-                  </p>
-                ))}
-                {h.plans.map((p) => (
-                  <p key={p.id}>原核定 {fmt(p.effort)} 人天 · 资产预留已释放</p>
-                ))}
-              </article>
-            ))}
-          </details>
-        )}
-        {!!record.operations?.evaluations.length && (
-          <details className="sr-assessment-legacy">
-            <summary>历史评估记录（旧流程）</summary>
-            {record.operations.evaluations.map((e) => (
-              <article key={e.id}>
-                <strong>
-                  {e.author} · {e.state}
-                </strong>
-                <p>{e.opinion}</p>
-                <p>
-                  范围：{e.scope || '—'} · 预计 {e.effort || '—'} 人天
-                </p>
-                {e.decisionNote && (
-                  <p>
-                    {e.decidedBy}：{e.decisionNote}
-                  </p>
-                )}
-              </article>
-            ))}
-          </details>
-        )}
         </section>
         <section className="sr-assessment-plan">
           <div className="sr-assessment-section-title">
@@ -421,7 +383,7 @@ export function RequestAssessment({
               {gap > 1e-8 && (
                 <div className="sr-assessment-gap">
                   <div>
-                    <strong>资产不足 {fmt(gap)} 人天</strong>
+                    <strong>资产缺少 {fmt(gap)} 人天</strong>
                     <p>
                       {approved
                         ? '额度特批已通过，可发起客户确认。'
@@ -449,9 +411,9 @@ export function RequestAssessment({
                 : '请选择客户资产并填写锁定人天；不足部分由销售发起额度特批。'}
             </p>
           )}
-          {a.approvals.length > 0 && (
+          {currentApprovals.length > 0 && (
             <div className="sr-assessment-approvals">
-              {[...a.approvals].reverse().map((v) => (
+              {currentApprovals.map((v) => (
                 <article key={v.id}>
                   <div>
                     <strong>{fmt(v.days)} 人天额度特批</strong>{' '}
@@ -507,22 +469,6 @@ export function RequestAssessment({
                 ? '等待额度特批通过后，可发起客户确认。'
                 : '服务依据已足额覆盖，请核对请求概览与预计消耗资产后发起客户确认。'}
           </p>
-          {!!record.operations?.customerDecisions?.some(decision => !decision.accepted) && (
-            <div className="sr-assessment-note">
-              <strong>拒绝历史</strong>
-              <div className="sr-assessment-rounds">
-                {[...(record.operations.customerDecisions ?? [])].filter(decision => !decision.accepted).reverse().map((decision, index) => (
-                  <article key={`${decision.at}:${index}`}>
-                    <div className="sr-assessment-round-title">
-                      <Badge>客户拒绝</Badge>
-                      <RecordMeta author={decision.actor} at={decision.at} />
-                    </div>
-                    <p className="whitespace-pre-wrap break-words">{decision.reason}</p>
-                  </article>
-                ))}
-              </div>
-            </div>
-          )}
         </section>
       </div>
       <Dialog
@@ -567,9 +513,11 @@ export function RequestAssessment({
                   ) : <p className="sr-help">本次不消耗客户资产。</p>}
                 </section>
                 <section>
-                  <Field title="对外说明（选填）">
-                    <Textarea value={externalNote} onChange={event => setExternalNote(event.target.value)} disabled={disabled} rows={4} placeholder="填写给客户的服务说明，提交后将在客户中心显示" />
-                  </Field>
+                  <div className="sr-confirmation-note-label">
+                    <label htmlFor="customer-confirmation-note">说明（选填）</label>
+                    <span className="sr-assessment-badge" id="customer-confirmation-note-hint">客户可见</span>
+                  </div>
+                  <Textarea id="customer-confirmation-note" aria-describedby="customer-confirmation-note-hint" value={externalNote} onChange={event => setExternalNote(event.target.value)} disabled={disabled} rows={4} placeholder="填写给客户的服务说明，提交后将在客户中心显示" />
                 </section>
               </div>
               {error && <p className="sr-error" role="alert">{error}</p>}

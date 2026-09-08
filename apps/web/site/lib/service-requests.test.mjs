@@ -238,7 +238,7 @@ test('联系人统一展示姓名、手机号和邮箱，缺失时不伪造联�
     contactDisplay(contact),
   );
 });
-test('外部协作人按联系人编号去重并保存联系方式快照', () => {
+test('客户协作人按联系人编号去重并保存联系方式快照', () => {
   const contact = {
     id: 'p2',
     name: '外部联系人',
@@ -571,4 +571,14 @@ test('停用目录、失效联系人或无效服务方式不能提交', () => {
       s.includes('停用或不存在'),
     ),
   );
+});
+
+test('申请说明选填，内部与客户申请均可留空，其他必填校验保留', () => {
+  for (const audience of ['internal', 'customer']) {
+    for (const description of ['', '   ']) {
+      const request = { ...completeRequest(), description };
+      assert.deepEqual(requestIssues(request, { ...refs, audience }), []);
+      assert.ok(requestIssues({ ...request, title: '' }, { ...refs, audience }).includes('填写申请主题'));
+    }
+  }
 });

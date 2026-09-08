@@ -62,7 +62,7 @@ export function resolvePortalContext(
     views: [],
   };
   if (!actor.id) return empty;
-  if (actor.role.startsWith('SmartX ')) {
+  if (actor.role === 'SmartX 销售经理' || actor.role.startsWith('SmartX ')) {
     return {
       type: 'staff',
       ...portalDefinitions.staff,

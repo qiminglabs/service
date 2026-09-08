@@ -36,7 +36,7 @@ test('菜单按公司和角色合并，保留当前身份且不修改完整目�
   assert.ok(!choices.some((actor) => actor.id === 'u1'));
   assert.ok(choices.some((actor) => actor.id === 'u2'));
   assert.equal(
-    choices.filter((actor) => actor.role === 'SmartX 员工').length,
+    choices.filter((actor) => actor.role === 'SmartX 销售经理').length,
     1,
   );
   assert.ok(choices.some((actor) => actor.role === 'SmartX 系统管理员'));
@@ -82,7 +82,7 @@ test('同角色不同组织的身份分别解析，名称从当前目录读取',
 test('员工所有职责使用公司全称，外部身份没有内部维护入口', () => {
   for (const actor of operationIdentities(localInternalUsers, sources)) {
     const portal = resolvePortalContext(actor, sources);
-    if (actor.role.startsWith('SmartX ')) {
+    if (actor.role === 'SmartX 销售经理' || actor.role.startsWith('SmartX ')) {
       assert.equal(portal.title, '服务管理中心');
       assert.equal(portal.organizationName, '北京志凌海纳科技有限公司');
       assert.deepEqual(

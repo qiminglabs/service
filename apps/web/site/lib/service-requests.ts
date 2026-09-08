@@ -1,3 +1,5 @@
+import { isInternal } from './request-operations.ts';
+import { supplementSaveIssue } from './request-supplements.ts';
 import { customerDecisionIssue } from './request-customer-decision.ts';
 import { assessmentLockIssue, currentPlan } from './request-assessment.ts';
 import type { OperationActor, RequestOperations } from './request-operations';
@@ -60,7 +62,7 @@ export function resolveRequestConfig(
     configs.find((config) => config.serviceId === service.id) ?? defaultConfig(service),
   );
 }
-export type CustomerRef = { id: string; name: string; status: string };
+export type CustomerRef = { id: string; name: string; status: string; ownerUserId?: string };
 export type ContactRef = CustomerRef & {
   customerId: string;
   phone?: string;
@@ -331,6 +333,8 @@ export function newRequest(
   owner: string,
   contactId = '',
   createdById?: string,
+  creatorRole?: string,
+  customerOwner?: InternalUser,
 ): ServiceRequest {
   const now = new Date().toISOString();
   return {
@@ -344,7 +348,11 @@ export function newRequest(
     createdBy: owner,
     ...(createdById ? { createdById } : {}),
     externalCollaborators: [],
-    internalParticipants: [],
+    internalParticipants: createdById && creatorRole && isInternal(creatorRole)
+      ? [{ userId: createdById, name: owner }]
+      : creatorRole === '客户' && customerOwner?.status === '启用'
+        ? [{ userId: customerOwner.id, name: customerOwner.name }]
+        : [],
     status: '草稿',
     createdAt: now,
     updatedAt: now,
@@ -406,7 +414,7 @@ export type RequestAccessContext = {
 export function canCreateRequest({ actor, customerId }: RequestAccessContext): boolean {
   if (!actor.id) return false;
   if (actor.role === '客户') return Boolean(customerId);
-  return ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 员工', 'SmartX 服务工程师'].includes(actor.role);
+  return ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师'].includes(actor.role);
 }
 
 export function requestCreationAccessIssue(record: ServiceRequest, access: RequestAccessContext): string | null {
@@ -416,11 +424,20 @@ export function requestCreationAccessIssue(record: ServiceRequest, access: Reque
   return null;
 }
 
-export function canAccessRequest(record: ServiceRequest, { actor, directory }: RequestAccessContext): boolean {
+export function canAccessRequest(record: ServiceRequest, { actor, directory, customerId, contacts }: RequestAccessContext): boolean {
   if (!actor.id) return false;
   if (actor.role === 'SmartX 系统管理员' || actor.role === 'SmartX 项目经理') return true;
   if (record.createdById === actor.id) return true;
-  if (['SmartX 员工', 'SmartX 服务工程师'].includes(actor.role)) {
+  const reachedCustomerConfirmation = ['待确认', '待受理', '已转工单'].includes(record.status)
+    || Boolean(record.operations?.assessment?.confirmation)
+    || Boolean(record.operations?.customerDecisions?.length)
+    || Boolean(record.operations?.assessmentHistory?.some(assessment => assessment.confirmation))
+    || Boolean(record.operations?.activities?.some(event => event.title === '发起客户确认'));
+  if (actor.role === '客户' && actor.id === record.contactId
+    && customerId === record.customerId && reachedCustomerConfirmation
+    && contacts?.some(contact => contact.id === actor.id && contact.customerId === record.customerId && contact.status === '启用')) return true;
+
+  if (['SmartX 销售经理', 'SmartX 服务工程师'].includes(actor.role)) {
     const assessment = record.operations?.assessment;
     if (assessment?.plans.some(plan => plan.salesId === actor.id)
       || assessment?.approvals.some(approval => approval.approverId === actor.id)) return true;
@@ -436,19 +453,18 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory }: R
 }
 
 export function canAddExternalCollaborators(record: ServiceRequest, access: RequestAccessContext): boolean {
-  return canAccessRequest(record, access) && ['客户', 'SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 员工', 'SmartX 服务工程师'].includes(access.actor.role);
+  return canAccessRequest(record, access) && ['客户', 'SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师'].includes(access.actor.role);
 }
 
 export function customerCollaborationIssue(record: ServiceRequest, existing: ServiceRequest, access: RequestAccessContext): string | null {
-  if (access.actor.role !== '客户') return null;
   const before = existing.externalCollaborators ?? [];
   const after = record.externalCollaborators ?? [];
   if (JSON.stringify(before) === JSON.stringify(after)) return null;
-  if (!canAddExternalCollaborators(existing, access)) return '无权添加外部协作人。';
-  if (before.some((person) => !after.some((next) => JSON.stringify(next) === JSON.stringify(person)))) return '客户只能添加外部协作人，不能移除或修改已有协作人。';
-  if (new Set(after.map((person) => person.contactId)).size !== after.length) return '外部协作人不能重复。';
+  if (!canAddExternalCollaborators(existing, access)) return '无权添加客户协作人。';
+  if (access.actor.role === '客户' && before.some((person) => !after.some((next) => JSON.stringify(next) === JSON.stringify(person)))) return '客户只能添加客户协作人，不能移除或修改已有协作人。';
+  if (new Set(after.map((person) => person.contactId)).size !== after.length) return '客户协作人不能重复。';
   const additions = after.filter((person) => !before.some((old) => old.contactId === person.contactId));
-  if (additions.some((person) => !access.contacts?.some((contact) => contact.id === person.contactId && contact.customerId === access.customerId && contact.status === '启用'))) return '只能添加本组织已启用的联系人。';
+  if (additions.some((person) => !access.contacts?.some((contact) => contact.id === person.contactId && contact.customerId === record.customerId && (access.actor.role !== '客户' || contact.customerId === access.customerId) && contact.status === '启用'))) return '只能添加当前客户已启用的联系人。';
   return null;
 }
 export function requestCreationIssue(
@@ -653,7 +669,6 @@ export function requestIssues(
     )
   )
     issues.push('选择该客户的有效联系人');
-  if (!request.description.trim()) issues.push('填写申请背景');
   if (!request.items.length) issues.push('至少添加一个申请项');
   request.items.forEach((item, index) => {
     const prefix = `申请项 ${index + 1}：`;
@@ -772,7 +787,8 @@ export async function saveLocal(
             return;
           }
           const decisionIssue = current.result ? customerDecisionIssue(serviceRequest, current.result, access?.actor, access?.customerId) : null;
-          const issue = decisionIssue ?? (access && current.result ? customerCollaborationIssue(serviceRequest, current.result, access) : null)
+          const supplementIssue = supplementSaveIssue(serviceRequest, current.result ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId);
+          const issue = supplementIssue ?? decisionIssue ?? (access ? customerCollaborationIssue(serviceRequest, current.result ?? { ...serviceRequest, externalCollaborators: [] }, access) : null)
             ?? requestIdentityIssue(serviceRequest, current.result, access?.actor);
           if (issue) {
             reject(new RequestIdentityError(issue));

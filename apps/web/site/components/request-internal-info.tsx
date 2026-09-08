@@ -213,7 +213,7 @@ export function RequestExternalCollaborators({
   busy,
   onChange,
   allowRemove = true,
-  description = '搜索当前客户联系人或合作伙伴用户，勾选后确认添加。',
+  description = '搜索当前客户联系人，勾选后确认添加。',
 }: {
   contacts: ContactRef[];
   description?: string;
@@ -226,7 +226,7 @@ export function RequestExternalCollaborators({
   const available = contacts.filter((contact) => contact.status === '启用');
   return (
     <CollaboratorCard
-      title="外部协作人"
+      title="客户协作人"
       description={description}
       placeholder="搜索姓名、手机号或邮箱"
       options={contacts.map((contact) => ({

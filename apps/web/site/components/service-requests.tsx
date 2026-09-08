@@ -25,7 +25,7 @@ import { DateField } from '@/components/date-field';
 import { RequestOperationsTabs } from '@/components/request-operations';
 import { emptyAssessment, applyAssessmentAction, isProjectManager, repairCustomerRequestApprover } from '@/lib/request-assessment';
 import { operationIdentities } from '@/lib/internal-users';
-import { appendActivity, operationsOf, isInternal, migrateRoleLabel } from '@/lib/request-operations';
+import { requestReturnNotice, appendActivity, operationsOf, isInternal, migrateRoleLabel } from '@/lib/request-operations';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import {
   RequestExternalCollaborators,
@@ -255,6 +255,8 @@ export function RequestWorkspace(props: Props) {
       props.currentActor.name || props.currentRole,
       createContact,
       props.currentActor.id,
+      props.currentActor.role,
+      props.users.find(user => user.id === props.customers.find(customer => customer.id === createCustomer)?.ownerUserId),
     );
     const issue = requestCreationAccessIssue(record, access) ?? requestCreationIssue(record, props);
     if (issue) {
@@ -348,6 +350,7 @@ export function RequestWorkspace(props: Props) {
     return ok;
   }
   const readonly = draft?.status !== '草稿';
+  const returnNotice = draft ? requestReturnNotice(draft) : null;
   const issues = draft ? requestIssues(draft, { ...props, audience }) : [];
   const materialItem = draft?.items.find(
     (item) => item.id === materialTarget?.itemId,
@@ -391,13 +394,17 @@ export function RequestWorkspace(props: Props) {
       const issue = customerCollaborationIssue({ ...draft, ...patch }, draft, access);
       if (issue) { setError(issue); return; }
     } else if (!isInternal(props.currentRole)) return;
+    if ('externalCollaborators' in patch) {
+      const issue = customerCollaborationIssue({ ...draft, ...patch }, draft, access);
+      if (issue) { setError(issue); return; }
+    }
     if (!props.currentActor.id) { setError('请先在右上角选择一个启用的内部用户。'); return; }
     if (!readonly && !customerAddition) { updateDraft(patch); return; }
     const external = 'externalCollaborators' in patch;
     const before = external ? (draft.externalCollaborators ?? []).map(p => p.name) : (draft.internalParticipants ?? []).map(p => p.name);
     const after = external ? (patch.externalCollaborators ?? []).map(p => p.name) : (patch.internalParticipants ?? []).map(p => p.name);
     const detail = `变更前：${before.join('、') || '无'}；变更后：${after.join('、') || '无'}`;
-    void persist(appendActivity({ ...draft, ...patch }, props.currentActor, '协作', external ? '更新外部协作人' : '更新内部协作人', detail), '协作人已保存');
+    void persist(appendActivity({ ...draft, ...patch }, props.currentActor, '协作', external ? '更新客户协作人' : '更新内部协作人', detail), '协作人已保存');
   }
 
   const feedback = (
@@ -483,7 +490,7 @@ export function RequestWorkspace(props: Props) {
                         <button
                           className="sr-title-link app-list-link"
                           onClick={() => {
-                            setDraft(structuredClone(record));
+                                                  setDraft(structuredClone(record));
                             setMaterialTarget(null);
                             setShowIssues(false);
                             setNotice('');
@@ -516,7 +523,7 @@ export function RequestWorkspace(props: Props) {
                           variant="ghost"
                           className="app-list-link"
                           onClick={() => {
-                            setDraft(structuredClone(record));
+                                                  setDraft(structuredClone(record));
                             setMaterialTarget(null);
                             setShowIssues(false);
                             setNotice('');
@@ -629,10 +636,8 @@ export function RequestWorkspace(props: Props) {
               <RequestOperationsTabs key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
             <aside className="sr-collaboration-column" aria-label="协作人">
               <RequestExternalCollaborators
-                contacts={[...props.contacts.filter(
-                  (contact) => customerPortal ? contact.customerId === props.currentCustomerId : contact.customerId === draft.customerId && contact.status === '启用',
-                ), ...(customerPortal ? [] : props.partnerCollaborators.map((person) => ({ ...person, customerId: draft.customerId })))]}
-                description={customerPortal ? '搜索本组织全部联系人，勾选后确认添加。已停用联系人不可添加。' : undefined}
+                contacts={props.contacts.filter(contact => contact.customerId === draft.customerId)}
+                description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。"
                 value={draft.externalCollaborators ?? []}
                 readonly={!canAddExternalCollaborators(draft, access)}
                 allowRemove={props.currentRole !== '客户'}
@@ -652,6 +657,12 @@ export function RequestWorkspace(props: Props) {
               />}
             </aside>
               }>
+              {returnNotice && <section className="sr-panel sr-ops-panel" role="status">
+                <div className="sr-ops-heading"><div>
+                  <h3>{returnNotice.title}</h3>
+                  <p className="whitespace-pre-wrap break-words">{returnNotice.reason}</p>
+                </div></div>
+              </section>}
               <section className="sr-panel">
                 <div className="sr-panel-heading">
                   <h3>基本信息</h3>
@@ -706,7 +717,7 @@ export function RequestWorkspace(props: Props) {
                     }
                   />
                   <label className="sr-span">
-                    申请背景 <em>*</em>
+                    申请说明（选填）
                     <textarea
                       value={draft.description}
                       onChange={(e) =>
@@ -1227,7 +1238,7 @@ export function RequestWorkspace(props: Props) {
             <DialogTitle>确认提交服务请求</DialogTitle>
             <DialogDescription>
               共 {draft?.items.length}{' '}
-              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX 员工
+              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX 销售经理
               核查材料、服务范围和依据。这不是客户对计费的确认。
             </DialogDescription>
           </DialogHeader>

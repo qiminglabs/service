@@ -262,6 +262,7 @@ export function RequestMaterialDialog({
                       单文件上限 20 MB
                     </p>
                   )}
+                  {!readonly && (
                   <div className="sr-document-template-download">
                     {/^https?:\/\//i.test(
                       requirement.onlineTemplateUrl?.trim() ?? '',
@@ -299,6 +300,7 @@ export function RequestMaterialDialog({
                       </Button>
                     )}
                   </div>
+                  )}
                 </div>
                 {!readonly && (
                   <input

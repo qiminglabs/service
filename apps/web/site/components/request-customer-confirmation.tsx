@@ -38,27 +38,29 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
       setError(error instanceof Error ? error.message : '保存失败，请重试。');
     } finally { lock.current = false; setWorking(false); }
   }
-  if (!canDecide && !latest) return null;
+  if (['草稿', '已取消'].includes(record.status) || (!canDecide && !latest?.accepted)) return null;
   return <section className="sr-panel sr-ops-panel">
     <div className="sr-ops-heading">
       <div>
-        <h3>{canDecide ? '服务请求待确认' : latest?.accepted ? '已确认服务请求' : '服务请求已拒绝'}</h3>
-        <p>{canDecide ? '请核对申请信息及预计消耗资产后，确认或拒绝本次服务请求。' : latest?.accepted ? '请求已进入后续受理流程。' : `拒绝原因：${latest?.reason}`}</p>
+        <h3>{canDecide ? '服务请求待确认' : '已确认服务请求'}</h3>
+        <p>{canDecide ? '请核对申请信息及预计消耗资产后，确认或拒绝本次服务请求。' : '请求已进入后续受理流程。'}</p>
       </div>
       {canDecide && <div className="flex gap-2">
         <Button variant="outline" disabled={disabled} onClick={() => { setReason(''); setError(''); setMode('reject'); }}>拒绝</Button>
         <Button disabled={disabled} onClick={() => { setError(''); setMode('accept'); }}>确认</Button>
       </div>}
     </div>
-    {confirmation && <div className="px-6 pb-6">
+    {confirmation && <div className="sr-customer-confirmation-body">
+      <section className="sr-customer-confirmation-assets">
       <h4 className="mb-3 font-medium">预计消耗资产</h4>
       {allocations.length ? <div className="sr-assessment-allocations">{allocations.map(asset => <div key={asset.assetId}>
         <span>{asset.name} <small>{asset.assetId}</small></span><strong>{Number(asset.days.toFixed(2))} 人天</strong>
       </div>)}</div> : <p className="sr-help">本次不消耗客户资产。</p>}
-      {confirmation.externalNote && <div className="sr-assessment-note">
-        <h4 className="mb-3 font-medium">对外说明</h4>
+      </section>
+      {confirmation.externalNote && <section className="sr-customer-confirmation-note">
+        <h4 className="mb-3 font-medium">说明</h4>
         <p className="whitespace-pre-wrap break-words">{confirmation.externalNote}</p>
-      </div>}
+      </section>}
     </div>}
     <Dialog open={!!mode} onOpenChange={open => { if (!open && !disabled) setMode(null); }}>
       <DialogContent showCloseButton={!disabled}>
