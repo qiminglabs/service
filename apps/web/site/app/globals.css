@@ -5767,3 +5767,41 @@ body:has(.sr-document-dialog) [data-slot='dialog-overlay'] {
 .sr-project-item-fields > div { display: flex; flex-wrap: wrap; min-width: 0; max-width: 100%; }
 .sr-project-item-fields dt { color: #8491a4; font-weight: 400; }
 .sr-project-item-fields dd { margin: 0; color: #52657c; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* Per-catalog effort pricing shares the assessment table hierarchy. */
+.sr-pricing-table-wrap { width: 100%; overflow-x: auto; border: 1px solid #e3eaf4; border-radius: 8px; }
+.sr-pricing-table { width: 100%; min-width: 570px; border-collapse: collapse; font-size: 14px; }
+.sr-pricing-table th { padding: 12px 16px; background: #f7f9fc; color: #66788f; font-weight: 500; text-align: left; white-space: nowrap; }
+.sr-pricing-table td { padding: 14px 16px; border-top: 1px solid #edf0f5; vertical-align: middle; }
+.sr-pricing-table td:first-child { width: 46%; min-width: 180px; overflow-wrap: anywhere; }
+.sr-pricing-table td strong { font-weight: 500; }
+.sr-pricing-table td small { display: block; margin-top: 4px; color: #8491a4; }
+.sr-pricing-table td:not(:first-child) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sr-pricing-table th:last-child, .sr-pricing-table td:last-child { text-align: right; }
+.sr-pricing-table em { color: #f05d5d; font-style: normal; }
+.sr-pricing-editor input { width: 128px; }
+.sr-pricing-editor output { font-weight: 600; color: #0088ff; }
+.sr-pricing-totals { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 16px 28px; padding: 16px; background: #f7f9fc; border-radius: 8px; color: #66788f; font-size: 14px; }
+.sr-pricing-totals strong { margin-left: 8px; color: #142e4a; font-size: 20px; font-variant-numeric: tabular-nums; }
+.sr-pricing-totals span:nth-child(odd) strong { color: #0088ff; }
+
+.sr-assessment-gap-preview { margin: 8px 0 0; color: #d93025; font-size: 18px; font-weight: 600; line-height: 1.5; font-variant-numeric: tabular-nums; }
+
+.sr-pricing-overview { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px 32px; margin-bottom: 20px; }
+.sr-pricing-primary { display: flex; align-items: baseline; gap: 16px; color: #66788f; font-size: 14px; }
+.sr-pricing-primary > strong { color: #142e4a; font-size: 30px; line-height: 1.3; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sr-pricing-primary small { color: #8491a4; font-size: 14px; font-weight: 400; }
+.sr-pricing-details { list-style: none; margin: 0; padding: 0; }
+.sr-pricing-details > li { display: flex; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 16px 0; border-top: 1px solid #edf0f5; }
+.sr-pricing-details > li:last-child { padding-bottom: 0; }
+.sr-pricing-service { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.sr-pricing-service strong { color: #142e4a; font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
+.sr-pricing-service > span { color: #8491a4; font-size: 14px; }
+.sr-pricing-equation { display: flex; align-items: baseline; justify-content: flex-end; flex-wrap: wrap; gap: 8px; color: #52657c; font-size: 14px; font-variant-numeric: tabular-nums; }
+.sr-pricing-equation > span, .sr-pricing-equation > strong { white-space: nowrap; }
+.sr-pricing-equation small, .sr-pricing-operator { color: #8491a4; font-size: 14px; font-weight: 400; }
+.sr-pricing-equation > strong { color: #142e4a; font-size: 16px; font-weight: 600; }
+@media (max-width: 760px) {
+  .sr-pricing-details > li { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .sr-pricing-equation { justify-content: flex-start; }
+}

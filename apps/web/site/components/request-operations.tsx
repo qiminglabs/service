@@ -30,6 +30,7 @@ import { RequestAssessment } from '@/components/request-assessment';
 import { downloadFile, storedFile } from '@/lib/service-requests';
 import type {
   ServiceRequest,
+  CatalogService,
   InternalUser,
   StoredFile,
 } from '@/lib/service-requests';
@@ -57,6 +58,7 @@ import type {
 } from '@/lib/request-operations';
 
 type Props = {
+  services: CatalogService[];
   record: ServiceRequest;
   users: InternalUser[];
   assets: RequestAsset[];
@@ -129,6 +131,7 @@ function Summary({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function RequestOperationsTabs({
+  services,
   record,
   users,
   assets,
@@ -457,6 +460,7 @@ export function RequestOperationsTabs({
             </TabsContent>
             <TabsContent value="evaluations">
               <RequestAssessment
+                services={services}
                 record={record}
                 users={users}
                 assets={assets}

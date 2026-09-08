@@ -1,3 +1,4 @@
+import { effortPricingSaveIssue } from './request-pricing.ts';
 import { projectCreationSaveIssue } from './request-projects.ts';
 import { isInternal } from './request-operations.ts';
 import { supplementSaveIssue } from './request-supplements.ts';
@@ -13,6 +14,7 @@ export type CatalogService = {
   deliveryMethods: string[];
   status: string;
   priceUnit: string;
+  priceCoefficient?: number;
   allowedInitiatorSites?: string[];
 };
 export type RequestAudience = 'internal' | 'customer';
@@ -183,6 +185,7 @@ export type RequestItem = {
   id: string;
   serviceId: string;
   serviceName: string;
+  priceCoefficient?: number;
   methods: string[];
   method: string;
   methodFieldType?:
@@ -553,6 +556,7 @@ export function newItem(
     id: crypto.randomUUID(),
     serviceId: service.id,
     serviceName: service.name,
+    priceCoefficient: service.priceCoefficient,
     methods: [...service.deliveryMethods],
     method: service.deliveryMethods[0] ?? '',
     description: '',
@@ -821,12 +825,14 @@ export async function saveLocal(
           } else {
             const changedPlan = JSON.stringify(currentPlan(serviceRequest)) !== JSON.stringify(previous ? currentPlan(previous) : undefined);
             const startingConfirmation = serviceRequest.operations?.assessment?.confirmation && !previous?.operations?.assessment?.confirmation;
-            if (!changedPlan && !startingConfirmation) { records.put(serviceRequest); return; }
+            const changedEffort = JSON.stringify(serviceRequest.operations?.assessment?.effort) !== JSON.stringify(previous?.operations?.assessment?.effort);
+            if (!changedPlan && !startingConfirmation && !changedEffort) { records.put(serviceRequest); return; }
             const all = records.getAll();
             all.onsuccess = () => {
               const workspace = transaction.objectStore('references').get('workspace');
               workspace.onsuccess = () => {
-                const lockIssue = assessmentLockIssue(serviceRequest, all.result.map(normalizeStoredRequest), workspace.result?.payload?.assets ?? []);
+                const lockIssue = effortPricingSaveIssue(serviceRequest, previous, workspace.result?.payload?.services ?? [])
+                  ?? assessmentLockIssue(serviceRequest, all.result.map(normalizeStoredRequest), workspace.result?.payload?.assets ?? []);
                 if (lockIssue) { reject(new RequestIdentityError(lockIssue)); transaction.abort(); }
                 else records.put(serviceRequest);
               };

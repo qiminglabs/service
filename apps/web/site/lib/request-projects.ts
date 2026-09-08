@@ -1,10 +1,11 @@
+import type { EffortPricingLine } from './request-pricing';
 import type { ServiceRequest, RequestItem } from './service-requests';
 import { operationsOf, type OperationActor } from './request-operations.ts';
 
 export type ProjectGroup = { id: string; name: string; note: string; itemIds: string[] };
 export type ServiceWorkOrder = {
   id: string; projectId: string; requestId: string; sourceItemId: string;
-  serviceId: string; serviceName: string; status: '待排期'; item: RequestItem;
+  serviceId: string; serviceName: string; status: '待排期'; item: RequestItem; pricing?: EffortPricingLine;
 };
 export type ServiceProject = {
   id: string; name: string; note: string; requestId: string; customerId: string;
@@ -45,8 +46,9 @@ export function createServiceProjects(record: ServiceRequest, actor: OperationAc
     managerId: actor.id, manager: actor.name, createdAt: at, status: '待启动',
     workOrders: group.itemIds.map(itemId => {
       const item = record.items.find(item => item.id === itemId)!;
+      const pricing = record.operations?.assessment?.effort?.lines?.find(line => line.itemId === itemId);
       return { id: `WO-${id.replaceAll('-', '').slice(0, 12).toUpperCase()}-${String(++orderNumber).padStart(3, '0')}`, projectId: group.id,
-        requestId: record.id, sourceItemId: item.id, serviceId: item.serviceId, serviceName: item.serviceName, status: '待排期', item: structuredClone(item) };
+        requestId: record.id, sourceItemId: item.id, serviceId: item.serviceId, serviceName: item.serviceName, status: '待排期', item: structuredClone(item), ...(pricing ? { pricing: structuredClone(pricing) } : {}) };
     }),
   }));
   const ops = operationsOf(record);

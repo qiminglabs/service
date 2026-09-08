@@ -29,9 +29,11 @@ import type { AssessmentAction, GapApproval } from '@/lib/request-assessment';
 import { operationIdentities } from '@/lib/internal-users';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import { readLocal } from '@/lib/service-requests';
-import type { ServiceRequest, InternalUser } from '@/lib/service-requests';
+import { itemPriceCoefficient, calculateBillableDays, calculateEffortPricing, effortTotalsByMethod } from '@/lib/request-pricing';
+import type { ServiceRequest, InternalUser, CatalogService } from '@/lib/service-requests';
 
 type Props = {
+  services: CatalogService[];
   record: ServiceRequest;
   actor: OperationActor;
   users: InternalUser[];
@@ -40,7 +42,7 @@ type Props = {
   save: (r: ServiceRequest, message?: string) => Promise<boolean>;
 };
 type Mode = 'round' | 'effort' | 'plan' | 'gap' | 'decide' | null;
-const fmt = (n: number) => String(Number(n.toFixed(2)));
+const fmt = (n: number) => String(Number(n.toFixed(4)));
 const stamp = (s: string) => {
   const date = new Date(s);
   if (!Number.isFinite(date.getTime())) return '—';
@@ -105,6 +107,7 @@ function Badge({ children }: { children: ReactNode }) {
   return <span className="sr-assessment-badge">{children}</span>;
 }
 export function RequestAssessment({
+  services,
   record,
   actor,
   users,
@@ -115,6 +118,7 @@ export function RequestAssessment({
   const a = assessmentOf(record),
     plan = currentPlan(record),
     effort = assessedEffort(record);
+  const effortTotals = effortTotalsByMethod(record, a.effort?.lines ?? []);
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
   const customerConfirmed = ['待受理', '已转服务项目'].includes(record.status);
   const latestDecision = record.operations?.customerDecisions?.at(-1);
@@ -175,6 +179,8 @@ export function RequestAssessment({
         assets,
         users,
         fresh,
+        undefined,
+        services,
       );
       const ok = await save(
         next,
@@ -308,19 +314,32 @@ export function RequestAssessment({
           {effort === undefined ? (
             <p className="sr-help">
               {passed
-                ? '材料评估已通过，请核定服务总人天。'
+                ? '材料评估已通过，请按服务目录核定预估人天。'
                 : '材料评估通过后可核定人天。'}
             </p>
           ) : (
             <>
-              <div className="sr-assessment-amounts">
-                <span>
-                  服务总人天
-                  <strong>
-                    {fmt(effort)} <small>人天</small>
-                  </strong>
-                </span>
+              <div className="sr-pricing-overview">
+                {effortTotals.length ? effortTotals.flatMap(total => [
+                  <div key={`${total.method}-billable`} className="sr-pricing-primary"><span>计价{total.method}总人天</span><strong>{fmt(total.days)} <small>人天</small></strong></div>,
+                  <div key={`${total.method}-estimated`} className="sr-pricing-primary"><span>预估{total.method}总人天</span><strong>{fmt(total.estimatedDays)} <small>人天</small></strong></div>,
+                ]) : <>
+                  <div className="sr-pricing-primary"><span>计价总人天</span><strong>{fmt(effort)} <small>人天</small></strong></div>
+                  {a.effort?.estimatedDays !== undefined && <div className="sr-pricing-primary"><span>预估总人天</span><strong>{fmt(a.effort.estimatedDays)} <small>人天</small></strong></div>}
+                </>}
               </div>
+              {!!a.effort?.lines?.length && <ul className="sr-pricing-details" aria-label="服务目录计价明细">
+                {a.effort.lines.map(line => <li key={line.itemId}>
+                  <div className="sr-pricing-service"><strong>{line.serviceName}</strong><span>{record.items.find(item => item.id === line.itemId)?.method}</span></div>
+                  <div className="sr-pricing-equation">
+                    <span><small>预估</small> {fmt(line.estimatedDays)} 人天</span>
+                    <span className="sr-pricing-operator" aria-hidden="true">×</span>
+                    <span><small>计价系数</small> {fmt(line.priceCoefficient)}</span>
+                    <span className="sr-pricing-operator" aria-hidden="true">=</span>
+                    <strong aria-label={`计价 ${fmt(line.billableDays)} 人天`}>{fmt(line.billableDays)} <small>人天</small></strong>
+                  </div>
+                </li>)}
+              </ul>}
             </>
           )}
           {a.effort?.note && (
@@ -485,7 +504,7 @@ export function RequestAssessment({
           if (!v && !disabled) setDialog(null);
         }}
       >
-        <DialogContent className="sr-ops-dialog" showCloseButton={!disabled}>
+        <DialogContent className={`sr-ops-dialog${dialog === 'effort' ? ' sr-ops-dialog--wide' : ''}`} showCloseButton={!disabled}>
           {dialog === 'confirm' ? (
             <>
               <DialogHeader>
@@ -539,6 +558,7 @@ export function RequestAssessment({
           ) : <AssessmentForm
             key={`${dialog}:${approval?.id}`}
             mode={dialog}
+            services={services}
             record={record}
             users={users}
             actor={actor}
@@ -556,6 +576,7 @@ export function RequestAssessment({
   );
 }
 function AssessmentForm({
+  services,
   mode,
   record,
   users,
@@ -569,6 +590,7 @@ function AssessmentForm({
   close,
 }: {
   mode: Mode;
+  services: CatalogService[];
   record: ServiceRequest;
   users: InternalUser[];
   actor: OperationActor;
@@ -585,9 +607,15 @@ function AssessmentForm({
     assessed = assessedEffort(record);
   const [opinion, setOpinion] = useState('');
   const [outcome, setOutcome] = useState<'需补充' | '评估通过'>('需补充');
-  const [effort, setEffort] = useState(
-    assessed === undefined ? '' : String(assessed),
-  );
+  const [estimates, setEstimates] = useState<Record<string, string>>(() => Object.fromEntries(
+    record.items.map(item => [item.id, String(a.effort?.lines?.find(line => line.itemId === item.id)?.estimatedDays ?? '')]),
+  ));
+  const pricingInputs = record.items.map(item => ({ itemId: item.id, estimatedDays: Number(estimates[item.id]), priceCoefficient: itemPriceCoefficient(item, services) }));
+  let pricingIssue = '';
+  let pricing: ReturnType<typeof calculateEffortPricing> | undefined;
+  try { pricing = calculateEffortPricing(record, pricingInputs, services); }
+  catch (error) { pricingIssue = error instanceof Error ? error.message : '请填写完整的预估人天。'; }
+
   const [effortNote, setEffortNote] = useState(a.effort?.note ?? '');
   const [amounts, setAmounts] = useState<Record<string, string>>(
     Object.fromEntries(
@@ -620,7 +648,7 @@ function AssessmentForm({
   async function submit() {
     if (mode === 'round') return run({ type: 'review', opinion, outcome });
     if (mode === 'effort')
-      return run({ type: 'effort', days: Number(effort), note: effortNote });
+      return run({ type: 'effort', items: pricingInputs, note: effortNote });
     if (mode === 'plan')
       return run({
         type: 'plan',
@@ -639,7 +667,7 @@ function AssessmentForm({
         {mode !== 'round' && (
           <DialogDescription>
             {mode === 'effort'
-              ? '核定本次服务总人天。修改人天会释放原资产预留，需重新关联服务依据。'
+              ? '按服务目录填写预估人天，计价人天 = 预估人天 × 计价系数。后续按计价人天消耗资产；计价总人天变化后需重新关联服务依据。'
               : mode === 'plan'
                 ? '关联客户资产并锁定人天，不足部分由销售发起额度特批。'
                 : `额外额度 ${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}
@@ -672,16 +700,30 @@ function AssessmentForm({
         )}
         {mode === 'effort' && (
           <>
-            <Field title="服务总人天 *">
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={effort}
-                disabled={disabled}
-                onChange={(e) => setEffort(e.target.value)}
-              />
-            </Field>
+            <div className="sr-pricing-table-wrap"><table className="sr-pricing-table sr-pricing-editor">
+              <thead><tr><th>服务目录</th><th>预估人天 <em>*</em></th><th>计价系数</th><th>计价人天</th></tr></thead>
+              <tbody>{record.items.map(item => {
+                const coefficient = itemPriceCoefficient(item, services);
+                const estimate = Number(estimates[item.id]);
+                const billable = estimates[item.id]?.trim() && Number.isFinite(estimate) && estimate > 0 && coefficient !== undefined
+                  ? calculateBillableDays(estimate, coefficient) : undefined;
+                return <tr key={item.id}>
+                  <td><strong>{item.serviceName}</strong><small>{item.method}</small></td>
+                  <td><Input aria-label={`${item.serviceName} ${item.id} 预估人天`} type="number" min="0.01" max="100000" step="0.01"
+                    placeholder="填写人天" value={estimates[item.id] ?? ''} disabled={disabled}
+                    onChange={event => setEstimates(old => ({ ...old, [item.id]: event.target.value }))} /></td>
+                  <td><span aria-label={`${item.serviceName} 计价系数（只读）`}>{coefficient === undefined ? '未配置' : `× ${fmt(coefficient)}`}</span></td>
+                  <td><output aria-label={`${item.serviceName} 计价人天`}>{billable === undefined ? '—' : fmt(billable)}</output></td>
+                </tr>;
+              })}</tbody>
+            </table></div>
+            <div className="sr-pricing-totals" aria-live="polite">
+              {pricing ? effortTotalsByMethod(record, pricing.lines).flatMap(total => [
+                <span key={`${total.method}-billable`}>计价{total.method}总人天 <strong>{fmt(total.days)}</strong></span>,
+                <span key={`${total.method}-estimated`}>预估{total.method}总人天 <strong>{fmt(total.estimatedDays)}</strong></span>,
+              ]) : <><span>计价总人天 <strong>—</strong></span><span>预估总人天 <strong>—</strong></span></>}
+            </div>
+            {pricingIssue && <p className="sr-help">{pricingIssue}</p>}
             <Field title="备注（选填）">
               <Textarea
                 value={effortNote}
@@ -696,7 +738,7 @@ function AssessmentForm({
         {mode === 'plan' && (
           <>
             <div className="sr-ops-form-row">
-              <Field title="已核定人天">
+              <Field title="计价总人天">
                 <Input value={`${fmt(assessed ?? 0)} 人天`} readOnly />
               </Field>
               <Field title="负责销售 *">
@@ -733,7 +775,7 @@ function AssessmentForm({
                       placeholder="锁定人天"
                       type="number"
                       min="0"
-                      step="0.01"
+                      step="0.0001"
                       max={available ?? 0}
                       disabled={disabled || available === null}
                       value={amounts[v.id] ?? ''}
@@ -748,7 +790,7 @@ function AssessmentForm({
                 <p>当前客户暂无有效资产，可按全部人天发起额度特批。</p>
               )}
             </div>
-            <p className="sr-help">
+            <p className="sr-assessment-gap-preview" aria-live="polite">
               预计缺口：
               {fmt(
                 Math.max(
@@ -836,7 +878,7 @@ function AssessmentForm({
             </Button>
           </>
         ) : (
-          <Button disabled={disabled} onClick={() => void submit()}>
+          <Button disabled={disabled || (mode === 'effort' && !!pricingIssue)} onClick={() => void submit()}>
             {mode === 'round'
               ? '保存评估结论'
               : mode === 'effort'

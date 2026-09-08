@@ -1,7 +1,9 @@
+import { roundDays, calculateEffortPricing, type EffortPricingLine, type EffortPricingInput } from './request-pricing.ts';
 import { portalSwitchIdentities } from './portal-context.ts';
 import { operationIdentities } from './internal-users.ts';
 import type {
   ServiceRequest,
+  CatalogService,
   InternalUser,
   StoredFile,
 } from './service-requests';
@@ -62,7 +64,7 @@ export type GapApproval = {
 };
 export type Assessment = {
   needsReview?: boolean; // Legacy field, no longer controls assessment.
-  effort?: { days: number; at: string; author: string; note?: string };
+  effort?: { days: number; estimatedDays?: number; lines?: EffortPricingLine[]; at: string; author: string; note?: string };
   managerId: string;
   manager: string;
   rounds: AssessmentRound[];
@@ -83,7 +85,7 @@ export type Assessment = {
 };
 export type AssessmentAction =
   | { type: 'return-draft'; reason: string }
-  | { type: 'effort'; days: number; note?: string }
+  | { type: 'effort'; items: EffortPricingInput[]; note?: string }
   | {
       type: 'review';
       scope?: string;
@@ -183,9 +185,9 @@ export const isProjectManager = (actor: OperationActor) =>
 export const isSalesUser = (user: InternalUser | undefined) =>
   !!user && user.status === '启用' && /销售/.test(user.department ?? '');
 export const planAssetDays = (plan?: AssessmentPlan) =>
-  plan?.allocations.reduce((sum, a) => sum + a.days, 0) ?? 0;
+  roundDays(plan?.allocations.reduce((sum, a) => sum + a.days, 0) ?? 0);
 export const planGap = (plan?: AssessmentPlan) =>
-  Math.max(0, (plan?.effort ?? 0) - planAssetDays(plan));
+  roundDays(Math.max(0, (plan?.effort ?? 0) - planAssetDays(plan)));
 export function assetAvailable(
   asset: RequestAsset,
   records: ServiceRequest[],
@@ -207,7 +209,7 @@ export function assetAvailable(
           .reduce((n, a) => n + a.days, 0) ?? 0),
       0,
     );
-  return Math.max(0, asset.balanceDays - locked);
+  return roundDays(Math.max(0, asset.balanceDays - locked));
 }
 export function assessmentLockIssue(
   record: ServiceRequest,
@@ -217,6 +219,7 @@ export function assessmentLockIssue(
   if (record.status === '已取消') return null;
   const plan = currentPlan(record);
   if (!plan) return null;
+  if (plan.effort !== assessedEffort(record)) return '服务依据与计价总人天不一致，请重新关联。';
   for (const allocation of plan.allocations) {
     const asset = assets.find(
       (a) =>
@@ -241,6 +244,7 @@ export function applyAssessmentAction(
   users: InternalUser[],
   records: ServiceRequest[],
   now = new Date().toISOString(),
+  services: CatalogService[] = [],
 ): ServiceRequest {
   if (!actor.id || !isInternal(actor.role))
     throw new Error('仅内部人员可处理评估工作。');
@@ -336,21 +340,21 @@ export function applyAssessmentAction(
     manager();
     if (!assessment.rounds.some((r) => r.outcome === '评估通过'))
       throw new Error('请先完成材料评估。');
-    positive(action.days);
+    const pricing = calculateEffortPricing(record, action.items, services);
     assessment.effort = {
-      days: action.days,
+      ...pricing,
       at: now,
       author: actor.name,
       note: action.note?.trim() ?? '',
     };
-    if (plan && plan.effort !== action.days) {
+    if (plan && plan.effort !== pricing.days) {
       assessment.plans.at(-1)!.releasedAt = now;
       assessment.approvals.forEach((a) => {
         if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
       });
     }
     title = '核定人天';
-    detail = `${action.days} 人天${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
+    detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
   } else if (action.type === 'plan') {
     manager();
     const round = assessment.rounds.find((r) => r.outcome === '评估通过');
@@ -375,7 +379,7 @@ export function applyAssessmentAction(
       return { ...a, name: asset.name };
     });
     if (allocations.reduce((sum, a) => sum + a.days, 0) > effort + 1e-8)
-      throw new Error('锁定人天不能超过评估总人天。');
+      throw new Error('锁定人天不能超过计价总人天。');
     assessment.plans.push({
       id: crypto.randomUUID(),
       roundId: round.id,
@@ -390,7 +394,7 @@ export function applyAssessmentAction(
       if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
     });
     title = plan ? '调整服务依据' : '关联服务依据';
-    detail = `总人天 ${effort} · 锁定 ${planAssetDays(assessment.plans.at(-1))} 人天`;
+    detail = `计价总人天 ${effort} · 锁定 ${planAssetDays(assessment.plans.at(-1))} 人天`;
   } else if (action.type === 'gap-submit') {
     const sales = users.find((u) => u.id === actor.id && isSalesUser(u));
     if (
@@ -483,7 +487,7 @@ export function applyAssessmentAction(
     };
     status = '待确认';
     title = '发起客户确认';
-    detail = `${round.scope} · 总人天 ${plan.effort} · 客户资产 ${planAssetDays(plan)} · 特批 ${gap}`;
+    detail = `${round.scope} · 计价总人天 ${plan.effort} · 客户资产 ${planAssetDays(plan)} · 特批 ${gap}`;
   } else {
     throw new Error('不支持的评估操作。');
   }

@@ -54,7 +54,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
       <section className="sr-customer-confirmation-assets">
       <h4 className="mb-3 font-medium">预计消耗资产</h4>
       {allocations.length ? <div className="sr-assessment-allocations">{allocations.map(asset => <div key={asset.assetId}>
-        <span>{asset.name} <small>{asset.assetId}</small></span><strong>{Number(asset.days.toFixed(2))} 人天</strong>
+        <span>{asset.name} <small>{asset.assetId}</small></span><strong>{Number(asset.days.toFixed(4))} 人天</strong>
       </div>)}</div> : <p className="sr-help">本次不消耗客户资产。</p>}
       </section>
       {confirmation.externalNote && <section className="sr-customer-confirmation-note">

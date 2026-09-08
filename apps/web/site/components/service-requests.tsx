@@ -637,7 +637,7 @@ export function RequestWorkspace(props: Props) {
               </p>
             </section>
           )}
-              <RequestOperationsTabs key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
+              <RequestOperationsTabs services={props.services} key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
             <aside className="sr-collaboration-column" aria-label="协作人">
               <RequestExternalCollaborators
                 contacts={props.contacts.filter(contact => contact.customerId === draft.customerId)}

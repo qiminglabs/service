@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { newRequest, requestIdentityIssue } from './service-requests.ts';
+import { newRequest, newItem, defaultConfig, requestIdentityIssue } from './service-requests.ts';
 import {
   applyAssessmentAction,
   assessmentOf,
@@ -34,6 +34,7 @@ const now = '2026-09-08T10:00:00.000Z';
 const request = () => ({
   ...newRequest('服务申请', 'c1', '客户', 'c'),
   status: '待评估',
+  items: [{ ...newItem({ id: 'svc', name: '实施', deliveryMethods: ['远程'], priceCoefficient: 1 }, defaultConfig({ id: 'svc', deliveryMethods: ['远程'] })), id: 'item' }],
 });
 const act = (r, action, actor = pm, all = [], catalog = assets) =>
   applyAssessmentAction(r, action, actor, catalog, users, all, now);
@@ -45,7 +46,7 @@ const review = {
   outcome: '评估通过',
 };
 const ready = (r = request()) => act(r, review);
-const effort = (r, days = 5) => act(r, { type: 'effort', days });
+const effort = (r, days = 5) => act(r, { type: 'effort', items: [{ itemId: 'item', estimatedDays: days }] });
 const link = (r, days = 5) =>
   act(r, {
     type: 'plan',
@@ -93,8 +94,8 @@ test('三个阶段顺序校验：材料通过、核定人天、关联服务依�
   let r = effort(ready(), 3);
   assert.equal(currentPlan(r), undefined);
   assert.equal(r.status, '待评估');
-  assert.throws(() => effort(r, 0), /正数/);
-  assert.throws(() => act(r, { type: 'effort', days: 3 }, sales), /项目经理/);
+  assert.throws(() => effort(r, 0), /大于 0/);
+  assert.throws(() => act(r, { type: 'effort', items: [{ itemId: 'item', estimatedDays: 3 }] }, sales), /项目经理/);
   r = link(r, 3);
   assert.equal(currentPlan(r).effort, 3);
   assert.throws(() => act(r, review), /已通过/);
@@ -299,16 +300,16 @@ test('核定人天备注选填、可保存和清空，仅修改备注不释放�
   const initial = ready();
   const saved = act(initial, {
     type: 'effort',
-    days: 5,
+    items: [{ itemId: 'item', estimatedDays: 5 }],
     note: '  实施 3 人天\n验收 2 人天  ',
   });
   assert.equal(assessmentOf(saved).effort.note, '实施 3 人天\n验收 2 人天');
   assert.match(saved.operations.activities.at(-1).detail, /实施 3 人天/);
   const linked = link(saved);
-  const updated = act(linked, { type: 'effort', days: 5, note: '补充说明' });
+  const updated = act(linked, { type: 'effort', items: [{ itemId: 'item', estimatedDays: 5 }], note: '补充说明' });
   assert.deepEqual(currentPlan(updated), currentPlan(linked));
   assert.equal(assessmentOf(updated).effort.note, '补充说明');
-  const cleared = act(updated, { type: 'effort', days: 5, note: '' });
+  const cleared = act(updated, { type: 'effort', items: [{ itemId: 'item', estimatedDays: 5 }], note: '' });
   assert.equal(assessmentOf(cleared).effort.note, '');
   assert.equal(assessmentOf(effort(initial)).effort.note, '');
 });
