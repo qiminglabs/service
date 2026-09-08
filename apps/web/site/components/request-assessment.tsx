@@ -116,6 +116,11 @@ export function RequestAssessment({
     plan = currentPlan(record),
     effort = assessedEffort(record);
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
+  const customerConfirmed = ['待受理', '已转服务项目'].includes(record.status);
+  const latestDecision = record.operations?.customerDecisions?.at(-1);
+  const confirmedDecision = customerConfirmed && latestDecision?.accepted && latestDecision.planId === a.confirmation?.planId
+    ? latestDecision : undefined;
+  const confirmationLabel = record.status === '已取消' ? '已取消' : customerConfirmed ? '客户已确认' : '等待客户确认';
   const gap = planGap(plan);
   const approved =
     plan &&
@@ -450,20 +455,23 @@ export function RequestAssessment({
         <section className="sr-assessment-plan">
           <div className="sr-assessment-section-title">
             <div className="sr-assessment-step-heading">
-              <StepTitle index={3} stage={stage} complete={!!a.confirmation}>
+              <StepTitle index={3} stage={stage} complete={customerConfirmed}>
                 客户确认
               </StepTitle>
-              {a.confirmation && <RecordMeta author={a.confirmation.by} at={a.confirmation.at} />}
+              {confirmedDecision ? <RecordMeta author={confirmedDecision.actor} at={confirmedDecision.at} /> : a.confirmation && <RecordMeta author={a.confirmation.by} at={a.confirmation.at} />}
             </div>
             {!a.confirmation && manager && editable && confirmationReady && (
               <Button disabled={!canConfirm || disabled} onClick={() => open('confirm')}>
                 发起客户确认<ArrowRight size={15} />
               </Button>
             )}
-            {a.confirmation && <Badge>已发起客户确认</Badge>}
+            {(a.confirmation || customerConfirmed) && <Badge>{confirmationLabel}</Badge>}
           </div>
           <p className="sr-help">
-            {a.confirmation ? '服务依据已提交，等待客户确认。' : !plan
+            {record.status === '已取消' ? '请求已取消。'
+              : record.status === '已转服务项目' ? '客户已确认，服务项目已创建。'
+              : customerConfirmed ? '客户已确认，等待项目经理创建服务项目。'
+              : a.confirmation ? '服务依据已提交，等待客户确认。' : !plan
               ? '关联服务依据后，可发起客户确认。'
               : gap > 1e-8 && !approved
                 ? '等待额度特批通过后，可发起客户确认。'
