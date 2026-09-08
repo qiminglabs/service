@@ -1,0 +1,17 @@
+# Dependencies and generated output
+node_modules/
+.next/
+.vinext/
+.wrangler/
+dist/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Local environment and operating-system files
+.DS_Store
+.env*
+*.pem
+*.key
+*.log
