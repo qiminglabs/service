@@ -1666,6 +1666,7 @@ function CatalogView(props: CatalogViewProps) {
                       <div className="service-identity">
                         <button
                           type="button"
+                          className="app-list-link"
                           onClick={() => props.onView(service.id)}
                           aria-label={`查看服务 ${service.name}`}
                         >
@@ -1702,6 +1703,7 @@ function CatalogView(props: CatalogViewProps) {
                       <div className="row-actions">
                         <button
                           type="button"
+                          className="app-list-link"
                           onClick={() => props.onView(service.id)}
                           aria-label={`查看 ${service.name}`}
                         >

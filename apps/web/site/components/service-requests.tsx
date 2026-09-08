@@ -20,6 +20,8 @@ import {
 import type { RequestField } from '@/components/request-field-settings';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
 import { RequestContactField } from '@/components/request-contact-field';
+import { RequestStatusProgress } from '@/components/request-status-progress';
+import { RequestServiceDate } from '@/components/request-service-date';
 import {
   RequestExternalCollaborators,
   RequestInternalInfo,
@@ -45,6 +47,8 @@ import {
 import {
   checkFile,
   requestCreationIssue,
+  requestStatuses,
+  requestStatusTone,
   RequestIdentityError,
   businessObjectsEnabled,
   matchesObjectProduct,
@@ -386,8 +390,9 @@ export function RequestWorkspace(props: Props) {
                 onChange={(e) => setStatus(e.target.value)}
               >
                 <option>全部状态</option>
-                <option>草稿</option>
-                <option>待评估</option>
+                {requestStatuses.map((state) => (
+                  <option key={state}>{state}</option>
+                ))}
               </select>
             </div>
             <Button
@@ -411,7 +416,7 @@ export function RequestWorkspace(props: Props) {
                     <th>申请主题 / 编号</th>
                     <th>客户</th>
                     <th>申请项</th>
-                    <th>材料准备</th>
+                    <th>期望服务日期</th>
                     <th>状态</th>
                     <th>最近更新</th>
                     <th>操作</th>
@@ -422,7 +427,7 @@ export function RequestWorkspace(props: Props) {
                     <tr key={record.id}>
                       <td>
                         <button
-                          className="sr-title-link"
+                          className="sr-title-link app-list-link"
                           onClick={() => {
                             setDraft(structuredClone(record));
                             setMaterialTarget(null);
@@ -439,19 +444,11 @@ export function RequestWorkspace(props: Props) {
                           ?.name ?? '待选择'}
                       </td>
                       <td>{record.items.length} 项</td>
-                      <td>
-                        {
-                          record.items.filter((i) => !itemIssues(i).length)
-                            .length
-                        }{' '}
-                        / {record.items.length} 项完整
-                      </td>
+                      <td>{record.expectedServiceDate || '—'}</td>
                       <td>
                         <span
                           className="sr-badge"
-                          data-tone={
-                            record.status === '草稿' ? 'muted' : 'blue'
-                          }
+                          data-tone={requestStatusTone(record.status)}
                         >
                           {record.status}
                         </span>
@@ -463,6 +460,7 @@ export function RequestWorkspace(props: Props) {
                       <td>
                         <Button
                           variant="ghost"
+                          className="app-list-link"
                           onClick={() => {
                             setDraft(structuredClone(record));
                             setMaterialTarget(null);
@@ -516,7 +514,7 @@ export function RequestWorkspace(props: Props) {
                 <h2>{draft.title || '未命名服务请求'}</h2>
                 <span
                   className="sr-badge"
-                  data-tone={readonly ? 'blue' : 'muted'}
+                  data-tone={requestStatusTone(draft.status)}
                 >
                   {draft.status}
                 </span>
@@ -558,6 +556,7 @@ export function RequestWorkspace(props: Props) {
               )}
             </div>
           </header>
+          <RequestStatusProgress status={draft.status} />
           {feedback}
           {showIssues && !readonly && issues.length > 0 && (
             <section className="sr-error" role="alert">
@@ -617,18 +616,14 @@ export function RequestWorkspace(props: Props) {
                     disabled={busy || !draft.customerId}
                     readonly={readonly}
                   />
-                  <label htmlFor="sr-expected-service-date">
-                    期望服务日期
-                    <Input
-                      id="sr-expected-service-date"
-                      type="date"
-                      value={draft.expectedServiceDate ?? ''}
-                      readOnly={readonly}
-                      onChange={(event) =>
-                        updateDraft({ expectedServiceDate: event.target.value })
-                      }
-                    />
-                  </label>
+                  <RequestServiceDate
+                    value={draft.expectedServiceDate ?? ''}
+                    readonly={readonly}
+                    disabled={busy}
+                    onChange={(expectedServiceDate) =>
+                      updateDraft({ expectedServiceDate })
+                    }
+                  />
                   <label className="sr-span">
                     申请背景 <em>*</em>
                     <textarea

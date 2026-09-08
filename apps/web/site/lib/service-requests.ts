@@ -198,6 +198,34 @@ export function reconcileExternalCollaborators(
     email: contact.email?.trim() ?? '',
   }));
 }
+export const requestStatuses = [
+  '草稿',
+  '待评估',
+  '待受理',
+  '已转工单',
+  '已取消',
+] as const;
+export type RequestStatus = (typeof requestStatuses)[number];
+export function requestStatusTone(status: RequestStatus) {
+  if (status === '已取消') return 'cancelled';
+  if (status === '已转工单') return 'green';
+  return status === '草稿' ? 'muted' : 'blue';
+}
+export function requestProgressSteps(status: RequestStatus) {
+  if (status === '已取消') return [{ label: '已取消', state: 'current' }];
+  const current = requestStatuses.indexOf(status);
+  return requestStatuses
+    .filter((step) => step !== '已取消')
+    .map((label, index) => ({
+      label,
+      state:
+        current === index
+          ? 'current'
+          : current > index
+            ? 'complete'
+            : 'upcoming',
+    }));
+}
 export type ServiceRequest = {
   id: string;
   title: string;
@@ -209,7 +237,7 @@ export type ServiceRequest = {
   createdBy?: string;
   externalCollaborators?: ExternalCollaborator[];
   internalParticipants?: InternalParticipant[];
-  status: '草稿' | '待评估';
+  status: RequestStatus;
   createdAt: string;
   updatedAt: string;
   submittedAt?: string;

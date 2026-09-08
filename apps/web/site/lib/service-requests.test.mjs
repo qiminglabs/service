@@ -14,6 +14,9 @@ import {
   normalizeRequestConfig,
   requestIdentityIssue,
   requestCreationIssue,
+  requestStatuses,
+  requestStatusTone,
+  requestProgressSteps,
   contactDisplay,
   reconcileExternalCollaborators,
   reconcileParticipants,
@@ -141,6 +144,36 @@ test('在申请详情补齐材料后可以提交，选填材料不阻止基础�
   assert.deepEqual(requestIssues(completeRequest(), refs), []);
 });
 
+test('五种请求状态共用定义，进度按当前阶段显示，取消不伪造完成进度', () => {
+  assert.deepEqual(requestStatuses, [
+    '草稿',
+    '待评估',
+    '待受理',
+    '已转工单',
+    '已取消',
+  ]);
+  for (const [index, status] of requestStatuses.slice(0, 4).entries()) {
+    const steps = requestProgressSteps(status);
+    assert.equal(steps.length, 4);
+    assert.ok(steps.every((step) => step.label !== '已取消'));
+    assert.equal(steps[index].label, status);
+    assert.equal(steps.filter((step) => step.state === 'current').length, 1);
+    assert.equal(
+      steps.filter((step) => step.state === 'complete').length,
+      index,
+    );
+    assert.equal(
+      steps.filter((step) => step.state === 'upcoming').length,
+      3 - index,
+    );
+  }
+  assert.deepEqual(requestProgressSteps('已取消'), [
+    { label: '已取消', state: 'current' },
+  ]);
+  assert.equal(requestStatusTone('已取消'), 'cancelled');
+  assert.equal(requestStatusTone('已转工单'), 'green');
+  assert.equal(requestStatusTone('草稿'), 'muted');
+});
 test('草稿可以不完整，提交必须有基本信息和至少一个申请项', () => {
   const draft = newRequest('', '', '客户');
   assert.equal(draft.status, '草稿');

@@ -32,6 +32,8 @@
 }
 
 :root {
+  --list-link-color: #0080ff;
+  --list-link-hover-color: #005ed1;
   --pagebackground-primary: #ffffff;
   --pagebackground-grouped: #edf0f7;
   --fill-neutral-white: #ffffff;
@@ -3517,6 +3519,14 @@ body {
   border-bottom: 1px solid #e8edf3;
 }
 /* Shared list headers across requests, catalog, field settings and references. */
+.app-list-table :is(a[href], [role='link'], .app-list-link) {
+  color: var(--list-link-color);
+}
+.app-list-table :is(a[href], [role='link'], .app-list-link):is(:hover, :focus-visible) {
+  color: var(--list-link-hover-color);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .app-list-table:is(.service-table, .reference-table, .sr-table)
   > thead
   > tr
@@ -3567,7 +3577,6 @@ body {
 }
 .sr-title-link {
   display: block;
-  color: #2563eb;
   text-align: left;
   font-weight: 500;
   cursor: pointer;
@@ -3621,6 +3630,41 @@ body {
   background: #eaf7f1;
   color: #288665;
 }
+.sr-badge[data-tone='cancelled'] { background: #f0f2f5; color: #667085; }
+.sr-status-progress {
+  display: flex; align-items: center; gap: 24px; padding: 20px 24px;
+  margin-bottom: 20px; background: #fff; border: 1px solid #e8edf3; border-radius: 8px;
+  overflow-x: auto;
+}
+.sr-status-steps { display: flex; align-items: center; flex: 1; min-width: 540px; list-style: none; margin: 0; padding: 0; }
+.sr-status-steps > li { display: flex; align-items: center; flex: 1; min-width: 0; }
+.sr-status-steps > li:last-child { flex: 0 0 auto; }
+.sr-status-steps > li:not(:last-child)::after { content: ''; flex: 1; height: 2px; min-width: 28px; margin: 0 12px; background: #e5eaf2; }
+.sr-status-steps > li[data-state='complete']::after { background: #008aff; }
+.sr-status-node { display: inline-flex; align-items: center; gap: 8px; color: #97a1b1; font-size: 14px; font-weight: 500; white-space: nowrap; }
+.sr-status-circle { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; justify-content: center; align-items: center; flex-shrink: 0; background: #f0f3f7; color: #97a1b1; font-size: 14px; font-weight: 600; }
+.sr-status-steps > li[data-state='complete'] .sr-status-node { color: #334155; }
+.sr-status-steps > li[data-state='current'] .sr-status-node { color: #008aff; }
+.sr-status-steps > li:is([data-state='complete'], [data-state='current']) .sr-status-circle { color: #fff; background: #008aff; }
+.sr-status-steps > li[data-state='current'] .sr-status-circle { box-shadow: 0 0 0 4px #e8f4ff; }
+.sr-status-progress[data-cancelled] .sr-status-steps { min-width: 0; }
+.sr-status-progress[data-cancelled] .sr-status-node { color: #475569; }
+.sr-status-progress[data-cancelled] .sr-status-circle { background: #71839e; color: #fff; box-shadow: none; }
+.sr-service-date-field { min-width: 0; }
+.sr-service-date-field > input,
+.sr-service-date-trigger {
+  margin-top: 8px; width: 100%; height: 40px; padding: 8px 12px;
+  border: 1px solid #dbe1ea; border-radius: 6px; background: #fff;
+  justify-content: space-between; font-weight: 400; color: #334155;
+}
+.sr-service-date-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-service-date-trigger[data-empty] { color: #97a1b1; }
+.sr-service-date-trigger:hover:not(:disabled) { border-color: #008aff; }
+.sr-service-date-trigger > svg { color: #8491a4; }
+div:has(> .sr-service-date-popover) { z-index: 220; }
+.sr-service-date-popover[data-slot='popover-content'] { width: fit-content; max-width: calc(100vw - 24px); padding: 8px; }
+.sr-service-date-popover [data-slot='calendar'] { --cell-size: 36px; }
+.sr-service-date-actions { display: flex; justify-content: space-between; padding-top: 6px; border-top: 1px solid #edf0f5; }
 .sr-detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 7fr) minmax(320px, 3fr);
