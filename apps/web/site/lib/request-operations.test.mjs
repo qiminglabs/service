@@ -32,6 +32,61 @@ function request() {
 }
 const act = (r, a, who = pmo, refs = assets) =>
   applyRequestAction(r, a, who, refs, now);
+
+test('预约会议保存日期时间和时长，不立即开会或自动填入协作人名单', () => {
+  const original = request();
+  let r = act(original, {
+    type: 'meeting-schedule',
+    title: '  需求沟通  ',
+    scheduledDate: '2030-10-10',
+    scheduledTime: '14:30',
+    durationMinutes: 60,
+  });
+  const m = r.operations.meetings[0];
+  assert.equal(m.title, '需求沟通');
+  assert.equal(m.status, '已预约');
+  assert.equal(m.scheduledDate, '2030-10-10');
+  assert.equal(m.scheduledTime, '14:30');
+  assert.equal(m.durationMinutes, 60);
+  assert.deepEqual(m.participantNames, []);
+  assert.equal(original.operations, undefined);
+  assert.equal(r.operations.activities.at(-1).title, '预约模拟会议');
+  assert.throws(
+    () => act(r, { type: 'meeting-end', id: m.id }),
+    /未结束|不存在|已结束/,
+  );
+  assert.throws(
+    () => act(r, { type: 'meeting-start', id: m.id }, reviewer),
+    /主持人/,
+  );
+  r = act(r, { type: 'meeting-start', id: m.id });
+  assert.equal(r.operations.meetings[0].status, '进行中');
+  assert.throws(() => act(r, { type: 'meeting-start', id: m.id }), /已预约/);
+  r = act(r, { type: 'meeting-end', id: m.id });
+  assert.equal(r.operations.meetings[0].status, '已结束');
+});
+
+test('预约必须有主题、有效的未来日期时间及支持的时长', () => {
+  const input = {
+    type: 'meeting-schedule',
+    title: '需求沟通',
+    scheduledDate: '2030-10-10',
+    scheduledTime: '14:30',
+    durationMinutes: 60,
+  };
+  for (const patch of [
+    { title: ' ' },
+    { scheduledDate: '' },
+    { scheduledDate: '2030-02-30' },
+    { scheduledDate: '2020-01-01' },
+    { scheduledTime: '' },
+    { scheduledTime: '25:00' },
+    { durationMinutes: 0 },
+    { durationMinutes: 17 },
+  ]) {
+    assert.throws(() => act(request(), { ...input, ...patch }));
+  }
+});
 function covered() {
   const r = act(request(), {
     type: 'basis-add',
@@ -94,7 +149,7 @@ test('提交后基本信息、申请项锁定，内外部协作人允许修改',
   );
   assert.match(
     requestIdentityIssue({ ...r, status: '草稿' }, r),
-    /不能直接变回草稿/,
+    /仅待评估阶段的负责项目经理可以退回草稿/,
   );
 });
 test('活动追加式保存，不能改写或删除历史', () => {
@@ -127,11 +182,12 @@ test('草稿、终态和客户角色不能操作内部模块', () => {
     /内部/,
   );
 });
-test('工时只允许内部协作人记录自己的投入，按 0.25 小时校验', () => {
+test('工时只允许内部协作人记录自己的投入，按起止时间计算投入', () => {
   const action = {
     type: 'worklog-add',
     date: '2026-09-08',
-    hours: 1.5,
+    startTime: '09:00',
+    endTime: '10:30',
     category: '需求调研',
     description: '核对客户网络条件',
   };
@@ -139,8 +195,17 @@ test('工时只允许内部协作人记录自己的投入，按 0.25 小时校�
   assert.equal(r.operations.worklogs[0].userId, pmo.id);
   assert.equal(r.operations.activities[0].category, '工时');
   assert.throws(() => act(request(), action, reviewer), /内部协作人/);
-  for (const hours of [0, -1, 25, 0.1, NaN])
-    assert.throws(() => act(request(), { ...action, hours }), /工时/);
+  assert.equal(r.operations.worklogs[0].hours, 1.5);
+  assert.equal(r.operations.worklogs[0].startTime, '09:00');
+  assert.equal(r.operations.worklogs[0].endTime, '10:30');
+  assert.equal(
+    act(request(), { ...action, endTime: '09:01', hours: 99 }).operations
+      .worklogs[0].hours,
+    1 / 60,
+  );
+  for (const endTime of ['', '09:00', '08:59', '24:00', '10:60', 'invalid'])
+    assert.throws(() => act(request(), { ...action, endTime }), /时间/);
+  assert.throws(() => act(request(), { ...action, startTime: '' }), /时间/);
   for (const date of ['2026-02-30', '2027-01-01', '', 'invalid'])
     assert.throws(() => act(request(), { ...action, date }), /工作日期/);
   assert.throws(
@@ -152,12 +217,13 @@ test('工时累计不超过 24 小时，作废留痕且允许重新录入', () =
   const action = {
     type: 'worklog-add',
     date: '2026-09-08',
-    hours: 20,
+    startTime: '00:00',
+    endTime: '20:00',
     category: '调研',
     description: '长时间调研',
   };
   let r = act(request(), action);
-  assert.throws(() => act(r, { ...action, hours: 5 }), /累计/);
+  assert.throws(() => act(r, { ...action, endTime: '05:00' }), /累计/);
   assert.throws(
     () =>
       act(
@@ -177,7 +243,7 @@ test('工时累计不超过 24 小时，作废留痕且允许重新录入', () =
     reason: '时间填写错误',
   });
   assert.ok(r.operations.worklogs[0].voidedAt);
-  r = act(r, { ...action, hours: 5 });
+  r = act(r, { ...action, endTime: '05:00' });
   assert.equal(r.operations.worklogs.length, 2);
   assert.equal(r.operations.activities.length, 3);
 });
@@ -471,4 +537,40 @@ test('每次操作不修改传入对象，成功结果可通过请求存储校�
   });
   assert.deepEqual(before, snapshot);
   assert.equal(requestIdentityIssue(after, before), null);
+});
+
+test('编辑工时原位更新、重新计算且排除原记录，拒绝越权和已作废记录', () => {
+  const input = {
+    type: 'worklog-add',
+    date: '2026-09-08',
+    startTime: '00:00',
+    endTime: '20:00',
+    category: '调研',
+    description: '原内容',
+  };
+  const original = act(request(), input);
+  const id = original.operations.worklogs[0].id;
+  const edit = {
+    ...input,
+    type: 'worklog-edit',
+    id,
+    endTime: '21:01',
+    category: '其他',
+    description: '更新内容',
+  };
+  const updated = act(original, edit);
+  assert.equal(updated.operations.worklogs.length, 1);
+  assert.equal(updated.operations.worklogs[0].id, id);
+  assert.equal(updated.operations.worklogs[0].hours, 1261 / 60);
+  assert.equal(updated.operations.worklogs[0].category, '其他');
+  assert.equal(updated.operations.worklogs[0].description, '更新内容');
+  assert.equal(original.operations.worklogs[0].hours, 20);
+  assert.equal(updated.operations.activities.at(-1).title, '编辑内部工时');
+  assert.throws(() => act(original, edit, reviewer), /自己的/);
+  assert.throws(() => act(original, { ...edit, id: 'missing' }), /自己的/);
+  assert.throws(() => act(original, { ...edit, endTime: '00:00' }), /时间/);
+  const crowded = act(original, { ...input, endTime: '04:00' });
+  assert.throws(() => act(crowded, edit), /累计/);
+  const voided = act(original, { type: 'worklog-void', id, reason: '取消' });
+  assert.throws(() => act(voided, edit), /自己的/);
 });

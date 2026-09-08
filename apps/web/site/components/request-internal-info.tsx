@@ -26,7 +26,7 @@ import type {
   InternalUser,
 } from '@/lib/service-requests';
 
-type CollaboratorOption = { id: string; name: string; details: string };
+type CollaboratorOption = { id: string; name: string; details: string; disabled?: boolean };
 
 function CollaboratorCard({
   title,
@@ -38,6 +38,7 @@ function CollaboratorCard({
   busy,
   onAdd,
   onRemove,
+  allowRemove = true,
 }: {
   title: string;
   description: string;
@@ -48,13 +49,14 @@ function CollaboratorCard({
   busy: boolean;
   onAdd: (ids: string[]) => void;
   onRemove: (id: string) => void;
+  allowRemove?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [pendingIds, setPendingIds] = useState<string[]>([]);
   const selectedIds = new Set(selected.map((person) => person.id));
-  const availableIds = new Set(options.map((person) => person.id));
+  const availableIds = new Set(options.filter((person) => !person.disabled).map((person) => person.id));
   const additions = pendingIds.filter(
     (personId) => availableIds.has(personId) && !selectedIds.has(personId),
   );
@@ -119,7 +121,7 @@ function CollaboratorCard({
                       >
                         <Checkbox
                           checked={added || pendingIds.includes(person.id)}
-                          disabled={busy || added}
+                          disabled={busy || added || person.disabled}
                           onCheckedChange={(checked) =>
                             setPendingIds((previous) =>
                               checked
@@ -136,7 +138,7 @@ function CollaboratorCard({
                           </span>
                           <small>{person.details}</small>
                         </span>
-                        {added && <span className="sr-help">已添加</span>}
+                        {person.disabled ? <span className="sr-help">已停用</span> : added && <span className="sr-help">已添加</span>}
                       </label>
                     );
                   })
@@ -182,7 +184,7 @@ function CollaboratorCard({
                   </span>
                   <small title={person.details}>{person.details}</small>
                 </span>
-                {!readonly && (
+                {!readonly && allowRemove && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -210,10 +212,14 @@ export function RequestExternalCollaborators({
   readonly,
   busy,
   onChange,
+  allowRemove = true,
+  description = '搜索当前客户联系人或合作伙伴用户，勾选后确认添加。',
 }: {
   contacts: ContactRef[];
+  description?: string;
   value: ExternalCollaborator[];
   readonly: boolean;
+  allowRemove?: boolean;
   busy: boolean;
   onChange: (value: ExternalCollaborator[]) => void;
 }) {
@@ -221,9 +227,10 @@ export function RequestExternalCollaborators({
   return (
     <CollaboratorCard
       title="外部协作人"
-      description="搜索当前客户的联系人，勾选后确认添加。"
+      description={description}
       placeholder="搜索姓名、手机号或邮箱"
-      options={available.map((contact) => ({
+      options={contacts.map((contact) => ({
+        disabled: contact.status !== '启用',
         id: contact.id,
         name: contact.name,
         details: [contact.phone, contact.email].filter(Boolean).join(' · '),
@@ -234,6 +241,7 @@ export function RequestExternalCollaborators({
         details: [person.phone, person.email].filter(Boolean).join(' · '),
       }))}
       readonly={readonly}
+      allowRemove={allowRemove}
       busy={busy}
       onAdd={(ids) =>
         onChange([

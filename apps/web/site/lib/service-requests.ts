@@ -1,3 +1,5 @@
+import { customerDecisionIssue } from './request-customer-decision.ts';
+import { assessmentLockIssue, currentPlan } from './request-assessment.ts';
 import type { OperationActor, RequestOperations } from './request-operations';
 
 export type CatalogService = {
@@ -8,7 +10,56 @@ export type CatalogService = {
   deliveryMethods: string[];
   status: string;
   priceUnit: string;
+  allowedInitiatorSites?: string[];
 };
+export type RequestAudience = 'internal' | 'customer';
+
+export function serviceAvailableForRequest(
+  service: CatalogService,
+  audience: RequestAudience,
+): boolean {
+  return (
+    service.status === '已启用' &&
+    (service.allowedInitiatorSites === undefined ||
+      service.allowedInitiatorSites.includes(
+        audience === 'customer' ? '客户中心' : '内部系统',
+      ))
+  );
+}
+
+export function customerRequestConfigId(serviceId: string) {
+  return `customer-request-config:${serviceId}`;
+}
+
+export async function readRequestConfigs(
+  audience: RequestAudience,
+): Promise<RequestConfig[]> {
+  if (audience === 'internal') {
+    return (await readLocal<RequestConfig>('configs')).map(
+      normalizeRequestConfig,
+    );
+  }
+  const references = await readLocal<{ id: string; payload?: RequestConfig }>(
+    'references',
+  );
+  return references
+    .filter(
+      (record) => record.payload?.serviceId &&
+        record.id === customerRequestConfigId(record.payload.serviceId),
+    )
+    .map((record) => normalizeRequestConfig(record.payload!));
+}
+
+export function resolveRequestConfig(
+  service: CatalogService,
+  configs: RequestConfig[],
+): RequestConfig {
+  // The caller supplies only the selected audience's configs. Never fall back
+  // from customer configuration to internal configuration, even for empty forms.
+  return normalizeRequestConfig(
+    configs.find((config) => config.serviceId === service.id) ?? defaultConfig(service),
+  );
+}
 export type CustomerRef = { id: string; name: string; status: string };
 export type ContactRef = CustomerRef & {
   customerId: string;
@@ -303,6 +354,7 @@ export function newRequest(
 export function requestIdentityIssue(
   record: ServiceRequest,
   existing?: ServiceRequest,
+  actor?: OperationActor,
 ): string | null {
   if (existing) {
     if (existing.customerId !== record.customerId)
@@ -315,7 +367,21 @@ export function requestIdentityIssue(
     )
       return '创建人和创建时间不支持修改。';
     if (existing.status !== '草稿') {
-      if (record.status === '草稿') return '已提交请求不能直接变回草稿。';
+      if (record.status === '草稿') {
+        const returned = record.operations?.draftReturns?.at(-1);
+        const previousReturns = existing.operations?.draftReturns ?? [];
+        const event = record.operations?.activities.at(-1);
+        const managerId = existing.operations?.assessment?.managerId;
+        const validReturn = existing.status === '待评估' && actor?.role === 'SmartX 项目经理'
+          && (!managerId || managerId === actor.id)
+          && returned?.actorId === actor.id && Boolean(returned.reason.trim())
+          && record.operations?.draftReturns?.length === previousReturns.length + 1
+          && previousReturns.every((item, index) => JSON.stringify(item) === JSON.stringify(record.operations?.draftReturns?.[index]))
+          && event?.title === '退回草稿' && event.actorId === actor.id && event.detail === returned?.reason && event.at === returned?.at
+          && (record.operations?.assessmentHistory?.length ?? 0) === (existing.operations?.assessmentHistory?.length ?? 0) + 1
+          && !currentPlan(record) && record.operations?.assessment?.rounds.length === 0;
+        if (!validReturn) return '仅待评估阶段的负责项目经理可以退回草稿。';
+      }
       const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'items'] as const;
       if (frozen.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '提交后基本信息和申请项只读，不支持修改。';
@@ -334,6 +400,7 @@ export type RequestAccessContext = {
   actor: OperationActor;
   directory: { id: string; name: string }[];
   customerId?: string;
+  contacts?: ContactRef[];
 };
 
 export function canCreateRequest({ actor, customerId }: RequestAccessContext): boolean {
@@ -353,7 +420,11 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory }: R
   if (!actor.id) return false;
   if (actor.role === 'SmartX 系统管理员' || actor.role === 'SmartX 项目经理') return true;
   if (record.createdById === actor.id) return true;
-  if (actor.role === '客户' && record.contactId === actor.id) return true;
+  if (['SmartX 员工', 'SmartX 服务工程师'].includes(actor.role)) {
+    const assessment = record.operations?.assessment;
+    if (assessment?.plans.some(plan => plan.salesId === actor.id)
+      || assessment?.approvals.some(approval => approval.approverId === actor.id)) return true;
+  }
   if (record.internalParticipants?.some((person) => person.userId === actor.id)
     || record.externalCollaborators?.some((person) => person.contactId === actor.id)) return true;
   if (record.createdById) return false;
@@ -362,6 +433,23 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory }: R
   const creator = record.createdBy ?? record.owner;
   const matches = new Set(directory.filter((person) => person.name === creator).map((person) => person.id));
   return matches.size === 1 && matches.has(actor.id);
+}
+
+export function canAddExternalCollaborators(record: ServiceRequest, access: RequestAccessContext): boolean {
+  return canAccessRequest(record, access) && ['客户', 'SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 员工', 'SmartX 服务工程师'].includes(access.actor.role);
+}
+
+export function customerCollaborationIssue(record: ServiceRequest, existing: ServiceRequest, access: RequestAccessContext): string | null {
+  if (access.actor.role !== '客户') return null;
+  const before = existing.externalCollaborators ?? [];
+  const after = record.externalCollaborators ?? [];
+  if (JSON.stringify(before) === JSON.stringify(after)) return null;
+  if (!canAddExternalCollaborators(existing, access)) return '无权添加外部协作人。';
+  if (before.some((person) => !after.some((next) => JSON.stringify(next) === JSON.stringify(person)))) return '客户只能添加外部协作人，不能移除或修改已有协作人。';
+  if (new Set(after.map((person) => person.contactId)).size !== after.length) return '外部协作人不能重复。';
+  const additions = after.filter((person) => !before.some((old) => old.contactId === person.contactId));
+  if (additions.some((person) => !access.contacts?.some((contact) => contact.id === person.contactId && contact.customerId === access.customerId && contact.status === '启用'))) return '只能添加本组织已启用的联系人。';
+  return null;
 }
 export function requestCreationIssue(
   record: ServiceRequest,
@@ -545,6 +633,7 @@ export function requestIssues(
     contacts: ContactRef[];
     businessObjects: ObjectRef[];
     services: CatalogService[];
+    audience?: RequestAudience;
   },
 ): string[] {
   const issues: string[] = [];
@@ -569,12 +658,11 @@ export function requestIssues(
   request.items.forEach((item, index) => {
     const prefix = `申请项 ${index + 1}：`;
     issues.push(...itemIssues(item).map((issue) => prefix + issue));
-    if (
-      !refs.services.some(
-        (s) => s.id === item.serviceId && s.status === '已启用',
-      )
-    )
+    const service = refs.services.find((s) => s.id === item.serviceId);
+    if (!service || service.status !== '已启用')
       issues.push(prefix + '服务目录已停用或不存在');
+    else if (refs.audience && !serviceAvailableForRequest(service, refs.audience))
+      issues.push(prefix + '服务目录未开放给当前申请站点');
     if (
       businessObjectsEnabled(item.config) &&
       item.businessObjectIds.some(
@@ -665,7 +753,7 @@ export async function saveLocal(
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(store, 'readwrite');
+      const transaction = db.transaction(store === 'requests' ? ['requests', 'references'] : store, 'readwrite');
       const records = transaction.objectStore(store);
       if (store === 'requests') {
         const serviceRequest = record as ServiceRequest;
@@ -683,11 +771,27 @@ export async function saveLocal(
             transaction.abort();
             return;
           }
-          const issue = requestIdentityIssue(serviceRequest, current.result);
+          const decisionIssue = current.result ? customerDecisionIssue(serviceRequest, current.result, access?.actor, access?.customerId) : null;
+          const issue = decisionIssue ?? (access && current.result ? customerCollaborationIssue(serviceRequest, current.result, access) : null)
+            ?? requestIdentityIssue(serviceRequest, current.result, access?.actor);
           if (issue) {
             reject(new RequestIdentityError(issue));
             transaction.abort();
-          } else records.put(record);
+          } else {
+            const previous = current.result as ServiceRequest | undefined;
+            const changedPlan = JSON.stringify(currentPlan(serviceRequest)) !== JSON.stringify(previous ? currentPlan(previous) : undefined);
+            const startingConfirmation = serviceRequest.operations?.assessment?.confirmation && !previous?.operations?.assessment?.confirmation;
+            if (!changedPlan && !startingConfirmation) { records.put(record); return; }
+            const all = records.getAll();
+            all.onsuccess = () => {
+              const workspace = transaction.objectStore('references').get('workspace');
+              workspace.onsuccess = () => {
+                const lockIssue = assessmentLockIssue(serviceRequest, all.result, workspace.result?.payload?.assets ?? []);
+                if (lockIssue) { reject(new RequestIdentityError(lockIssue)); transaction.abort(); }
+                else records.put(record);
+              };
+            };
+          }
         };
       } else if (
         store === 'references' &&

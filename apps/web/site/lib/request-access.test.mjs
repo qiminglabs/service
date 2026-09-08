@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   canAccessRequest,
+  canAddExternalCollaborators,
+  customerCollaborationIssue,
+  requestStatuses,
   canCreateRequest,
   requestCreationAccessIssue,
   newRequest,
@@ -12,6 +15,33 @@ const actor = { id: 'u1', name: '王琪', role: 'SmartX 员工' };
 const directory = [actor, { id: 'u2', name: '林澈' }];
 const access = { actor, directory };
 const record = newRequest('请求', 'c1', '林澈', 'contact1', 'u2');
+
+test('客户在全部状态可为可见请求添加本组织协作人，新增人员获得访问权', () => {
+  const context = { actor: { ...actor, role: '客户' }, directory, customerId: 'c1', contacts: [{ id: 'new-contact', name: '同事', customerId: 'c1', status: '启用' }] };
+  const person = { contactId: 'new-contact', name: '同事', phone: '', email: '' };
+  for (const status of requestStatuses) {
+    const existing = { ...record, status, createdById: actor.id };
+    const next = { ...existing, externalCollaborators: [person] };
+    assert.equal(canAddExternalCollaborators(existing, context), true);
+    assert.equal(customerCollaborationIssue(next, existing, context), null);
+    assert.equal(requestIdentityIssue(next, existing), null);
+    assert.equal(canAccessRequest(next, { ...context, actor: { id: person.contactId, name: person.name, role: '客户' } }), true);
+  }
+});
+
+test('不可见请求不能自行加人，客户不能删除已有协作人或添加其他组织及停用联系人', () => {
+  const context = { actor: { ...actor, role: '客户' }, directory, customerId: 'c1', contacts: [{ id: 'p1', name: '同事', customerId: 'c1', status: '启用' }] };
+  const person = { contactId: 'p1', name: '同事', phone: '', email: '' };
+  const own = { ...record, createdById: actor.id, externalCollaborators: [person] };
+  assert.equal(canAddExternalCollaborators(record, context), false);
+  assert.match(customerCollaborationIssue({ ...record, externalCollaborators: [person] }, record, context), /无权/);
+  assert.match(customerCollaborationIssue({ ...own, externalCollaborators: [] }, own, context), /不能移除/);
+  const empty = { ...own, externalCollaborators: [] };
+  for (const contact of [{ ...context.contacts[0], customerId: 'c2' }, { ...context.contacts[0], status: '停用' }]) {
+    assert.match(customerCollaborationIssue(own, empty, { ...context, contacts: [contact] }), /本组织已启用/);
+  }
+  assert.equal(canAddExternalCollaborators(own, { ...context, actor: { ...actor, role: '合作伙伴服务工程师' } }), false);
+});
 
 test('合作伙伴不能创建请求，已有协作记录仍可访问', () => {
   const context = { ...access, actor: { ...actor, role: '合作伙伴服务工程师' } };
@@ -76,7 +106,7 @@ test('管理员看全部，其他身份仅看本人创建或按编号加入协�
     );
     assert.equal(
       canAccessRequest({ ...record, contactId: actor.id }, context),
-      role === '客户',
+      false,
     );
     assert.equal(
       canAccessRequest({ ...record, createdBy: actor.name }, context),
@@ -149,10 +179,20 @@ test('项目经理查看全部请求，包括其他人创建且未参与协作�
 });
 
 
-test('客户联系人按本人编号授权，更换联系人后原联系人不再可见', () => {
+test('客户仅作为联系人不可见，成为创建人或协作人后可见', () => {
   const context = { ...access, actor: { ...actor, id: 'contact1', role: '客户' } };
-  assert.equal(canAccessRequest(record, context), true);
+  assert.equal(canAccessRequest(record, context), false);
+  assert.equal(canAccessRequest({ ...record, createdById: 'contact1' }, context), true);
+  assert.equal(canAccessRequest({ ...record, externalCollaborators: [{ contactId: 'contact1' }] }, context), true);
   assert.equal(canAccessRequest({ ...record, contactId: 'contact2' }, context), false);
   assert.equal(canAccessRequest(record, { ...context, actor: { ...context.actor, id: 'contact2' } }), false);
   assert.equal(canAccessRequest({ ...record, contactId: '' }, { ...context, actor: { ...context.actor, id: '' } }), false);
+});
+
+test('评估方案指定销售和上级可访问请求，无关员工无权访问', () => {
+  const record = { ...newRequest('服务申请', 'c1', '客户', 'c'), createdById: 'customer', status: '待评估', operations: { assessment: { tasks: [], plans: [{salesId:'sales'}], approvals: [{approverId:'boss'}] } } };
+  const access = id => ({actor:{id,name:id,role:'SmartX 员工'},directory:[]});
+  assert.equal(canAccessRequest(record,access('sales')),true);
+  assert.equal(canAccessRequest(record,access('boss')),true);
+  assert.equal(canAccessRequest(record,access('unrelated')),false);
 });

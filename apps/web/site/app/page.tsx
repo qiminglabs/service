@@ -15,6 +15,7 @@ import {
 import type { OperationActor } from '@/lib/request-operations';
 import {
   ensurePartnerSamples,
+  normalizePartnerName,
   samplePartners,
   samplePartnerUsers,
   type Partner,
@@ -27,7 +28,6 @@ import type { Dispatch, SetStateAction } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArrowLeft,
-  Bell,
   Boxes,
   Building2,
   Check,
@@ -237,6 +237,7 @@ type Asset = {
   customerId: string;
   name: '远程人天' | '现场人天';
   status: AssetStatus;
+  balanceDays?: number;
 };
 type BusinessObject = {
   id: string;
@@ -560,15 +561,6 @@ function Header({
         </button>
       </nav>
       <div className="topbar-actions">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="通知"
-          className="notification-button"
-        >
-          <Bell />
-          <span aria-hidden="true" />
-        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -985,12 +977,15 @@ export default function Home() {
     }
     if (referenceTab === 'assets') {
       if (!customerId) return setReferenceFormError('请选择所属客户。');
+      const balanceDays = Number(referenceForm.balanceDays);
+      if (!referenceForm.balanceDays?.trim() || !Number.isFinite(balanceDays) || balanceDays < 0) return setReferenceFormError('请填写有效的余额人天。');
       setAssets((records) => [
         ...records,
         {
           id: `AST-${nextNumber(records.length)}`,
           customerId,
           name: (referenceForm.assetName ?? '远程人天') as Asset['name'],
+          balanceDays,
           status: (referenceForm.status ?? '启用') as AssetStatus,
         },
       ]);
@@ -1062,7 +1057,7 @@ export default function Home() {
     }
 
     if (referenceTab === 'partners') {
-      const name = (referenceForm.name ?? '').trim();
+      const name = normalizePartnerName(referenceForm.name ?? '');
       if (
         !name ||
         name.length > 120 ||
@@ -1545,6 +1540,7 @@ export default function Home() {
                   ),
                 )
               }
+              onAssetBalanceChange={(id, days) => setAssets(records => records.map(record => record.id === id ? { ...record, balanceDays: days } : record))}
               onDisableAsset={(id) =>
                 setAssets((records) =>
                   records.map((record) =>
@@ -2156,6 +2152,7 @@ type ReferenceDataViewProps = {
   onDisableCustomer: (id: string) => void;
   onDisableContact: (id: string) => void;
   onDisableAsset: (id: string) => void;
+  onAssetBalanceChange: (id: string, days: number) => void;
   onDisableBusinessObject: (id: string) => void;
   onDisableUser: (id: string) => void;
 };
@@ -2332,6 +2329,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
               <tr>
                 <th>所属客户</th>
                 <th>资产名称</th>
+                <th>余额人天（含已锁定）</th>
                 <th>状态</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
@@ -2344,6 +2342,11 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <strong>{customerNames.get(record.customerId)}</strong>
                   </td>
                   <td>{record.name}</td>
+                  <td><Input key={`${record.id}:${record.balanceDays}`} aria-label={`${record.id} 余额人天`} type="number" min="0" step="0.01" placeholder="待维护" defaultValue={record.balanceDays ?? ''} onBlur={event => {
+                    const value = Number(event.target.value);
+                    if (event.target.value.trim() && Number.isFinite(value) && value >= 0) props.onAssetBalanceChange(record.id, value);
+                    else event.target.value = record.balanceDays === undefined ? '' : String(record.balanceDays);
+                  }} /></td>
                   <td>
                     <span
                       className="reference-status"
@@ -2782,6 +2785,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   <option>现场人天</option>
                 </select>
               </label>
+              <label htmlFor="asset-balance"><span>余额人天 <em>*</em></span><Input id="asset-balance" type="number" min="0" step="0.01" value={props.form.balanceDays ?? ''} onChange={event => update('balanceDays', event.target.value)} placeholder="请输入实际余额人天" /></label>
               <label htmlFor="asset-status">
                 <span>
                   状态 <em>*</em>

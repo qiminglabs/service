@@ -8,18 +8,22 @@ export type PartnerUser = {
   status: '启用' | '停用';
 };
 
+export function normalizePartnerName(name: string): string {
+  return name.replace(/\s*(?:（模拟）|\(模拟\))/g, '').trim();
+}
+
 // Demo records live in the same editable directory as manually created records.
 // Reserved IDs avoid collisions with existing PAR-/PUS- numeric sequences.
 export const samplePartners: Partner[] = [
   {
     id: 'PAR-DEMO-001',
-    name: '北京云桥信息技术有限公司（模拟）',
+    name: '北京云桥信息技术有限公司',
     status: '启用',
   },
-  { id: 'PAR-DEMO-002', name: '上海启川科技有限公司（模拟）', status: '启用' },
+  { id: 'PAR-DEMO-002', name: '上海启川科技有限公司', status: '启用' },
   {
     id: 'PAR-DEMO-003',
-    name: '深圳汇辰系统集成有限公司（模拟）',
+    name: '深圳汇辰系统集成有限公司',
     status: '启用',
   },
 ];
@@ -70,6 +74,7 @@ export function ensurePartnerSamples(
   partners: Partner[],
   users: PartnerUser[],
 ) {
+  partners = partners.map((partner) => ({ ...partner, name: normalizePartnerName(partner.name) }));
   return {
     partners: [
       ...partners,

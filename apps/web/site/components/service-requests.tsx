@@ -23,7 +23,9 @@ import { RequestContactField } from '@/components/request-contact-field';
 import { RequestStatusProgress } from '@/components/request-status-progress';
 import { DateField } from '@/components/date-field';
 import { RequestOperationsTabs } from '@/components/request-operations';
-import { appendActivity, isInternal, migrateRoleLabel } from '@/lib/request-operations';
+import { emptyAssessment, applyAssessmentAction, isProjectManager, repairCustomerRequestApprover } from '@/lib/request-assessment';
+import { operationIdentities } from '@/lib/internal-users';
+import { appendActivity, operationsOf, isInternal, migrateRoleLabel } from '@/lib/request-operations';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import {
   RequestExternalCollaborators,
@@ -31,6 +33,7 @@ import {
 } from '@/components/request-internal-info';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -49,6 +52,8 @@ import {
 } from '@/components/ui/sheet';
 import {
   canAccessRequest,
+  canAddExternalCollaborators,
+  customerCollaborationIssue,
   canCreateRequest,
   requestCreationAccessIssue,
   checkFile,
@@ -59,6 +64,9 @@ import {
   businessObjectsEnabled,
   matchesObjectProduct,
   defaultConfig,
+  readRequestConfigs,
+  resolveRequestConfig,
+  serviceAvailableForRequest,
   downloadFile,
   fieldLabels,
   fileAccept,
@@ -139,11 +147,12 @@ function configForEditing(
 }
 
 export function RequestWorkspace(props: Props) {
-  const access = { actor: props.currentActor, directory: props.identityDirectory, customerId: props.currentCustomerId };
+  const access = { actor: props.currentActor, directory: props.identityDirectory, customerId: props.currentCustomerId, contacts: props.contacts };
   const customerPortal = props.currentActor.role === '客户';
+  const audience = customerPortal ? 'customer' : 'internal';
+  const availableServices = props.services.filter((service) => serviceAvailableForRequest(service, audience));
   const canCreate = canCreateRequest(access);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [configs, setConfigs] = useState<RequestConfig[]>([]);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -173,20 +182,24 @@ export function RequestWorkspace(props: Props) {
   } | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [returnDraftOpen, setReturnDraftOpen] = useState(false);
+  const [returnDraftReason, setReturnDraftReason] = useState('');
   const [showIssues, setShowIssues] = useState(false);
   const handledToken = useRef(0);
   const saveLock = useRef(false);
 
   function load() {
-    return Promise.all([
-      readLocal<ServiceRequest>('requests'),
-      readLocal<RequestConfig>('configs'),
-    ])
-      .then(([records, settings]) => {
+    return readLocal<ServiceRequest>('requests')
+      .then(async (records) => {
+        const repair = repairCustomerRequestApprover(records, props.users);
+        if (repair && canAccessRequest(repair, access)) {
+          await saveLocal('requests', repair, access);
+          records = records.map(record => record.id === repair.id ? repair : record);
+          setDraft(current => current?.id === repair.id ? repair : current);
+        }
         const visible = records.filter((record) => canAccessRequest(record, access));
         setRequests(visible.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
         setDraft((current) => current && !visible.some((record) => record.id === current.id) ? null : current);
-        setConfigs(settings.map(normalizeRequestConfig));
         setReady(true);
         setError('');
       })
@@ -199,7 +212,8 @@ export function RequestWorkspace(props: Props) {
     const refresh = () => { if (active) void load(); };
     refresh();
     window.addEventListener('focus', refresh);
-    return () => { active = false; window.removeEventListener('focus', refresh); };
+    window.addEventListener('catalog-version-saved', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); window.removeEventListener('catalog-version-saved', refresh); };
   }, []);
   useEffect(() => {
     if (canCreate && props.createToken > handledToken.current) {
@@ -253,15 +267,19 @@ export function RequestWorkspace(props: Props) {
       setShowIssues(false);
     }
   }
-  function selectItemService(service: CatalogService) {
+  async function selectItemService(service: CatalogService) {
+    if (!ready || busy || !serviceAvailableForRequest(service, audience)) return;
     setItemError('');
-    setPendingItem(
-      newItem(
-        service,
-        configs.find((c) => c.serviceId === service.id) ??
-          defaultConfig(service),
-      ),
-    );
+    setBusy(true);
+    try {
+      // Read at selection time as configuration may have changed in another tab.
+      const latest = await readRequestConfigs(audience);
+      setPendingItem(newItem(service, resolveRequestConfig(service, latest)));
+    } catch {
+      setItemError('无法读取申请配置，请重试。');
+    } finally {
+      setBusy(false);
+    }
   }
   async function savePendingItem() {
     if (!draft || !pendingItem || draft.status !== '草稿') return;
@@ -272,10 +290,10 @@ export function RequestWorkspace(props: Props) {
     }
     if (
       !props.services.some(
-        (s) => s.id === pendingItem.serviceId && s.status === '已启用',
+        (s) => s.id === pendingItem.serviceId && serviceAvailableForRequest(s, audience),
       )
     ) {
-      setItemError('该服务目录已停用或不存在，请重新选择。');
+      setItemError('该服务目录已停用、不存在或未开放给当前申请站点，请重新选择。');
       return;
     }
     if (
@@ -330,15 +348,13 @@ export function RequestWorkspace(props: Props) {
     return ok;
   }
   const readonly = draft?.status !== '草稿';
-  const issues = draft ? requestIssues(draft, props) : [];
+  const issues = draft ? requestIssues(draft, { ...props, audience }) : [];
   const materialItem = draft?.items.find(
     (item) => item.id === materialTarget?.itemId,
   );
   const materialRequirement = materialItem?.config.materials.find(
     (m) => m.id === materialTarget?.requirementId,
   );
-  const completeCount =
-    draft?.items.filter((item) => !itemIssues(item).length).length ?? 0;
   const filtered = requests.filter((record) => {
     if (!canAccessRequest(record, access)) return false;
     const customer =
@@ -368,9 +384,15 @@ export function RequestWorkspace(props: Props) {
   }
 
   function updateCollaborators(patch: Partial<Pick<ServiceRequest, 'externalCollaborators' | 'internalParticipants'>>) {
-    if (!draft || busy || !isInternal(props.currentRole)) return;
+    if (!draft || busy) return;
+    const customerAddition = props.currentRole === '客户' && 'externalCollaborators' in patch && !('internalParticipants' in patch);
+    if (customerAddition) {
+      if (!canAddExternalCollaborators(draft, access)) return;
+      const issue = customerCollaborationIssue({ ...draft, ...patch }, draft, access);
+      if (issue) { setError(issue); return; }
+    } else if (!isInternal(props.currentRole)) return;
     if (!props.currentActor.id) { setError('请先在右上角选择一个启用的内部用户。'); return; }
-    if (!readonly) { updateDraft(patch); return; }
+    if (!readonly && !customerAddition) { updateDraft(patch); return; }
     const external = 'externalCollaborators' in patch;
     const before = external ? (draft.externalCollaborators ?? []).map(p => p.name) : (draft.internalParticipants ?? []).map(p => p.name);
     const after = external ? (patch.externalCollaborators ?? []).map(p => p.name) : (patch.internalParticipants ?? []).map(p => p.name);
@@ -556,11 +578,12 @@ export function RequestWorkspace(props: Props) {
                 {props.customers.find(
                   (customer) => customer.id === draft.customerId,
                 )?.name ?? '未关联客户'}
-                {' · '}
-                {completeCount} / {draft.items.length} 项完整
               </p>
             </div>
             <div className="detail-actions">
+              {draft.status === '待评估' && isProjectManager(props.currentActor) && (!draft.operations?.assessment?.managerId || draft.operations.assessment.managerId === props.currentActor.id) && (
+                <Button variant="outline" className="ct-button ct-button--ordinary" disabled={busy} onClick={() => { setError(''); setReturnDraftReason(''); setReturnDraftOpen(true); }}>退回草稿</Button>
+              )}
               {!readonly && (
                 <>
                   <Button
@@ -603,14 +626,16 @@ export function RequestWorkspace(props: Props) {
               </p>
             </section>
           )}
-              <RequestOperationsTabs key={draft.id} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
+              <RequestOperationsTabs key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
             <aside className="sr-collaboration-column" aria-label="协作人">
               <RequestExternalCollaborators
                 contacts={[...props.contacts.filter(
-                  (contact) => contact.customerId === draft.customerId && contact.status === '启用',
-                ), ...props.partnerCollaborators.map((person) => ({ ...person, customerId: draft.customerId }))]}
+                  (contact) => customerPortal ? contact.customerId === props.currentCustomerId : contact.customerId === draft.customerId && contact.status === '启用',
+                ), ...(customerPortal ? [] : props.partnerCollaborators.map((person) => ({ ...person, customerId: draft.customerId })))]}
+                description={customerPortal ? '搜索本组织全部联系人，勾选后确认添加。已停用联系人不可添加。' : undefined}
                 value={draft.externalCollaborators ?? []}
-                readonly={!isInternal(props.currentRole)}
+                readonly={!canAddExternalCollaborators(draft, access)}
+                allowRemove={props.currentRole !== '客户'}
                 busy={busy}
                 onChange={(externalCollaborators) =>
                   updateCollaborators({ externalCollaborators })
@@ -1058,7 +1083,7 @@ export function RequestWorkspace(props: Props) {
                   placeholder="搜索服务名称或编码"
                 />
                 <div className="sr-catalog-options">
-                  {props.services
+                  {availableServices
                     .filter(
                       (s) =>
                         s.status === '已启用' &&
@@ -1082,14 +1107,14 @@ export function RequestWorkspace(props: Props) {
                         </div>
                         <Button
                           variant="outline"
-                          disabled={busy}
+                          disabled={busy || !ready}
                           onClick={() => selectItemService(service)}
                         >
                           选择
                         </Button>
                       </div>
                     ))}
-                  {!props.services.some(
+                  {!availableServices.some(
                     (s) =>
                       s.status === '已启用' &&
                       (s.id + ' ' + s.name)
@@ -1176,6 +1201,21 @@ export function RequestWorkspace(props: Props) {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={returnDraftOpen} onOpenChange={open => { if (!busy) setReturnDraftOpen(open); }}>
+        <DialogContent className="sr-ops-dialog" showCloseButton={!busy}>
+          <DialogHeader><DialogTitle>退回草稿</DialogTitle><DialogDescription>退回后可修改申请信息和材料；已锁定资产将释放，相关特批失效，评估历史保留。</DialogDescription></DialogHeader>
+          <label className="sr-ops-field"><span>退回原因 *</span><Textarea value={returnDraftReason} disabled={busy} onChange={event => setReturnDraftReason(event.target.value)} rows={3} placeholder="说明需要补充或修改的内容" /></label>
+          {error && <p className="sr-error" role="alert">{error}</p>}
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setReturnDraftOpen(false)}>取消</Button><Button disabled={busy || !returnDraftReason.trim()} onClick={async () => {
+            if (!draft) return;
+            setError('');
+            try {
+              const next = applyAssessmentAction(draft, { type: 'return-draft', reason: returnDraftReason }, props.currentActor, props.assets, props.users, []);
+              if (await persist(next, '已退回草稿，可补充申请后重新提交')) { setReturnDraftOpen(false); setShowIssues(false); }
+            } catch (issue) { setError(issue instanceof Error ? issue.message : '退回失败，请重试。'); }
+          }}>确认退回草稿</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={submitOpen}
         onOpenChange={(open) => {
@@ -1213,14 +1253,16 @@ export function RequestWorkspace(props: Props) {
                   setShowIssues(true);
                   return;
                 }
+                const projectManager = operationIdentities(props.users).find(user => user.role === 'SmartX 项目经理');
                 if (
                   await persist(
                     appendActivity({
                       ...draft,
                       status: '待评估',
+                      operations: { ...operationsOf(draft), assessment: { ...emptyAssessment(), managerId: projectManager?.id ?? '', manager: projectManager?.name ?? '' } },
                       submittedAt: new Date().toISOString(),
                     }, props.currentActor, '提交', '提交服务请求', '请求进入待评估，基本信息和申请项已锁定'),
-                    '已提交，等待 SmartX 员工评估',
+                    '已提交，等待项目经理评估',
                   )
                 ) {
                   setSubmitOpen(false);
@@ -1445,7 +1487,6 @@ export function RequestCatalogSettings({
   audience?: 'internal' | 'customer';
 }) {
   const configLabel = audience === 'internal' ? '内部申请' : '客户中心申请';
-  const customerConfigId = `customer-request-config:${service.id}`;
   const requestFields = useContext(RequestFieldsContext);
   const products = useContext(BusinessObjectProductsContext);
   const [config, setConfig] = useState<RequestConfig>(() =>
@@ -1459,22 +1500,11 @@ export function RequestCatalogSettings({
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     let active = true;
-    (audience === 'internal'
-      ? readLocal<RequestConfig>('configs')
-      : readLocal<{ id: string; payload: RequestConfig }>('references').then(
-          (records) =>
-            records
-              .filter((record) => record.id === customerConfigId)
-              .map((record) => record.payload),
-        )
-    )
+    readRequestConfigs(audience)
       .then((records) => {
         if (active) {
           setConfig(
-            normalizeRequestConfig(
-              records.find((c) => c.serviceId === service.id) ??
-                defaultConfig(service),
-            ),
+            resolveRequestConfig(service, records),
           );
           setReady(true);
         }
@@ -1485,7 +1515,7 @@ export function RequestCatalogSettings({
     return () => {
       active = false;
     };
-  }, [service, audience, customerConfigId]);
+  }, [service, audience]);
   return (
     <section className="detail-card detail-card--wide sr-config-card">
       <div className="sr-panel-heading">

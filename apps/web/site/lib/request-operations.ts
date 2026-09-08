@@ -1,10 +1,29 @@
+import type { Assessment } from './request-assessment';
 import type { ServiceRequest, StoredFile } from './service-requests';
+
+// Same-day local times, with minute precision. Historical logs may lack times.
+export function worklogHours(
+  startTime: string,
+  endTime: string,
+): number | null {
+  const valid = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+  if (!valid.test(startTime) || !valid.test(endTime)) return null;
+  const minutes = (time: string) =>
+    Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
+  const duration = minutes(endTime) - minutes(startTime);
+  return duration > 0 ? duration / 60 : null;
+}
+
+export function formatWorklogHours(hours: number): string {
+  return String(Number(hours.toFixed(2)));
+}
 
 export type RequestAsset = {
   id: string;
   customerId: string;
   name: string;
   status: string;
+  balanceDays?: number;
 };
 export type OperationActor = { id: string; name: string; role: string };
 export type RequestActivity = {
@@ -23,17 +42,63 @@ export type RequestMeeting = {
   host: string;
   hostId: string;
   participantNames: string[];
-  status: '进行中' | '已结束';
+  status: '已预约' | '进行中' | '已结束';
+  scheduledDate?: string;
+  scheduledTime?: string;
+  durationMinutes?: number;
+  startedAt?: string;
   endedAt?: string;
   mode: 'local-demo';
   recording?: StoredFile;
+  attachments?: StoredFile[];
   transcript?: string;
 };
+
+export const meetingAttachmentAccept =
+  '.doc,.docx,.pdf,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md,.png,.jpg,.jpeg,.zip,.mp4,.webm';
+export function meetingAttachmentIssue(file: StoredFile): string | null {
+  if (
+    !file.id ||
+    !file.name.trim() ||
+    !(file.blob instanceof Blob) ||
+    file.blob.size !== file.size ||
+    file.size <= 0
+  )
+    return '请选择有效且非空的附件。';
+  if (file.size > 20 * 1024 * 1024) return '单个附件不能超过 20 MB。';
+  if (
+    !meetingAttachmentAccept
+      .split(',')
+      .includes('.' + file.name.split('.').at(-1)?.toLowerCase())
+  )
+    return '请上传文档、表格、演示文稿、图片、ZIP 或视频文件。';
+  return null;
+}
+export function meetingAttachments(meeting: RequestMeeting): StoredFile[] {
+  const files = [...(meeting.attachments ?? [])];
+  if (
+    meeting.recording &&
+    !files.some((file) => file.id === meeting.recording!.id)
+  )
+    files.push(meeting.recording);
+  return files;
+}
+export function meetingTranscript(meeting: RequestMeeting) {
+  const original = meeting.transcript?.trim();
+  if (original && original.toLowerCase() !== 'test')
+    return { text: meeting.transcript!, example: false };
+  return {
+    example: true,
+    text: '00:00  主持人（示例）\n本次会议围绕服务申请的目标、服务范围和待补充材料进行沟通，先确认本次希望解决的问题与预期交付结果。\n\n02:15  客户代表（示例）\n希望先明确服务包含的工作及不包含的事项。涉及现网操作时，需要提前说明影响范围，并协调业务窗口。\n\n05:40  技术代表（示例）\n评估前需要核对环境清单、产品版本以及网络拓扑。材料中的未知项请明确标注，不适用项请说明原因。\n\n09:20  主持人（示例）\n内部团队将根据补充材料评估工作量，核对服务依据，并整理服务范围和费用概览供后续确认。\n\n12:05  客户代表（示例）\n请列出仍需提供的材料及对接人。计划和实施窗口待服务范围明确后再进一步讨论。\n\n15:30  主持人（示例）\n本次待办包括补齐环境资料、澄清服务边界和核对可用服务依据。本次沟通不替代正式服务确认或审批。',
+  };
+}
 export type RequestWorklog = {
   id: string;
   userId: string;
   userName: string;
   date: string;
+  startTime?: string;
+  endTime?: string;
   hours: number;
   category: string;
   description: string;
@@ -79,6 +144,10 @@ export type RequestEvaluation = {
   decisionNote?: string;
 };
 export type RequestOperations = {
+  customerDecisions?: import('./request-customer-decision').CustomerDecision[];
+  assessment?: Assessment;
+  assessmentHistory?: Assessment[];
+  draftReturns?: { at: string; actorId: string; reason: string }[];
   meetings: RequestMeeting[];
   worklogs: RequestWorklog[];
   bases: RequestBasis[];
@@ -209,7 +278,17 @@ type EvaluationInput = Pick<
 >;
 export type RequestAction =
   | { type: 'meeting-create'; title: string; participantNames: string[] }
+  | {
+      type: 'meeting-schedule';
+      title: string;
+      scheduledDate: string;
+      scheduledTime: string;
+      durationMinutes: number;
+    }
+  | { type: 'meeting-start'; id: string }
   | { type: 'meeting-end'; id: string }
+  | { type: 'meeting-attachments-add'; id: string; files: StoredFile[] }
+  | { type: 'meeting-attachment-delete'; id: string; fileId: string }
   | {
       type: 'meeting-materials';
       id: string;
@@ -219,7 +298,17 @@ export type RequestAction =
   | {
       type: 'worklog-add';
       date: string;
-      hours: number;
+      startTime: string;
+      endTime: string;
+      category: string;
+      description: string;
+    }
+  | {
+      type: 'worklog-edit';
+      id: string;
+      date: string;
+      startTime: string;
+      endTime: string;
       category: string;
       description: string;
     }
@@ -253,7 +342,7 @@ export function applyRequestAction(
 ): ServiceRequest {
   if (!actor.id || !actor.name || !isInternal(actor.role))
     throw new Error('请选择内部操作人。');
-  if (record.status === '草稿')
+  if (record.status === '草稿' && !['meeting-attachments-add', 'meeting-attachment-delete'].includes(action.type))
     throw new Error('提交申请后才能使用内部工作模块。');
   if (['已取消', '已转工单'].includes(record.status))
     throw new Error('当前请求已结束，仅可查看历史记录。');
@@ -283,6 +372,66 @@ export function applyRequestAction(
     if (actor.id === creatorId) throw new Error('不能审批自己提交的记录。');
   };
   switch (action.type) {
+    case 'meeting-schedule': {
+      requireText(action.title, '会议主题');
+      const date = action.scheduledDate;
+      const time = action.scheduledTime;
+      const start = new Date(`${date}T${time}:00`);
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(time) ||
+        !Number.isFinite(start.getTime()) ||
+        localDate(start) !== date
+      )
+        throw new Error('请选择有效的预约日期和开始时间。');
+      if (start.getTime() <= new Date(now).getTime())
+        throw new Error('预约开始时间必须晚于当前时间。');
+      if (![15, 30, 45, 60, 90, 120, 180, 240].includes(action.durationMinutes))
+        throw new Error('请选择有效的会议时长。');
+      ops.meetings.unshift({
+        id: crypto.randomUUID(),
+        title: action.title.trim(),
+        createdAt: now,
+        host: actor.name,
+        hostId: actor.id,
+        participantNames: [],
+        status: '已预约',
+        mode: 'local-demo',
+        scheduledDate: date,
+        scheduledTime: time,
+        durationMinutes: action.durationMinutes,
+      });
+      category = '会议';
+      title = '预约模拟会议';
+      detail = `${action.title.trim()} · ${date} ${time} · ${action.durationMinutes} 分钟`;
+      break;
+    }
+    case 'meeting-start': {
+      const meeting = ops.meetings.find((m) => m.id === action.id);
+      if (!meeting || meeting.status !== '已预约')
+        throw new Error('仅已预约的会议可以开始。');
+      if (meeting.hostId !== actor.id && !isAdministrator(actor.role))
+        throw new Error('仅主持人可开始会议。');
+      meeting.status = '进行中';
+      meeting.startedAt = now;
+      if (!meeting.participantNames.length) {
+        meeting.participantNames = [
+          ...new Set(
+            [
+              meeting.host,
+              ...(record.internalParticipants?.map((person) => person.name) ??
+                []),
+              ...(record.externalCollaborators?.map((person) => person.name) ??
+                []),
+            ].filter(Boolean),
+          ),
+        ];
+      }
+      category = '会议';
+      title = '开始模拟会议';
+      detail = meeting.title;
+      break;
+    }
     case 'meeting-create': {
       requireText(action.title, '会议主题');
       ops.meetings.unshift({
@@ -293,6 +442,7 @@ export function applyRequestAction(
         hostId: actor.id,
         participantNames: action.participantNames,
         status: '进行中',
+        startedAt: now,
         mode: 'local-demo',
       });
       category = '会议';
@@ -311,6 +461,43 @@ export function applyRequestAction(
       category = '会议';
       title = '结束模拟会议';
       detail = meeting.title;
+      break;
+    }
+    case 'meeting-attachments-add': {
+      const meeting = ops.meetings.find((m) => m.id === action.id);
+      if (!meeting) throw new Error('会议不存在。');
+      if (meeting.hostId !== actor.id && !isAdministrator(actor.role))
+        throw new Error('仅主持人可维护会议附件。');
+      if (!action.files.length) throw new Error('请选择附件。');
+      const ids = new Set(meetingAttachments(meeting).map((file) => file.id));
+      for (const file of action.files) {
+        const issue = meetingAttachmentIssue(file);
+        if (issue) throw new Error(issue);
+        if (ids.has(file.id)) throw new Error('附件已存在，请勿重复保存。');
+        ids.add(file.id);
+      }
+      meeting.attachments = [...(meeting.attachments ?? []), ...action.files];
+      category = '会议';
+      title = '上传会议附件';
+      detail = `${meeting.title} · ${action.files.map((file) => file.name).join('、')}`;
+      break;
+    }
+    case 'meeting-attachment-delete': {
+      const meeting = ops.meetings.find((m) => m.id === action.id);
+      if (!meeting) throw new Error('会议不存在。');
+      if (meeting.hostId !== actor.id && !isAdministrator(actor.role))
+        throw new Error('仅主持人可维护会议附件。');
+      const file = meetingAttachments(meeting).find(
+        (item) => item.id === action.fileId,
+      );
+      if (!file) throw new Error('附件不存在或已删除。');
+      meeting.attachments = (meeting.attachments ?? []).filter(
+        (item) => item.id !== action.fileId,
+      );
+      if (meeting.recording?.id === action.fileId) delete meeting.recording;
+      category = '会议';
+      title = '删除会议附件';
+      detail = `${meeting.title} · ${file.name}`;
       break;
     }
     case 'meeting-materials': {
@@ -337,7 +524,17 @@ export function applyRequestAction(
       detail = meeting.title;
       break;
     }
-    case 'worklog-add': {
+    case 'worklog-add':
+    case 'worklog-edit': {
+      const existing =
+        action.type === 'worklog-edit'
+          ? ops.worklogs.find((w) => w.id === action.id)
+          : undefined;
+      if (
+        action.type === 'worklog-edit' &&
+        (!existing || existing.voidedAt || existing.userId !== actor.id)
+      )
+        throw new Error('只能编辑自己的有效工时记录。');
       const person = record.internalParticipants?.find(
         (p) => p.userId === actor.id,
       );
@@ -351,35 +548,41 @@ export function applyRequestAction(
         action.date > localDate(new Date(now))
       )
         throw new Error('请选择有效且不晚于今天的工作日期。');
-      if (
-        !Number.isFinite(action.hours) ||
-        action.hours <= 0 ||
-        action.hours > 24 ||
-        !Number.isInteger(action.hours * 4)
-      )
-        throw new Error('工时须为 0.25 小时的倍数，每天不超过 24 小时。');
+      const hours = worklogHours(action.startTime, action.endTime);
+      if (hours === null)
+        throw new Error(
+          '请选择有效的起始时间和终止时间，终止时间须晚于起始时间（同一天）。',
+        );
       const dayTotal = ops.worklogs
         .filter(
-          (w) => w.userId === actor.id && w.date === action.date && !w.voidedAt,
+          (w) =>
+            w.userId === actor.id &&
+            w.date === action.date &&
+            !w.voidedAt &&
+            w.id !== existing?.id,
         )
         .reduce((s, w) => s + w.hours, 0);
-      if (dayTotal + action.hours > 24)
+      if (dayTotal + hours > 24 + 1e-9)
         throw new Error('该成员当天累计工时不能超过 24 小时。');
       requireText(action.description, '工作内容');
       requireText(action.category, '工作类型');
-      ops.worklogs.unshift({
-        id: crypto.randomUUID(),
+      const updatedLog = {
+        id: existing?.id ?? crypto.randomUUID(),
         userId: actor.id,
         userName: actor.name,
         date: action.date,
-        hours: action.hours,
+        startTime: action.startTime,
+        endTime: action.endTime,
+        hours,
         category: action.category,
         description: action.description.trim(),
-        createdAt: now,
-      });
+        createdAt: existing?.createdAt ?? now,
+      };
+      if (existing) Object.assign(existing, updatedLog);
+      else ops.worklogs.unshift(updatedLog);
       category = '工时';
-      title = '录入内部工时';
-      detail = `${action.date} · ${action.hours} 小时 · ${action.description.trim()}`;
+      title = existing ? '编辑内部工时' : '录入内部工时';
+      detail = `${action.date} ${action.startTime}–${action.endTime} · ${formatWorklogHours(hours)} 小时 · ${action.description.trim()}`;
       break;
     }
     case 'worklog-void': {

@@ -1,21 +1,17 @@
 'use client';
+import { RequestCustomerConfirmation } from '@/components/request-customer-confirmation';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  FileText,
-  Video,
-  Clock3,
-  Plus,
-  Download,
-  Play,
-  ShieldCheck,
-  ClipboardCheck,
-  History,
-} from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
+import { Video, Clock3, Plus, Play, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
@@ -27,8 +23,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { DateField } from '@/components/date-field';
-import { operationIdentities } from '@/lib/internal-users';
-import { downloadFile } from '@/lib/service-requests';
+import { TimeField } from '@/components/time-field';
+import { RequestAssessment } from '@/components/request-assessment';
+import { downloadFile, storedFile } from '@/lib/service-requests';
 import type {
   ServiceRequest,
   InternalUser,
@@ -36,22 +33,22 @@ import type {
 } from '@/lib/service-requests';
 import {
   applyRequestAction,
-  basisUsable,
-  canApprove,
+  worklogHours,
+  formatWorklogHours,
   isInternal,
-  canEvaluate,
   isAdministrator,
   migrateRoleLabel,
   localDate,
   operationsOf,
-  uncoveredItems,
+  meetingAttachments,
+  meetingAttachmentAccept,
+  meetingAttachmentIssue,
+  meetingTranscript,
 } from '@/lib/request-operations';
 import type {
   OperationActor,
   RequestAction,
   RequestAsset,
-  RequestBasis,
-  RequestEvaluation,
   RequestMeeting,
   RequestWorklog,
 } from '@/lib/request-operations';
@@ -61,6 +58,7 @@ type Props = {
   users: InternalUser[];
   assets: RequestAsset[];
   actor: OperationActor;
+  customerId?: string;
   busy: boolean;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
   children: ReactNode;
@@ -71,7 +69,7 @@ const stamp = (s: string) =>
 function Tag({ children }: { children: string }) {
   const tone = ['有效', '已通过', '已结束'].includes(children)
     ? 'green'
-    : ['待审批', '待核对', '进行中'].includes(children)
+    : ['待审批', '待核对', '已预约', '进行中'].includes(children)
       ? 'blue'
       : ['已拒绝'].includes(children)
         ? 'amber'
@@ -132,33 +130,26 @@ export function RequestOperationsTabs({
   users,
   assets,
   actor,
+  customerId,
   busy,
   save,
   children,
   sidebar,
 }: Props) {
   const [tab, setTab] = useState('overview');
-  const [dialog, setDialog] = useState<
-    'meeting' | 'worklog' | 'evaluation' | 'basis' | null
-  >(null);
+  const [dialog, setDialog] = useState<'meeting' | 'worklog' | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('全部');
   const [meeting, setMeeting] = useState<RequestMeeting | null>(null);
   const [worklog, setWorklog] = useState<RequestWorklog | null>(null);
-  const [evaluation, setEvaluation] = useState<RequestEvaluation | null>(null);
-  const [basis, setBasis] = useState<RequestBasis | null>(null);
-  const [basisKind, setBasisKind] = useState<'asset' | 'exception'>('asset');
+  const [voidWorklog, setVoidWorklog] = useState(false);
   const role = actor.role;
   const ops = operationsOf(record);
   const closed = ['已取消', '已转工单'].includes(record.status);
   const editable = !closed && !busy && Boolean(actor.id);
-  const assessing = record.status === '待评估';
   const canLog =
     editable &&
     Boolean(record.internalParticipants?.some((p) => p.userId === actor.id));
-  const availableBases = ops.bases.filter((b) =>
-    basisUsable(b, record, assets),
-  );
   const activeLogs = ops.worklogs.filter((w) => !w.voidedAt);
   const activities = [...ops.activities];
   if (record.submittedAt && !activities.some((a) => a.category === '提交'))
@@ -194,22 +185,28 @@ export function RequestOperationsTabs({
   const tabs = [
     ['overview', '申请信息', null],
     ['meetings', '会议', ops.meetings.length],
+    [
+      'evaluations',
+      '评估记录',
+      (ops.assessment?.rounds.length ?? 0) + ops.evaluations.length,
+    ],
     ['worklogs', '内部工时', activeLogs.length],
-    ['evaluations', '评估记录', ops.evaluations.length],
     ['activity', '活动', activities.length],
-    ['basis', '服务依据', availableBases.length],
   ] as const;
-  if (record.status === '草稿' || !isInternal(role))
+  if (!isInternal(role) || (record.status === '草稿' && !ops.meetings.length))
     return (
       <div className="sr-detail-layout">
-        <div className="sr-detail-main">{children}</div>
+        <div className="sr-detail-main">
+          <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
+          {children}
+        </div>
         {sidebar}
       </div>
     );
   return (
     <div className="sr-ops-workspace">
       <Tabs
-        value={tab}
+        value={record.status === '草稿' && tab !== 'meetings' ? 'overview' : tab}
         onValueChange={(v) => {
           setTab(String(v));
           setError('');
@@ -221,7 +218,7 @@ export function RequestOperationsTabs({
           className="sr-ops-tab-list"
           aria-label="服务请求工作区"
         >
-          {tabs.map(([value, label, count]) => (
+          {tabs.filter(([value]) => record.status !== '草稿' || ['overview', 'meetings'].includes(value)).map(([value, label, count]) => (
             <TabsTrigger key={value} value={value}>
               {label}
               {count !== null && count > 0 && <span>{count}</span>}
@@ -246,17 +243,16 @@ export function RequestOperationsTabs({
                 <div className="sr-ops-heading">
                   <div>
                     <h3>会议</h3>
-                    <p>围绕本次服务请求开展沟通，集中查看录制与转写。</p>
                   </div>
                   <Button
-                    disabled={!editable}
+                    disabled={!editable || record.status === '草稿'}
                     onClick={() => {
                       setMeeting(null);
                       launch('meeting');
                     }}
                   >
                     <Video size={16} />
-                    发起会议
+                    预约会议
                   </Button>
                 </div>
                 <div className="sr-meeting-integration">
@@ -266,7 +262,7 @@ export function RequestOperationsTabs({
                       腾讯会议 <Tag>本地模拟</Tag>
                     </strong>
                     <p>
-                      尚未连接腾讯会议。此处不创建真实会议、不通知参会人；支持模拟会议流程和导入已有录制、转写。
+                      尚未连接腾讯会议。此处不创建真实会议、不通知参会人；支持预约会议、查看转写及上传会议附件。
                     </p>
                   </div>
                 </div>
@@ -274,7 +270,7 @@ export function RequestOperationsTabs({
                   <Empty
                     icon={<Video />}
                     title="还没有会议"
-                    detail="发起首次沟通，会议记录将与当前请求关联。"
+                    detail="预约会议后，会议记录将与当前请求关联。"
                   />
                 ) : (
                   <div className="sr-ops-records">
@@ -294,11 +290,19 @@ export function RequestOperationsTabs({
                             <Tag>{m.status}</Tag>
                           </h4>
                           <p>
-                            {stamp(m.createdAt)} · 主持人 {m.host}
+                            {m.scheduledDate
+                              ? `${m.scheduledDate} ${m.scheduledTime} · ${m.durationMinutes} 分钟`
+                              : stamp(m.createdAt)}{' '}
+                            · 主持人 {m.host}
                           </p>
                           <small>
-                            {m.recording ? '已有录制' : '暂无录制'} ·{' '}
-                            {m.transcript ? '已有转写' : '暂无转写'} · 本地模拟
+                            附件 {meetingAttachments(m).length} 个 ·{' '}
+                            {m.status === '已结束'
+                              ? meetingTranscript(m).example
+                                ? '示例转写'
+                                : '已有转写'
+                              : '暂无转写'}{' '}
+                            · 本地模拟
                           </small>
                         </div>
                         <Button
@@ -308,9 +312,11 @@ export function RequestOperationsTabs({
                             launch('meeting');
                           }}
                         >
-                          {m.status === '进行中'
-                            ? '进入模拟会议'
-                            : '查看会议资料'}
+                          {m.status === '已预约'
+                            ? '查看预约'
+                            : m.status === '进行中'
+                              ? '进入模拟会议'
+                              : '查看会议资料'}
                           <Play size={14} />
                         </Button>
                       </article>
@@ -330,6 +336,7 @@ export function RequestOperationsTabs({
                     disabled={!canLog}
                     onClick={() => {
                       setWorklog(null);
+                      setVoidWorklog(false);
                       launch('worklog');
                     }}
                   >
@@ -340,7 +347,7 @@ export function RequestOperationsTabs({
                 <div className="sr-ops-summary">
                   <Summary
                     label="累计投入"
-                    value={`${activeLogs.reduce((s, w) => s + w.hours, 0)} 小时`}
+                    value={`${formatWorklogHours(activeLogs.reduce((s, w) => s + w.hours, 0))} 小时`}
                   />
                   <Summary
                     label="参与成员"
@@ -348,7 +355,7 @@ export function RequestOperationsTabs({
                   />
                   <Summary
                     label="我的投入"
-                    value={`${activeLogs.filter((w) => w.userId === actor.id).reduce((s, w) => s + w.hours, 0)} 小时`}
+                    value={`${formatWorklogHours(activeLogs.filter((w) => w.userId === actor.id).reduce((s, w) => s + w.hours, 0))} 小时`}
                   />
                 </div>
                 {!canLog && !closed && (
@@ -364,47 +371,83 @@ export function RequestOperationsTabs({
                   />
                 ) : (
                   <div className="sr-table-scroll">
-                    <table className="sr-table app-list-table">
+                    <table className="sr-table app-list-table sr-worklog-table">
+                      <colgroup>
+                        <col className="sr-worklog-name-col" />
+                        <col className="sr-worklog-date-col" />
+                        <col />
+                        <col className="sr-worklog-hours-col" />
+                        <col className="sr-worklog-type-col" />
+                        <col className="sr-worklog-actions-col" />
+                      </colgroup>
                       <thead>
                         <tr>
-                          <th>成员 / 工作日期</th>
+                          <th>姓名</th>
+                          <th>工作日期 / 时间</th>
                           <th>工作内容</th>
                           <th>工时</th>
-                          <th>状态</th>
+                          <th>类型</th>
                           <th>操作</th>
                         </tr>
                       </thead>
                       <tbody>
                         {ops.worklogs.map((w) => (
                           <tr key={w.id}>
+                            <td>{w.userName}</td>
                             <td>
-                              {w.userName}
-                              <small>{w.date}</small>
+                              {w.date}
+                              {w.startTime && w.endTime && (
+                                <small>
+                                  {w.startTime}–{w.endTime}
+                                </small>
+                              )}
                             </td>
                             <td className="sr-ops-cell-wrap">
                               {w.description}
-                              <small>
-                                {w.category}
-                                {w.voidedAt && ` · 作废原因：${w.voidReason}`}
-                              </small>
                             </td>
-                            <td>{w.hours} 小时</td>
                             <td>
-                              <Tag>{w.voidedAt ? '已作废' : '有效'}</Tag>
+                              {w.voidedAt ? (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger className="sr-worklog-void-badge">
+                                      已作废
+                                    </TooltipTrigger>
+                                    <TooltipContent className="whitespace-pre-wrap break-words">
+                                      作废原因：{w.voidReason || '未填写'}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              ) : (
+                                `${formatWorklogHours(w.hours)} 小时`
+                              )}
                             </td>
+                            <td>{w.category}</td>
                             <td>
                               {!w.voidedAt &&
                               w.userId === actor.id &&
                               editable ? (
-                                <Button
-                                  variant="ghost"
-                                  onClick={() => {
-                                    setWorklog(w);
-                                    launch('worklog');
-                                  }}
-                                >
-                                  作废
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setWorklog(w);
+                                      setVoidWorklog(false);
+                                      launch('worklog');
+                                    }}
+                                  >
+                                    编辑
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setWorklog(w);
+                                      setVoidWorklog(true);
+                                      launch('worklog');
+                                    }}
+                                  >
+                                    作废
+                                  </Button>
+                                </>
                               ) : (
                                 '—'
                               )}
@@ -418,103 +461,17 @@ export function RequestOperationsTabs({
               </section>
             </TabsContent>
             <TabsContent value="evaluations">
-              <section className="sr-panel sr-ops-panel">
-                <div className="sr-ops-heading">
-                  <div>
-                    <h3>评估记录</h3>
-                    <p>
-                      SmartX
-                      员工梳理服务范围和工作量，指定审批人审核；通过后进入待确认。
-                    </p>
-                  </div>
-                  <Button
-                    disabled={!editable || !canEvaluate(role) || !assessing}
-                    onClick={() => {
-                      setEvaluation(null);
-                      launch('evaluation');
-                    }}
-                  >
-                    <Plus size={16} />
-                    新增评估
-                  </Button>
-                </div>
-                {assessing && (
-                  <div className="sr-ops-summary">
-                    <Summary
-                      label="待审批"
-                      value={
-                        ops.evaluations.filter((e) => e.state === '待审批')
-                          .length
-                      }
-                    />
-                    <Summary
-                      label="已覆盖申请项"
-                      value={`${record.items.length - uncoveredItems(record, assets).length} / ${record.items.length}`}
-                    />
-                    <button
-                      className="sr-ops-link"
-                      onClick={() => setTab('basis')}
-                    >
-                      查看服务依据 →
-                    </button>
-                  </div>
-                )}
-                {!ops.evaluations.length ? (
-                  <Empty
-                    icon={<ClipboardCheck />}
-                    title="暂无评估记录"
-                    detail="评估草稿可持续完善；提交审批后的意见和结论保留历史。"
-                  />
-                ) : (
-                  <div className="sr-ops-records">
-                    {ops.evaluations.map((e, index) => (
-                      <article key={e.id} className="sr-ops-record">
-                        <div className="sr-ops-record-main">
-                          <h4>
-                            第 {ops.evaluations.length - index} 次评估
-                            <Tag>{e.state}</Tag>
-                          </h4>
-                          <p className="sr-ops-excerpt">
-                            {e.opinion || '尚未填写评估意见'}
-                          </p>
-                          <small>
-                            {e.author} · {stamp(e.createdAt)} · 预计{' '}
-                            {e.effort || '—'} 人天 · 审批人{' '}
-                            {e.approverName || '待指定'}
-                          </small>
-                          {e.decisionNote && (
-                            <p className="sr-ops-decision">
-                              {e.decidedBy}：{e.decisionNote}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setEvaluation(e);
-                            launch('evaluation');
-                          }}
-                        >
-                          {e.state === '待审批' &&
-                          e.approverId === actor.id &&
-                          canApprove(role) &&
-                          editable
-                            ? '审批评估'
-                            : e.state === '草稿' &&
-                                e.authorId === actor.id &&
-                                canEvaluate(role) &&
-                                editable
-                              ? '继续填写'
-                              : '查看详情'}
-                        </Button>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
+              <RequestAssessment
+                record={record}
+                users={users}
+                assets={assets}
+                actor={actor}
+                busy={busy}
+                save={save}
+              />
             </TabsContent>
             <TabsContent value="activity">
-              <section className="sr-panel sr-ops-panel">
+              <section className="sr-panel sr-ops-panel" aria-label="活动">
                 <div className="sr-ops-heading">
                   <div>
                     <h3>活动</h3>
@@ -571,127 +528,6 @@ export function RequestOperationsTabs({
                 )}
               </section>
             </TabsContent>
-            <TabsContent value="basis">
-              <section className="sr-panel sr-ops-panel">
-                <div className="sr-ops-heading">
-                  <div>
-                    <h3>服务依据</h3>
-                    <p>
-                      按申请项关联客户资产；额度不足时，由 SmartX 员工提交特批。
-                    </p>
-                  </div>
-                  <div className="sr-ops-actions">
-                    <Button
-                      variant="outline"
-                      disabled={!editable || !assessing || !canEvaluate(role)}
-                      onClick={() => {
-                        setBasis(null);
-                        setBasisKind('exception');
-                        launch('basis');
-                      }}
-                    >
-                      提交特批
-                    </Button>
-                    <Button
-                      disabled={!editable || !assessing || !canEvaluate(role)}
-                      onClick={() => {
-                        setBasis(null);
-                        setBasisKind('asset');
-                        launch('basis');
-                      }}
-                    >
-                      <Plus size={16} />
-                      关联资产
-                    </Button>
-                  </div>
-                </div>
-                <div className="sr-ops-summary">
-                  <Summary
-                    label="有效依据"
-                    value={`${availableBases.length} 条`}
-                  />
-                  <Summary
-                    label="未覆盖申请项"
-                    value={uncoveredItems(record, assets).length}
-                  />
-                  <Summary
-                    label="待特批"
-                    value={ops.bases.filter((b) => b.state === '待审批').length}
-                  />
-                </div>
-                <p className="sr-ops-hint">
-                  资产余额尚未接入：关联不代表扣减或冻结，需 SmartX 员工
-                  核对有效性及可用额度。特批信息仅供内部使用。
-                </p>
-                {!ops.bases.length ? (
-                  <Empty
-                    icon={<ShieldCheck />}
-                    title="尚未关联服务依据"
-                    detail="有效依据覆盖全部申请项后，才能提交评估审批。"
-                  />
-                ) : (
-                  <div className="sr-ops-records">
-                    {ops.bases.map((b) => (
-                      <article key={b.id} className="sr-ops-record">
-                        <div className="sr-ops-record-main">
-                          <h4>
-                            {b.name}
-                            <Tag>
-                              {b.state === '有效' &&
-                              !basisUsable(b, record, assets)
-                                ? '资产已失效'
-                                : b.state}
-                            </Tag>
-                          </h4>
-                          <p>
-                            {b.quantity} {b.unit} ·{' '}
-                            {b.itemIds
-                              .map(
-                                (id) =>
-                                  record.items.find((i) => i.id === id)
-                                    ?.serviceName ?? '历史申请项',
-                              )
-                              .join('、')}
-                          </p>
-                          <small>
-                            {b.kind === 'asset'
-                              ? b.assetId
-                              : `审批人 ${b.approverName}`}{' '}
-                            · {b.createdBy} · {stamp(b.createdAt)}
-                          </small>
-                          {b.decisionNote && (
-                            <p className="sr-ops-decision">
-                              {b.decidedBy}：{b.decisionNote}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setBasis(b);
-                            setBasisKind(b.kind);
-                            launch('basis');
-                          }}
-                        >
-                          {b.state === '待核对' &&
-                          canEvaluate(role) &&
-                          editable &&
-                          assessing
-                            ? '核对资产'
-                            : b.state === '待审批' &&
-                                b.approverId === actor.id &&
-                                canApprove(role) &&
-                                editable &&
-                                assessing
-                              ? '审批特批'
-                              : '查看详情'}
-                        </Button>
-                      </article>
-                    ))}
-                  </div>
-                )}
-              </section>
-            </TabsContent>
           </div>
           {sidebar}
         </div>
@@ -727,37 +563,11 @@ export function RequestOperationsTabs({
           )}
           {dialog === 'worklog' && (
             <WorklogForm
-              key={`${actor.id}:${actor.role}:${worklog?.id ?? 'new'}`}
+              key={`${actor.id}:${actor.role}:${worklog?.id ?? 'new'}:${voidWorklog}`}
+              voiding={voidWorklog}
               log={worklog}
               actor={actor}
               disabled={!editable}
-              error={error}
-              run={run}
-              close={() => setDialog(null)}
-            />
-          )}
-          {dialog === 'evaluation' && (
-            <EvaluationForm
-              key={`${actor.id}:${actor.role}:${evaluation?.id ?? 'new'}`}
-              evaluation={evaluation}
-              users={users}
-              actor={actor}
-              disabled={!editable || !assessing}
-              error={error}
-              run={run}
-              close={() => setDialog(null)}
-            />
-          )}
-          {dialog === 'basis' && (
-            <BasisForm
-              key={`${actor.id}:${actor.role}:${basis?.id ?? 'new'}`}
-              basis={basis}
-              kind={basisKind}
-              record={record}
-              assets={assets}
-              users={users}
-              actor={actor}
-              disabled={!editable || !assessing}
               error={error}
               run={run}
               close={() => setDialog(null)}
@@ -783,84 +593,65 @@ function ErrorText({ error }: { error: string }) {
     </p>
   ) : null;
 }
-function Reviewer({
-  users,
-  actorId,
-  value,
-  onChange,
-  disabled,
-}: {
-  users: InternalUser[];
-  actorId: string;
-  value: string;
-  onChange: (id: string) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Field title="审批人" required>
-      <NativeSelect
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-      >
-        <option value="">请选择审批人</option>
-        {operationIdentities(users)
-          .filter((u) => u.id !== actorId && canApprove(u.role))
-          .map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name} · {u.role}
-            </option>
-          ))}
-      </NativeSelect>
-    </Field>
-  );
-}
-
 function WorklogForm({
   log,
+  voiding,
   actor,
   disabled,
   error,
   run,
   close,
-}: FormActions & { log: RequestWorklog | null }) {
-  const [date, setDate] = useState(localDate());
-  const [hours, setHours] = useState('');
-  const [category, setCategory] = useState('需求调研');
-  const [description, setDescription] = useState('');
+}: FormActions & { log: RequestWorklog | null; voiding: boolean }) {
+  const [date, setDate] = useState(log?.date ?? localDate());
+  const [startTime, setStartTime] = useState(log?.startTime ?? '');
+  const [endTime, setEndTime] = useState(log?.endTime ?? '');
+  const hours = worklogHours(startTime, endTime);
+  const [category, setCategory] = useState(log?.category ?? '需求调研');
+  const [description, setDescription] = useState(
+    voiding ? '' : (log?.description ?? ''),
+  );
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{log ? '作废工时' : '录入内部工时'}</DialogTitle>
+        <DialogTitle>
+          {voiding ? '作废工时' : log ? '编辑内部工时' : '录入内部工时'}
+        </DialogTitle>
         <DialogDescription>
-          {log
-            ? `${log.date} · ${log.hours} 小时；作废后保留原记录，不计入汇总。`
-            : `录入人：${actor.name}。仅记录实际投入，最小单位为 0.25 小时。`}
+          {voiding && log
+            ? `${log.date} · ${formatWorklogHours(log.hours)} 小时；作废后保留原记录，不计入汇总。`
+            : `录入人：${actor.name}。按起止时间计算分钟数，自动换算为投入小时。`}
         </DialogDescription>
       </DialogHeader>
       <div className="sr-ops-form">
-        {!log && (
+        {!voiding && (
           <>
             <DateField
               id="sr-work-date"
-              label="工作日期"
+              label="日期"
+              required
               value={date}
               onChange={setDate}
               disabled={disabled}
             />
             <div className="sr-ops-form-row">
-              <Field title="投入小时" required>
-                <Input
-                  type="number"
-                  min="0.25"
-                  max="24"
-                  step="0.25"
-                  value={hours}
-                  onChange={(e) => setHours(e.target.value)}
-                  disabled={disabled}
-                  placeholder="例如 1.5"
-                />
-              </Field>
+              <TimeField
+                id="sr-work-start"
+                label="起始时间"
+                required
+                value={startTime}
+                onChange={setStartTime}
+                disabled={disabled}
+              />
+              <TimeField
+                id="sr-work-end"
+                label="终止时间"
+                required
+                value={endTime}
+                onChange={setEndTime}
+                disabled={disabled}
+              />
+            </div>
+            <div className="sr-ops-form-row">
               <Field title="工作类型" required>
                 <NativeSelect
                   value={category}
@@ -882,7 +673,7 @@ function WorklogForm({
             </div>
           </>
         )}
-        <Field title={log ? '作废原因' : '工作内容'} required>
+        <Field title={voiding ? '作废原因' : '工作内容'} required>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -890,6 +681,16 @@ function WorklogForm({
             rows={4}
           />
         </Field>
+        {!voiding && (
+          <Field title="投入小时（自动计算）">
+            <Input
+              aria-label="投入小时（自动计算）"
+              value={hours === null ? '' : formatWorklogHours(hours)}
+              readOnly
+              placeholder="选择有效起止时间后自动计算"
+            />
+          </Field>
+        )}
         <ErrorText error={error} />
       </div>
       <DialogFooter>
@@ -901,12 +702,15 @@ function WorklogForm({
           onClick={async () => {
             if (
               await run(
-                log
+                voiding && log
                   ? { type: 'worklog-void', id: log.id, reason: description }
                   : {
-                      type: 'worklog-add',
+                      ...(log
+                        ? { type: 'worklog-edit' as const, id: log.id }
+                        : { type: 'worklog-add' as const }),
                       date,
-                      hours: Number(hours),
+                      startTime,
+                      endTime,
                       category,
                       description,
                     },
@@ -915,465 +719,8 @@ function WorklogForm({
               close();
           }}
         >
-          {log ? '确认作废' : '保存工时'}
+          {voiding ? '确认作废' : '保存工时'}
         </Button>
-      </DialogFooter>
-    </>
-  );
-}
-
-function EvaluationForm({
-  evaluation: e,
-  users,
-  actor,
-  disabled,
-  error,
-  run,
-  close,
-}: FormActions & {
-  evaluation: RequestEvaluation | null;
-  users: InternalUser[];
-}) {
-  const [scope, setScope] = useState(e?.scope ?? '');
-  const [opinion, setOpinion] = useState(e?.opinion ?? '');
-  const [risks, setRisks] = useState(e?.risks ?? '');
-  const [effort, setEffort] = useState(e?.effort ? String(e.effort) : '');
-  const [approverId, setApproverId] = useState(e?.approverId ?? '');
-  const [note, setNote] = useState('');
-  const edit =
-    !disabled &&
-    canEvaluate(actor.role) &&
-    (!e || (e.state === '草稿' && e.authorId === actor.id));
-  const review =
-    !disabled &&
-    e?.state === '待审批' &&
-    e.approverId === actor.id &&
-    e.authorId !== actor.id &&
-    canApprove(actor.role);
-  async function submit(send: boolean) {
-    if (
-      await run({
-        type: 'evaluation-save',
-        id: e?.id,
-        input: {
-          scope,
-          opinion,
-          risks,
-          effort: Number(effort),
-          approverId,
-          approverName: users.find((u) => u.id === approverId)?.name ?? '',
-        },
-        submit: send,
-      })
-    )
-      close();
-  }
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>
-          {review ? '审批评估' : edit ? '填写评估' : '评估详情'}
-        </DialogTitle>
-        <DialogDescription>
-          {e
-            ? `${e.author} · ${stamp(e.createdAt)} · ${e.state}`
-            : '先明确范围与风险，再核对服务依据，提交给其他内部用户审批。'}
-        </DialogDescription>
-      </DialogHeader>
-      <div className="sr-ops-form">
-        <Field title="服务范围与交付结果" required>
-          <Textarea
-            value={scope}
-            onChange={(ev) => setScope(ev.target.value)}
-            readOnly={!edit}
-            rows={3}
-          />
-        </Field>
-        <Field title="评估意见" required>
-          <Textarea
-            value={opinion}
-            onChange={(ev) => setOpinion(ev.target.value)}
-            readOnly={!edit}
-            rows={4}
-          />
-        </Field>
-        <Field title="风险与前置条件">
-          <Textarea
-            value={risks}
-            onChange={(ev) => setRisks(ev.target.value)}
-            readOnly={!edit}
-            rows={3}
-          />
-        </Field>
-        <div className="sr-ops-form-row">
-          <Field title="预计服务人天" required>
-            <Input
-              type="number"
-              min="0.25"
-              step="0.25"
-              value={effort}
-              onChange={(ev) => setEffort(ev.target.value)}
-              readOnly={!edit}
-            />
-          </Field>
-          {edit ? (
-            <Reviewer
-              users={users}
-              actorId={actor.id}
-              value={approverId}
-              onChange={setApproverId}
-            />
-          ) : (
-            <Field title="审批人">
-              <Input value={e?.approverName || '未指定'} readOnly />
-            </Field>
-          )}
-        </div>
-        {e?.decisionNote && (
-          <div className="sr-ops-decision">
-            <strong>
-              {e.decidedBy} · {e.state}
-            </strong>
-            <p>{e.decisionNote}</p>
-            <small>{stamp(e.decidedAt!)}</small>
-          </div>
-        )}
-        {review && (
-          <Field title="审批意见" required>
-            <Textarea
-              value={note}
-              onChange={(ev) => setNote(ev.target.value)}
-              rows={3}
-              placeholder="填写通过或拒绝的原因"
-            />
-          </Field>
-        )}
-        <ErrorText error={error} />
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={close}>
-          关闭
-        </Button>
-        {edit && (
-          <>
-            <Button variant="outline" onClick={() => void submit(false)}>
-              保存草稿
-            </Button>
-            <Button onClick={() => void submit(true)}>提交审批</Button>
-          </>
-        )}
-        {review && (
-          <>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                if (
-                  await run({
-                    type: 'evaluation-decide',
-                    id: e!.id,
-                    approve: false,
-                    note,
-                  })
-                )
-                  close();
-              }}
-            >
-              拒绝
-            </Button>
-            <Button
-              onClick={async () => {
-                if (
-                  await run({
-                    type: 'evaluation-decide',
-                    id: e!.id,
-                    approve: true,
-                    note,
-                  })
-                )
-                  close();
-              }}
-            >
-              通过评估
-            </Button>
-          </>
-        )}
-      </DialogFooter>
-    </>
-  );
-}
-
-function BasisForm({
-  basis: b,
-  kind,
-  record,
-  assets,
-  users,
-  actor,
-  disabled,
-  error,
-  run,
-  close,
-}: FormActions & {
-  basis: RequestBasis | null;
-  kind: 'asset' | 'exception';
-  record: ServiceRequest;
-  assets: RequestAsset[];
-  users: InternalUser[];
-}) {
-  const [assetId, setAssetId] = useState('');
-  const [quantity, setQuantity] = useState('');
-  const [reason, setReason] = useState('');
-  const [itemIds, setItemIds] = useState<string[]>([]);
-  const [approverId, setApproverId] = useState('');
-  const [note, setNote] = useState('');
-  const decide =
-    b &&
-    !disabled &&
-    ((b.state === '待核对' && canEvaluate(actor.role)) ||
-      (b.state === '待审批' &&
-        b.approverId === actor.id &&
-        actor.id !== b.creatorId &&
-        canApprove(actor.role)));
-  const remove =
-    b &&
-    !disabled &&
-    canEvaluate(actor.role) &&
-    !['已移除', '已拒绝'].includes(b.state);
-  const available = assets.filter(
-    (a) => a.customerId === record.customerId && a.status === '启用',
-  );
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>
-          {b
-            ? kind === 'asset'
-              ? '资产依据详情'
-              : '特批详情'
-            : kind === 'asset'
-              ? '关联客户资产'
-              : '提交额度特批'}
-        </DialogTitle>
-        <DialogDescription>
-          {kind === 'asset'
-            ? '资产仅从当前客户中选择，关联后由 SmartX 员工核对；不会自动冻结或扣减额度。'
-            : '特批仅作为内部服务依据，不进入客户总览。审批拒绝后保留记录，可重新提交。'}
-        </DialogDescription>
-      </DialogHeader>
-      <div className="sr-ops-form">
-        {b ? (
-          <dl className="sr-ops-details">
-            <div>
-              <dt>依据</dt>
-              <dd>
-                {b.name} <Tag>{b.state}</Tag>
-              </dd>
-            </div>
-            <div>
-              <dt>服务数量</dt>
-              <dd>
-                {b.quantity} {b.unit}
-              </dd>
-            </div>
-            <div>
-              <dt>关联申请项</dt>
-              <dd>
-                {b.itemIds
-                  .map(
-                    (id) =>
-                      record.items.find((i) => i.id === id)?.serviceName ?? id,
-                  )
-                  .join('、')}
-              </dd>
-            </div>
-            <div>
-              <dt>申请说明</dt>
-              <dd>{b.reason}</dd>
-            </div>
-            <div>
-              <dt>提交人</dt>
-              <dd>
-                {b.createdBy} · {stamp(b.createdAt)}
-              </dd>
-            </div>
-            {b.approverName && (
-              <div>
-                <dt>审批人</dt>
-                <dd>{b.approverName}</dd>
-              </div>
-            )}
-            {b.decisionNote && (
-              <div>
-                <dt>处理意见</dt>
-                <dd>
-                  {b.decidedBy}：{b.decisionNote}
-                </dd>
-              </div>
-            )}
-          </dl>
-        ) : (
-          <>
-            {kind === 'asset' && (
-              <Field title="客户资产" required>
-                <NativeSelect
-                  value={assetId}
-                  onChange={(e) => setAssetId(e.target.value)}
-                  disabled={disabled}
-                >
-                  <option value="">
-                    {available.length ? '请选择资产' : '当前客户无已启用的资产'}
-                  </option>
-                  {available.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} · {a.id}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            )}
-            <Field
-              title={kind === 'asset' ? '本次计划使用人天' : '申请特批人天'}
-              required
-            >
-              <Input
-                type="number"
-                min="0.25"
-                step="0.25"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                disabled={disabled}
-              />
-            </Field>
-            <fieldset className="sr-ops-item-choices" disabled={disabled}>
-              <legend>关联申请项 *</legend>
-              {record.items.map((item, index) => (
-                <label key={item.id}>
-                  <Checkbox
-                    checked={itemIds.includes(item.id)}
-                    onCheckedChange={(v) =>
-                      setItemIds((old) =>
-                        v
-                          ? [...old, item.id]
-                          : old.filter((id) => id !== item.id),
-                      )
-                    }
-                  />
-                  {String(index + 1).padStart(2, '0')} · {item.serviceName}
-                </label>
-              ))}
-            </fieldset>
-            <Field
-              title={kind === 'asset' ? '使用说明' : '特批原因与业务价值'}
-              required
-            >
-              <Textarea
-                rows={4}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                disabled={disabled}
-              />
-            </Field>
-            {kind === 'exception' && (
-              <Reviewer
-                users={users}
-                actorId={actor.id}
-                value={approverId}
-                onChange={setApproverId}
-                disabled={disabled}
-              />
-            )}
-          </>
-        )}
-        {(decide || remove) && (
-          <Field
-            title={
-              b?.kind === 'asset' && b.state === '待核对'
-                ? '核对结论（有效期、余额及适用范围）'
-                : '处理意见 / 移除原因'
-            }
-            required
-          >
-            <Textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              rows={3}
-            />
-          </Field>
-        )}
-        <ErrorText error={error} />
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={close}>
-          关闭
-        </Button>
-        {remove && (
-          <Button
-            variant="outline"
-            onClick={async () => {
-              if (await run({ type: 'basis-remove', id: b!.id, reason: note }))
-                close();
-            }}
-          >
-            移除依据
-          </Button>
-        )}
-        {decide && (
-          <>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                if (
-                  await run({
-                    type: 'basis-decide',
-                    id: b!.id,
-                    approve: false,
-                    note,
-                  })
-                )
-                  close();
-              }}
-            >
-              拒绝
-            </Button>
-            <Button
-              onClick={async () => {
-                if (
-                  await run({
-                    type: 'basis-decide',
-                    id: b!.id,
-                    approve: true,
-                    note,
-                  })
-                )
-                  close();
-              }}
-            >
-              {kind === 'asset' ? '核对通过' : '批准特批'}
-            </Button>
-          </>
-        )}
-        {!b && (
-          <Button
-            disabled={disabled}
-            onClick={async () => {
-              if (
-                await run({
-                  type: 'basis-add',
-                  kind,
-                  assetId,
-                  quantity: Number(quantity),
-                  reason,
-                  itemIds,
-                  approverId,
-                  approverName: users.find((u) => u.id === approverId)?.name,
-                })
-              )
-                close();
-            }}
-          >
-            {kind === 'asset' ? '保存关联' : '提交特批'}
-          </Button>
-        )}
       </DialogFooter>
     </>
   );
@@ -1389,28 +736,20 @@ function MeetingForm({
   close,
 }: FormActions & { meeting: RequestMeeting | null; record: ServiceRequest }) {
   const [title, setTitle] = useState(record.title + ' · 需求沟通');
-  const [transcript, setTranscript] = useState(meeting?.transcript ?? '');
-  const [file, setFile] = useState<File | null>(null);
+  const [scheduledDate, setScheduledDate] = useState(localDate());
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [pendingFiles, setPendingFiles] = useState<StoredFile[]>([]);
   const [uploadError, setUploadError] = useState('');
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const attachmentInput = useRef<HTMLInputElement>(null);
   const canManage =
     !disabled &&
     meeting &&
     (meeting.hostId === actor.id || isAdministrator(actor.role));
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!meeting?.recording || !video) return;
-    const next = URL.createObjectURL(meeting.recording.blob);
-    video.src = next;
-    return () => {
-      video.removeAttribute('src');
-      URL.revokeObjectURL(next);
-    };
-  }, [meeting?.recording]);
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{meeting ? meeting.title : '发起会议'}</DialogTitle>
+        <DialogTitle>{meeting ? meeting.title : '预约会议'}</DialogTitle>
         <DialogDescription>
           腾讯会议 · 本地模拟
           {meeting
@@ -1428,19 +767,54 @@ function MeetingForm({
                 disabled={disabled}
               />
             </Field>
-            <div className="sr-ops-hint">
-              参会范围：当前内部协作人与外部协作人。此处仅记录拟参会名单。
+            <div className="sr-ops-form-row">
+              <DateField
+                label="预约日期"
+                required
+                value={scheduledDate}
+                onChange={setScheduledDate}
+                disabled={disabled}
+              />
+              <TimeField
+                label="开始时间"
+                required
+                value={scheduledTime}
+                onChange={setScheduledTime}
+                disabled={disabled}
+              />
             </div>
-            <div className="sr-meeting-people">
-              {[
-                ...(record.internalParticipants?.map((p) => p.name) ?? []),
-                ...(record.externalCollaborators?.map((p) => p.name) ?? []),
-              ].join('、') || '尚未添加协作人'}
-            </div>
+            <Field title="会议时长" required>
+              <NativeSelect
+                value={String(durationMinutes)}
+                onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                disabled={disabled}
+              >
+                {[15, 30, 45, 60, 90, 120, 180, 240].map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {minutes} 分钟
+                  </option>
+                ))}
+              </NativeSelect>
+            </Field>
           </>
         ) : (
           <>
-            {meeting.status === '进行中' ? (
+            {meeting.status === '已预约' ? (
+              <dl className="sr-ops-details">
+                <div>
+                  <dt>预约日期</dt>
+                  <dd>{meeting.scheduledDate}</dd>
+                </div>
+                <div>
+                  <dt>开始时间</dt>
+                  <dd>{meeting.scheduledTime}</dd>
+                </div>
+                <div>
+                  <dt>会议时长</dt>
+                  <dd>{meeting.durationMinutes} 分钟</dd>
+                </div>
+              </dl>
+            ) : meeting.status === '进行中' ? (
               <div className="sr-meeting-stage">
                 <Video size={32} />
                 <h3>模拟会议进行中</h3>
@@ -1451,87 +825,153 @@ function MeetingForm({
               </div>
             ) : (
               <>
-                <div className="sr-meeting-artifacts">
-                  <section>
-                    <h4>会议录制</h4>
-                    {meeting.recording ? (
-                      <>
-                        <video
-                          ref={videoRef}
-                          controls
-                          preload="metadata"
-                          aria-label="会议录制"
-                        >
-                          <track kind="captions" />
-                        </video>
-                        <Button
-                          variant="ghost"
-                          onClick={() => downloadFile(meeting.recording!)}
-                        >
-                          <Download size={14} />
-                          下载录制
-                        </Button>
-                      </>
-                    ) : (
-                      <div className="sr-meeting-placeholder">
-                        <Video size={24} />
-                        <p>暂无会议录制</p>
-                        <small>
-                          连接腾讯会议后可同步；本地可导入已有文件。
-                        </small>
-                      </div>
-                    )}
-                  </section>
-                  <section>
-                    <h4>会议转写</h4>
-                    {meeting.transcript ? (
-                      <div className="sr-meeting-transcript">
-                        {meeting.transcript}
-                      </div>
-                    ) : (
-                      <div className="sr-meeting-placeholder">
-                        <FileText size={24} />
-                        <p>暂无转写内容</p>
-                      </div>
-                    )}
-                  </section>
-                </div>
-                {canManage && (
-                  <div className="sr-meeting-import">
-                    <h4>归档已有会议资料</h4>
-                    <Field title="导入录制 · MP4 / WebM，单文件不超过 20 MB">
-                      <Input
-                        type="file"
-                        accept="video/mp4,video/webm"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          setUploadError('');
-                          if (
-                            f &&
-                            (f.size <= 0 ||
-                              f.size > 20 * 1024 * 1024 ||
-                              !['video/mp4', 'video/webm'].includes(f.type))
-                          ) {
-                            setUploadError(
-                              '请选择 20 MB 以内的 MP4 或 WebM 文件。',
-                            );
-                            setFile(null);
-                            e.target.value = '';
-                          } else setFile(f ?? null);
-                        }}
-                      />
-                    </Field>
-                    <Field title="转写正文（粘贴已有转写，不自动生成）">
-                      <Textarea
-                        rows={5}
-                        value={transcript}
-                        onChange={(e) => setTranscript(e.target.value)}
-                      />
-                    </Field>
+                <dl className="sr-meeting-meta">
+                  <div>
+                    <dt>会议时间</dt>
+                    <dd>
+                      {stamp(meeting.startedAt ?? meeting.createdAt)}
+                      {meeting.endedAt ? ` — ${stamp(meeting.endedAt)}` : ''}
+                    </dd>
                   </div>
-                )}
+                  <div>
+                    <dt>参会人</dt>
+                    <dd>
+                      {[
+                        ...new Set(
+                          [meeting.host, ...meeting.participantNames].filter(
+                            Boolean,
+                          ),
+                        ),
+                      ].join('、') || '未记录'}
+                    </dd>
+                  </div>
+                </dl>
+                <section className="sr-meeting-transcript-section">
+                  <div className="sr-meeting-section-heading">
+                    <h4>会议转写</h4>
+                    {meetingTranscript(meeting).example && (
+                      <span className="sr-help">模拟示例</span>
+                    )}
+                  </div>
+                  <div className="sr-meeting-transcript">
+                    {meetingTranscript(meeting).text}
+                  </div>
+                </section>
+
               </>
             )}
+                <section className="sr-meeting-attachments">
+                  <div className="sr-meeting-section-heading">
+                    <h4>
+                      附件{' '}
+                      <span className="sr-help">
+                        {meetingAttachments(meeting).length +
+                          pendingFiles.length}
+                      </span>
+                    </h4>
+                    {canManage && (
+                      <div className="sr-meeting-upload-actions">
+                        <span className="sr-help">单文件不超过 20 MB</span>
+                        <Button
+                          variant="outline"
+                          onClick={() => attachmentInput.current?.click()}
+                        >
+                          上传附件
+                        </Button>
+                        <input
+                          ref={attachmentInput}
+                          type="file"
+                          multiple
+                          hidden
+                          accept={meetingAttachmentAccept}
+                          aria-label="上传会议附件"
+                          disabled={disabled}
+                          onChange={(event) => {
+                            const files = Array.from(
+                              event.target.files ?? [],
+                            ).map(storedFile);
+                            event.target.value = '';
+                            const issue = files
+                              .map(meetingAttachmentIssue)
+                              .find(Boolean);
+                            setUploadError(issue ?? '');
+                            if (!issue)
+                              setPendingFiles((previous) => [
+                                ...previous,
+                                ...files,
+                              ]);
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  {meetingAttachments(meeting).length || pendingFiles.length ? (
+                    <ul className="sr-meeting-file-list">
+                      {meetingAttachments(meeting).map((file) => (
+                        <li key={file.id}>
+                          <span
+                            className="sr-meeting-file-name"
+                            title={file.name}
+                          >
+                            {file.name}
+                          </span>
+                          <small>{(file.size / 1024).toFixed(1)} KB</small>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => downloadFile(file)}
+                          >
+                            下载
+                          </Button>
+                          {canManage && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={disabled}
+                              aria-label={`删除附件 ${file.name}`}
+                              onClick={() =>
+                                void run({
+                                  type: 'meeting-attachment-delete',
+                                  id: meeting.id,
+                                  fileId: file.id,
+                                })
+                              }
+                            >
+                              删除
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                      {pendingFiles.map((file) => (
+                        <li key={file.id}>
+                          <span
+                            className="sr-meeting-file-name"
+                            title={file.name}
+                          >
+                            {file.name}
+                          </span>
+                          <small>
+                            待保存 · {(file.size / 1024).toFixed(1)} KB
+                          </small>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={disabled}
+                            onClick={() =>
+                              setPendingFiles((previous) =>
+                                previous.filter((item) => item.id !== file.id),
+                              )
+                            }
+                          >
+                            移除
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="sr-help">暂无附件</p>
+                  )}
+                </section>
           </>
         )}
         <ErrorText error={uploadError || error} />
@@ -1546,54 +986,54 @@ function MeetingForm({
             onClick={async () => {
               if (
                 await run({
-                  type: 'meeting-create',
+                  type: 'meeting-schedule',
                   title,
-                  participantNames: [
-                    ...(record.internalParticipants?.map((p) => p.name) ?? []),
-                    ...(record.externalCollaborators?.map((p) => p.name) ?? []),
-                  ],
+                  scheduledDate,
+                  scheduledTime,
+                  durationMinutes,
                 })
               )
                 close();
             }}
           >
-            发起模拟会议
+            预约会议
           </Button>
         )}
-        {canManage && meeting?.status === '进行中' && (
+        {canManage && record.status !== '草稿' && meeting?.status === '已预约' && (
+          <Button
+            onClick={() => void run({ type: 'meeting-start', id: meeting.id })}
+          >
+            开始模拟会议
+          </Button>
+        )}
+        {canManage && record.status !== '草稿' && meeting?.status === '进行中' && (
           <Button
             onClick={() => void run({ type: 'meeting-end', id: meeting.id })}
           >
             结束模拟会议
           </Button>
         )}
-        {canManage && meeting?.status === '已结束' && (
-          <Button
-            disabled={Boolean(uploadError)}
-            onClick={async () => {
-              const recording: StoredFile | undefined = file
-                ? {
-                    id: crypto.randomUUID(),
-                    name: file.name,
-                    size: file.size,
-                    blob: file,
-                    uploadedAt: new Date().toISOString(),
-                  }
-                : undefined;
-              if (
-                await run({
-                  type: 'meeting-materials',
-                  id: meeting.id,
-                  recording,
-                  transcript,
-                })
-              )
-                close();
-            }}
-          >
-            保存会议资料
-          </Button>
-        )}
+        {canManage &&
+          meeting &&
+          pendingFiles.length > 0 && (
+            <Button
+              disabled={disabled || Boolean(uploadError)}
+              onClick={async () => {
+                if (
+                  await run({
+                    type: 'meeting-attachments-add',
+                    id: meeting.id,
+                    files: pendingFiles,
+                  })
+                ) {
+                  setPendingFiles([]);
+                  setUploadError('');
+                }
+              }}
+            >
+              保存附件
+            </Button>
+          )}
       </DialogFooter>
     </>
   );
