@@ -26,12 +26,13 @@ import {
   isSalesUser,
   applyAssessmentAction,
 } from '@/lib/request-assessment';
+import { activeEntitlementAllocations, effortEntitlementAllocations, entitlementLabel } from '@/lib/request-entitlement-reservations';
 import { assetDayMethod, requestDayRequirements, coverageByMethod, allocationMethodIssue, planDayGaps, formatDayRequirements } from '@/lib/request-asset-coverage';
 import type { AssessmentAction, GapApproval } from '@/lib/request-assessment';
 import { operationIdentities } from '@/lib/internal-users';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import { readLocal } from '@/lib/service-requests';
-import { itemMinimumDays, itemPriceCoefficient, calculateBillableDays, calculateEffortPricing, effortTotalsByMethod } from '@/lib/request-pricing';
+import { itemMinimumDays, itemPriceCoefficient, calculateBillableDays, calculateEffortPricing, effortTotalsByMethod, entitlementPricingContext, itemEntitlementKind, calculateEntitlementLines, type EntitlementPricingContext } from '@/lib/request-pricing';
 import type { ServiceRequest, InternalUser, CatalogService, CustomerRef } from '@/lib/service-requests';
 
 type Props = {
@@ -47,11 +48,11 @@ type Props = {
 type Mode = 'round' | 'effort' | 'plan' | 'gap' | 'decide' | null;
 const fmt = (n: number) => String(Number(n.toFixed(4)));
 const isMinimumDaysIssue = (message: string) => message.includes('预估人天不能小于当前最小人天数量');
-async function readCurrentPricingCatalog(): Promise<CatalogService[]> {
-  const references = await readLocal<{ id: string; payload?: { services?: CatalogService[] } }>('references');
+async function readCurrentPricingData() {
+  const [references, records] = await Promise.all([readLocal<{ id: string; payload?: any }>('references'), readLocal<ServiceRequest>('requests')]);
   const services = references.find(reference => reference.id === 'workspace')?.payload?.services;
   if (!services) throw new Error('无法读取最新服务目录，请刷新后重试。');
-  return services;
+  return { services: services as CatalogService[], context: entitlementPricingContext(references, records) };
 }
 const stamp = (s: string) => {
   const date = new Date(s);
@@ -156,6 +157,7 @@ export function RequestAssessment({
   const [externalNote, setExternalNote] = useState('');
   const [dialog, setDialog] = useState<Mode | 'confirm'>(null);
   const [liveServices, setLiveServices] = useState<CatalogService[]>([]);
+  const [livePricingContext, setLivePricingContext] = useState<EntitlementPricingContext>({ businessObjects: [], conversions: {} });
   const [catalogReady, setCatalogReady] = useState(false);
   const [approval, setApproval] = useState<GapApproval | null>(null);
   const [error, setError] = useState('');
@@ -163,16 +165,17 @@ export function RequestAssessment({
   const [records, setRecords] = useState<ServiceRequest[]>([]);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    if (dialog !== 'effort') return;
+    if (dialog !== 'effort' && dialog !== 'plan') return;
     let active = true;
     let version = 0;
     const refresh = async () => {
       const current = ++version;
       setCatalogReady(false);
       try {
-        const latest = await readCurrentPricingCatalog();
+        const latest = await readCurrentPricingData();
         if (active && current === version) {
-          setLiveServices(latest);
+          setLiveServices(latest.services);
+          setLivePricingContext(latest.context);
           setCatalogReady(true);
           setError('');
         }
@@ -209,8 +212,9 @@ export function RequestAssessment({
     setError('');
     try {
       const fresh = await readLocal<ServiceRequest>('requests');
-      const pricingServices = action.type === 'effort' ? await readCurrentPricingCatalog() : services;
-      if (action.type === 'effort') setLiveServices(pricingServices);
+      const pricingData = ['effort', 'plan', 'confirm'].includes(action.type) ? await readCurrentPricingData() : { services, context: livePricingContext };
+      const pricingServices = pricingData.services;
+      if (action.type === 'effort') { setLiveServices(pricingServices); setLivePricingContext(pricingData.context); }
       const references = action.type === 'plan' ? await readLocal<{ id: string; payload?: { customers?: CustomerRef[]; users?: InternalUser[] } }>('references') : [];
       const workspace = references.find(reference => reference.id === 'workspace')?.payload;
       const next = applyAssessmentAction(
@@ -223,6 +227,7 @@ export function RequestAssessment({
         undefined,
         pricingServices,
         action.type === 'plan' ? (workspace?.customers ?? []) : customers,
+        pricingData.context,
       );
       const ok = await save(
         next,
@@ -375,9 +380,9 @@ export function RequestAssessment({
                 {a.effort.lines.map(line => <li key={line.itemId}>
                   <div className="sr-pricing-service"><strong>{line.serviceName}</strong><span>{record.items.find(item => item.id === line.itemId)?.method}</span></div>
                   <div className="sr-pricing-equation">
-                    <span><small>预估</small> {fmt(line.estimatedDays)} 人天</span>
+                    <span><small>{line.kind === 'entitlement' ? '差额权益' : '预估'}</small> {line.kind === 'entitlement' ? (line.deficitEntitlements ? fmt(line.deficitEntitlements) : '—') : `${fmt(line.estimatedDays)} 人天`}</span>
                     <span className="sr-pricing-operator" aria-hidden="true">×</span>
-                    <span><small>计价系数</small> {fmt(line.priceCoefficient)}</span>
+                    <span><small>{line.kind === 'entitlement' ? '换算系数' : '计价系数'}</small> {fmt(line.priceCoefficient)}</span>
                     <span className="sr-pricing-operator" aria-hidden="true">=</span>
                     <strong aria-label={`计价 ${fmt(line.billableDays)} 人天`}>{fmt(line.billableDays)} <small>人天</small></strong>
                   </div>
@@ -438,9 +443,14 @@ export function RequestAssessment({
                     </div>
                   ))
                 ) : (
-                  <p>未锁定客户资产，全部人天需额度特批。</p>
+                  <p>{plan.effort > 0 ? '未锁定人天资产，计价人天需额度特批。' : '本次无需锁定人天资产。'}</p>
                 )}
               </div>
+              {!!activeEntitlementAllocations(record).length && <div className="sr-assessment-allocations" aria-label="已冻结权益">
+                {activeEntitlementAllocations(record).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+                  <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>已冻结 {allocation.quantity}</strong>
+                </div>)}
+              </div>}
               <p className="sr-help">负责销售：{plan.salesName}</p>
               {gap > 1e-8 && (
                 <div className="sr-assessment-gap">
@@ -564,9 +574,12 @@ export function RequestAssessment({
                 </section>
                 <section>
                   <h4>待客户确认的服务资产消耗</h4>
-                  {plan?.allocations.length ? (
+                  {plan && (plan.allocations.length || activeEntitlementAllocations(record).length) ? (
                     <>
                       <div className="sr-assessment-allocations">
+                        {activeEntitlementAllocations(record).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+                          <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
+                        </div>)}
                         {plan.allocations.map(asset => (
                           <div key={asset.assetId}>
                             <span>{asset.name} <small>{asset.assetId}</small></span>
@@ -598,6 +611,7 @@ export function RequestAssessment({
             mode={dialog}
             customers={customers}
             services={dialog === 'effort' ? liveServices : services}
+            pricingContext={livePricingContext}
             record={record}
             users={users}
             actor={actor}
@@ -605,7 +619,7 @@ export function RequestAssessment({
             records={records}
             approval={approval}
             disabled={disabled}
-            pricingReady={dialog !== 'effort' || catalogReady}
+            pricingReady={!['effort', 'plan'].includes(dialog ?? '') || catalogReady}
             error={error}
             run={run}
             close={() => setDialog(null)}
@@ -616,6 +630,7 @@ export function RequestAssessment({
   );
 }
 function AssessmentForm({
+  pricingContext,
   customers,
   services,
   pricingReady,
@@ -635,6 +650,7 @@ function AssessmentForm({
   mode: Mode;
   services: CatalogService[];
   pricingReady: boolean;
+  pricingContext: EntitlementPricingContext;
   record: ServiceRequest;
   users: InternalUser[];
   actor: OperationActor;
@@ -654,12 +670,20 @@ function AssessmentForm({
   const [estimates, setEstimates] = useState<Record<string, string>>(() => Object.fromEntries(
     record.items.map(item => [item.id, String(a.effort?.lines?.find(line => line.itemId === item.id)?.estimatedDays ?? '')]),
   ));
-  const pricingInputs = record.items.map(item => ({ itemId: item.id, estimatedDays: Number(estimates[item.id]), priceCoefficient: itemPriceCoefficient(item, services) }));
+  const dayItems = record.items.filter(item => !itemEntitlementKind(item, services));
+  const entitlementItems = record.items.filter(item => !!itemEntitlementKind(item, services));
+  const pricingInputs = record.items.map(item => itemEntitlementKind(item, services)
+    ? { itemId: item.id, estimatedDays: 0 }
+    : { itemId: item.id, estimatedDays: Number(estimates[item.id]), priceCoefficient: itemPriceCoefficient(item, services) });
   let pricingIssue = '';
   let pricing: ReturnType<typeof calculateEffortPricing> | undefined;
-  try { pricing = calculateEffortPricing(record, pricingInputs, services); }
+  try { pricing = calculateEffortPricing(record, pricingInputs, services, pricingContext); }
   catch (error) { pricingIssue = error instanceof Error ? error.message : '请填写完整的预估人天。'; }
 
+  let entitlementLines: ReturnType<typeof calculateEntitlementLines> = [];
+  let entitlementIssue = '';
+  try { entitlementLines = calculateEntitlementLines(record, services, pricingContext); }
+  catch (error) { entitlementIssue = error instanceof Error ? error.message : '无法获取权益信息'; }
   const [effortNote, setEffortNote] = useState(a.effort?.note ?? '');
   const requirements = requestDayRequirements(record);
   const [amounts, setAmounts] = useState<Record<string, string>>(
@@ -712,7 +736,7 @@ function AssessmentForm({
         {mode !== 'round' && (
           <DialogDescription>
             {mode === 'effort'
-              ? '预估人天不得低于目录最新的最小人天数量。计价人天 = 预估人天 × 计价系数；计价总人天变化后需重新关联服务依据。'
+              ? '人天类按预估人天 × 计价系数计价；权益类按差额权益 × 换算系数计价。预估总人天仅汇总人天类，计价总人天汇总两类。'
               : mode === 'plan'
                 ? '远程计价人天仅锁定远程资产，现场计价人天仅锁定现场资产；各类资产缺少数量分别核算。'
                 : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`}
@@ -745,9 +769,11 @@ function AssessmentForm({
         )}
         {mode === 'effort' && (
           <>
+            {!!dayItems.length && <section className="sr-pricing-group" aria-label="人天类申请项">
+            <h4>人天类申请项</h4>
             <div className="sr-pricing-table-wrap"><table className="sr-pricing-table sr-pricing-editor">
               <thead><tr><th>服务目录</th><th>预估人天 <em>*</em></th><th>计价系数</th><th>计价人天</th></tr></thead>
-              <tbody>{record.items.map(item => {
+              <tbody>{dayItems.map(item => {
                 const coefficient = itemPriceCoefficient(item, services);
                 const minimumDays = itemMinimumDays(item, services);
                 const estimate = Number(estimates[item.id]);
@@ -765,6 +791,27 @@ function AssessmentForm({
                 </tr>;
               })}</tbody>
             </table></div>
+            </section>}
+            {!!entitlementItems.length && <section className="sr-pricing-group" aria-label="权益类申请项">
+              <h4>权益类申请项</h4>
+              <div className="sr-pricing-table-wrap"><table className="sr-pricing-table sr-pricing-editor">
+                <thead><tr><th>服务目录</th><th>差额权益</th><th>换算系数</th><th>计价人天</th></tr></thead>
+                <tbody>{entitlementItems.map(item => {
+                  const line = entitlementLines.find(line => line.itemId === item.id);
+                  const issue = entitlementIssue;
+                  const kind = itemEntitlementKind(item, services)!;
+                  const conversion = pricingContext.conversions[kind];
+                  return <tr key={item.id}>
+                    <td><strong>{item.serviceName}</strong><small>{item.method} · {kind === 'inspection' ? '巡检权益' : '升级权益'}</small>
+                      {line?.entitlementObjects?.map(object => <small key={object.objectId}>{object.name}（{object.available}/{object.nodes}）</small>)}
+                      {issue && pricingReady && <small className="sr-error">{issue}</small>}</td>
+                    <td><span className={line?.deficitEntitlements ? 'sr-entitlement-deficit' : undefined}>{line ? (line.deficitEntitlements ? fmt(line.deficitEntitlements) : '—') : '—'}</span></td>
+                    <td><span aria-label={`${item.serviceName} 换算系数（只读）`}>{conversion ? `× ${fmt(conversion.days)}` : '未配置'}</span><small>人天 / 权益</small></td>
+                    <td><output aria-label={`${item.serviceName} 计价人天`}>{line ? fmt(line.billableDays) : '—'}</output></td>
+                  </tr>;
+                })}</tbody>
+              </table></div>
+            </section>}
             <div className="sr-pricing-totals" aria-live="polite">
               {pricing ? effortTotalsByMethod(record, pricing.lines).flatMap(total => [
                 <span key={`${total.method}-estimated`}>预估{total.method}总人天 <strong>{fmt(total.estimatedDays)}</strong></span>,
@@ -789,6 +836,13 @@ function AssessmentForm({
               <Input value={sales?.name ?? '未配置有效的客户所有人'} readOnly aria-readonly="true" />
               <small className="sr-help">使用客户所有人，由客户资料统一维护。</small>
             </Field>
+            {!!effortEntitlementAllocations(a.effort?.lines).length && <section>
+              <h4>待冻结权益</h4>
+              <div className="sr-assessment-allocations">{effortEntitlementAllocations(a.effort?.lines).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+                <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
+              </div>)}</div>
+              <p className="sr-help">保存服务依据后冻结权益；调整核定结果、退回草稿或取消请求时按人天规则释放。</p>
+            </section>}
             <div className="sr-asset-method-groups">
               {coverage.map(row => {
                 const matchingAssets = customerAssets.filter(asset => assetDayMethod(asset) === row.method);
@@ -890,7 +944,7 @@ function AssessmentForm({
             </Button>
           </>
         ) : (
-          <Button disabled={disabled || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!sales || !!allocationIssue))} onClick={() => void submit()}>
+          <Button disabled={disabled || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!pricingReady || !sales || !!allocationIssue))} onClick={() => void submit()}>
             {mode === 'round'
               ? '保存评估结论'
               : mode === 'effort'

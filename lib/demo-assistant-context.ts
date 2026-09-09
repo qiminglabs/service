@@ -1,6 +1,6 @@
 // Navigation metadata; full page and stored content travel separately as siteContent.
 export const assistantPages = {
-  requests: '服务请求', catalog: '服务目录', 'reference-data': '引用数据', 'field-settings': '后台字段配置',
+  requests: '服务请求', catalog: '服务目录', 'reference-data': '引用数据', 'field-settings': '后台配置',
 } as const;
 export const assistantStatuses = ['草稿', '待评估', '待确认', '待受理', '已转服务项目', '已取消'] as const;
 export const assistantTabs = ['申请信息', '补充信息', '评估', '会议', '工时', '活动', 'customers', 'contacts', 'assets', 'business-objects', 'users', 'partners', 'partner-users', 'service-certifications'] as const;

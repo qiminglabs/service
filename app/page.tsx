@@ -1,6 +1,9 @@
 'use client';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
+import { isEntitlementService } from '@/lib/service-requests';
 import { CatalogHistory } from '@/components/catalog-history';
+import { InitializeDataButton } from '@/components/initialize-data-button';
+import { initializeCustomerOwners, resetLocalDemoData } from '@/lib/initialize-demo-data';
 import {
   resolveOperationActor,
   operationIdentities,
@@ -23,7 +26,7 @@ import {
 } from '@/lib/partner-directory';
 import { migrateRoleLabel } from '@/lib/request-operations';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction, ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -71,6 +74,7 @@ import {
   type InternalUser,
 } from '@/lib/service-requests';
 import { businessObjectProducts } from '@/lib/product-dictionary';
+import { withDefaultAssetBalances, parseEntitlementQuantity, type EntitlementField } from '@/lib/reference-balances';
 import {
   serviceCertificationOptions,
   catalogCertificationOptions,
@@ -159,8 +163,8 @@ type Service = {
   category: ServiceCategory;
   deliveryMethods: string[];
   priceUnit: '服务人天' | '巡检权益' | '升级权益';
-  priceCoefficient: number;
-  defaultQuantity: number;
+  priceCoefficient?: number;
+  defaultQuantity?: number;
   certifications: string[];
   providers: string[];
   allowedInitiatorSites: string[];
@@ -187,8 +191,8 @@ const services: Service[] = (() => {
       category: seed.serviceCategory,
       deliveryMethods: ['远程', '现场'],
       priceUnit: seed.pricingUnit ?? '服务人天',
-      priceCoefficient: 1,
-      defaultQuantity: 1,
+      priceCoefficient: seed.pricingUnit && isEntitlementService({ priceUnit: seed.pricingUnit }) ? undefined : 1,
+      defaultQuantity: seed.pricingUnit && isEntitlementService({ priceUnit: seed.pricingUnit }) ? undefined : 1,
       certifications: ['无认证要求'],
       providers: [...seed.supportedProviders],
       allowedInitiatorSites: ['内部系统', '客户中心'],
@@ -212,6 +216,8 @@ function mergeImportedServices(storedServices: Service[]): Service[] {
     ...storedServices.filter((service) => !importedServiceIds.has(service.id)),
   ].map((service) => ({
     ...service,
+    priceCoefficient: isEntitlementService(service) ? undefined : service.priceCoefficient,
+    defaultQuantity: isEntitlementService(service) ? undefined : service.defaultQuantity,
     allowedInitiatorSites: service.allowedInitiatorSites.filter(
       (site) => site !== '合作伙伴中心',
     ),
@@ -259,11 +265,12 @@ type StoredBusinessObject = Omit<BusinessObject, 'product'> & {
 };
 
 const initialCustomers: Customer[] = [
-  { id: 'CUS-001', name: '北京星海科技有限公司', team: '金融', status: '启用' },
-  { id: 'CUS-002', name: '上海远帆数据有限公司', team: '商业', status: '启用' },
+  { id: 'CUS-001', name: '北京星海科技有限公司', team: '金融', status: '启用', ownerUserId: 'USR-001' },
+  { id: 'CUS-002', name: '上海远帆数据有限公司', team: '商业', status: '启用', ownerUserId: 'USR-001' },
   {
     id: 'CUS-003',
     name: '深圳云岭信息技术有限公司',
+    ownerUserId: 'USR-001',
     team: '其他',
     status: '启用',
   },
@@ -296,11 +303,11 @@ const initialContacts: Contact[] = [
   },
 ];
 
-const initialAssets: Asset[] = [
+const initialAssets: Asset[] = withDefaultAssetBalances<Asset>([
   { id: 'AST-001', customerId: 'CUS-001', name: '远程人天', status: '使用中' },
   { id: 'AST-002', customerId: 'CUS-001', name: '现场人天', status: '启用' },
   { id: 'AST-003', customerId: 'CUS-002', name: '远程人天', status: '已使用' },
-];
+]);
 
 const initialBusinessObjects: BusinessObject[] = [
   {
@@ -445,7 +452,7 @@ const navigation: Array<{
   },
   {
     key: 'field-settings',
-    label: '后台字段配置',
+    label: '后台配置',
     icon: Database,
   },
 ];
@@ -528,6 +535,8 @@ function Header({
   identities,
   onUserChange,
   onOpenMenu,
+  onInitialize,
+  initializationDisabled,
 }: {
   portal: PortalContext;
   identitySources: Parameters<typeof resolvePortalContext>[1];
@@ -535,6 +544,8 @@ function Header({
   identities: OperationActor[];
   onUserChange: (id: string) => void;
   onOpenMenu: () => void;
+  onInitialize: () => Promise<void>;
+  initializationDisabled: boolean;
 }) {
   return (
     <header className="topbar">
@@ -562,11 +573,13 @@ function Header({
         </button>
       </nav>
       <div className="topbar-actions">
+        <InitializeDataButton disabled={initializationDisabled} onInitialize={onInitialize} />
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <button
-                className="user-menu role-switcher"
+              <Button
+                variant="outline"
+                className="role-switcher"
                 type="button"
                 aria-label={`当前用户：${currentActor.name || '未选择'}，切换身份`}
               />
@@ -679,6 +692,12 @@ function MultiChoiceField({
 }
 
 export default function Home() {
+  const [generation, setGeneration] = useState(0);
+  return <Workspace key={generation} onInitialized={() => setGeneration(value => value + 1)} />;
+}
+
+function Workspace({ onInitialized }: { onInitialized: () => void }) {
+  const resetting = useRef(false);
   const [selectedView, setActiveView] = useState<ViewKey>('requests');
   const [requestCreateToken, setRequestCreateToken] = useState(0);
   const [serviceRecords, setServiceRecords] = useState<Service[]>(services);
@@ -755,6 +774,7 @@ export default function Home() {
     readLocal<{
       id: string;
       payload: {
+        customerOwnersInitialized?: boolean;
         requestFields?: RequestField[];
         services: Service[];
         customers: Customer[];
@@ -790,9 +810,8 @@ export default function Home() {
               Array.isArray(snapshot.services) ? snapshot.services : [],
             ),
           );
-          setCustomers(snapshot.customers);
           setContacts(snapshot.contacts);
-          setAssets(snapshot.assets);
+          setAssets(withDefaultAssetBalances(Array.isArray(snapshot.assets) ? snapshot.assets : initialAssets));
           const partnerDirectory = ensurePartnerSamples(
             Array.isArray(snapshot.partners) ? snapshot.partners : [],
             Array.isArray(snapshot.partnerUsers) ? snapshot.partnerUsers : [],
@@ -806,6 +825,7 @@ export default function Home() {
             Array.isArray(snapshot.users) ? snapshot.users : initialUsers,
           );
           setUsers(restoredUsers);
+          setCustomers(snapshot.customerOwnersInitialized ? snapshot.customers : initializeCustomerOwners(snapshot.customers, restoredUsers));
           setServiceCertifications(
             ensureCertificationSamples(
               Array.isArray(snapshot.serviceCertifications)
@@ -834,9 +854,11 @@ export default function Home() {
     if (!referencesReady) return;
     // Debounce edits and cancel obsolete scheduled snapshots before opening a transaction.
     const timer = window.setTimeout(() => {
+      if (resetting.current) return;
       void saveLocal('references', {
         id: 'workspace',
         payload: {
+          customerOwnersInitialized: true,
           requestFields,
           services: serviceRecords,
           customers,
@@ -870,6 +892,30 @@ export default function Home() {
     partnerUsers,
     serviceCertifications,
   ]);
+
+  async function initializeAllData() {
+    if (resetting.current || !referencesReady) return;
+    resetting.current = true;
+    try {
+      await resetLocalDemoData({
+        requestFields: initialRequestFields,
+        services,
+        customers: initialCustomers,
+        contacts: initialContacts,
+        assets: initialAssets,
+        businessObjects: initialBusinessObjects,
+        users: initialUsers,
+        partners: samplePartners,
+        partnerUsers: samplePartnerUsers,
+        serviceCertifications: ensureCertificationSamples([], initialUsers, samplePartnerUsers, samplePartners),
+      });
+      // Remount all editors so stale forms and filters cannot overwrite restored data.
+      onInitialized();
+    } catch (error) {
+      resetting.current = false;
+      throw error;
+    }
+  }
 
   const generatedCode = useMemo(() => {
     const nextSequence =
@@ -910,6 +956,7 @@ export default function Home() {
       product: 'SMTX OS 系统',
       status: '启用',
       assetName: '远程人天',
+      balanceDays: '5',
     });
     setReferenceFormError('');
     setReferenceCreateOpen(true);
@@ -1251,11 +1298,11 @@ export default function Home() {
       catalogForm.certifications.length &&
       catalogForm.providers.length &&
       catalogForm.allowedInitiatorSites.length;
-    const validNumbers =
+    const validNumbers = isEntitlementService(catalogForm) || (
       decimalPattern.test(catalogForm.priceCoefficient) &&
       decimalPattern.test(catalogForm.defaultQuantity) &&
       Number(catalogForm.priceCoefficient) > 0 &&
-      Number(catalogForm.defaultQuantity) > 0;
+      Number(catalogForm.defaultQuantity) > 0);
     if (!allFieldsComplete || !validNumbers) {
       setFormError(
         '请填写全部字段；计价系数和最小人天数量须为大于 0、最多两位小数的数字。',
@@ -1270,8 +1317,8 @@ export default function Home() {
       category: catalogForm.category,
       deliveryMethods: catalogForm.deliveryMethods,
       priceUnit: catalogForm.priceUnit,
-      priceCoefficient: Number(catalogForm.priceCoefficient),
-      defaultQuantity: Number(catalogForm.defaultQuantity),
+      priceCoefficient: isEntitlementService(catalogForm) ? undefined : Number(catalogForm.priceCoefficient),
+      defaultQuantity: isEntitlementService(catalogForm) ? undefined : Number(catalogForm.defaultQuantity),
       certifications: catalogForm.certifications,
       providers: catalogForm.providers,
       allowedInitiatorSites: catalogForm.allowedInitiatorSites,
@@ -1343,6 +1390,8 @@ export default function Home() {
           identities={referencesReady ? identities : []}
           onUserChange={switchIdentity}
           onOpenMenu={() => setMobileNavOpen(true)}
+          onInitialize={initializeAllData}
+          initializationDisabled={!referencesReady}
         />
         <main className="content-area" data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
           {referenceStorageError && (
@@ -1358,7 +1407,7 @@ export default function Home() {
                   : activeView === 'catalog'
                     ? '服务目录'
                     : activeView === 'field-settings'
-                      ? '后台字段配置'
+                      ? '后台配置'
                       : '引用数据'}
               </h1>
               {activeView === 'reference-data' ? (
@@ -1441,8 +1490,8 @@ export default function Home() {
                     setEditingService(service);
                     setCatalogForm({
                       ...service,
-                      priceCoefficient: String(service.priceCoefficient),
-                      defaultQuantity: String(service.defaultQuantity),
+                      priceCoefficient: String(service.priceCoefficient ?? ''),
+                      defaultQuantity: String(service.defaultQuantity ?? ''),
                     });
                     setFormError('');
                     setCreateOpen(true);
@@ -1490,6 +1539,7 @@ export default function Home() {
             </BusinessObjectProductsContext.Provider>
           ) : activeView === 'field-settings' ? (
             <RequestFieldSettings
+              actor={currentActor.name}
               fields={requestFields}
               onChange={setRequestFields}
               ready={referencesReady}
@@ -1547,6 +1597,10 @@ export default function Home() {
                 )
               }
               onAssetBalanceChange={(id, days) => setAssets(records => records.map(record => record.id === id ? { ...record, balanceDays: days } : record))}
+              onEntitlementChange={(id, field, quantity) => setBusinessObjects((records) => records.map((record) =>
+                record.id === id && parseEntitlementQuantity(String(quantity), record.nodeCount) !== null
+                  ? { ...record, [field]: quantity } : record,
+              ))}
               onDisableAsset={(id) =>
                 setAssets((records) =>
                   records.map((record) =>
@@ -1676,7 +1730,7 @@ export default function Home() {
                     <option>升级权益</option>
                   </select>
                 </label>
-                <label htmlFor="price-coefficient">
+                {!isEntitlementService(catalogForm) && <><label htmlFor="price-coefficient">
                   <span>
                     计价系数 <em>*</em>
                   </span>
@@ -1710,6 +1764,7 @@ export default function Home() {
                     placeholder="例如：5.00"
                   />
                 </label>
+                </>}
               </div>
             </section>
             <section className="form-section">
@@ -1939,12 +1994,12 @@ function CatalogView(props: CatalogViewProps) {
                     </td>
                     <td>{service.category}</td>
                     <td>
-                      <strong className="price-coefficient">
-                        {service.priceCoefficient.toFixed(2)}
-                      </strong>
+                      {!isEntitlementService(service) && <strong className="price-coefficient">
+                        {service.priceCoefficient?.toFixed(2) ?? '—'}
+                      </strong>}
                       <small className="cell-note">
                         {' '}
-                        / {service.priceUnit}
+                        {!isEntitlementService(service) && '/ '}{service.priceUnit}
                       </small>
                     </td>
                     <td>{service.deliveryMethods.join(' / ')}</td>
@@ -2067,20 +2122,21 @@ function CatalogDetail({
                 <dt>计价单位</dt>
                 <dd>{service.priceUnit}</dd>
               </div>
-              <div>
+              {!isEntitlementService(service) && <><div>
                 <dt>计价系数</dt>
-                <dd>{service.priceCoefficient.toFixed(2)}</dd>
+                <dd>{service.priceCoefficient?.toFixed(2) ?? '—'}</dd>
               </div>
               <div>
                 <dt>最小人天数量</dt>
-                <dd>{service.defaultQuantity.toFixed(2)} 人天</dd>
+                <dd>{service.defaultQuantity?.toFixed(2) ?? '—'} 人天</dd>
               </div>
               <div>
                 <dt>最小计价人天</dt>
                 <dd>
-                  {Number((service.priceCoefficient * service.defaultQuantity).toFixed(4))} 人天
+                  {Number(((service.priceCoefficient ?? 0) * (service.defaultQuantity ?? 0)).toFixed(4))} 人天
                 </dd>
               </div>
+              </>}
             </dl>
           </section>
           <section className="detail-card">
@@ -2159,6 +2215,7 @@ type ReferenceDataViewProps = {
   onDisableContact: (id: string) => void;
   onDisableAsset: (id: string) => void;
   onAssetBalanceChange: (id: string, days: number) => void;
+  onEntitlementChange: (id: string, field: EntitlementField, quantity: number) => void;
   onDisableBusinessObject: (id: string) => void;
   onDisableUser: (id: string) => void;
 };
@@ -2394,8 +2451,8 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                 <th>SN</th>
                 <th>产品</th>
                 <th>节点数</th>
-                <th>升级权益</th>
-                <th>巡检权益</th>
+                <th>升级权益（含已锁定）</th>
+                <th>巡检权益（含已锁定）</th>
                 <th>状态</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
@@ -2415,10 +2472,25 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <span className="product-tag">{record.product}</span>
                   </td>
                   <td className="numeric-cell">{record.nodeCount}</td>
-                  <td className="numeric-cell">{record.upgradeEntitlement}</td>
-                  <td className="numeric-cell">
-                    {record.inspectionEntitlement}
-                  </td>
+                  {(['upgradeEntitlement', 'inspectionEntitlement'] as const).map((field) => (
+                    <td className="numeric-cell" key={field}>
+                      <Input
+                        key={`${record.id}:${field}:${record[field]}`}
+                        aria-label={`${record.id} ${field === 'upgradeEntitlement' ? '升级权益' : '巡检权益'}（含已锁定）`}
+                        type="number"
+                        min="0"
+                        max={record.nodeCount}
+                        step="1"
+                        defaultValue={record[field]}
+                        title={`请输入 0 至 ${record.nodeCount} 的整数，离开输入框后保存`}
+                        onBlur={(event) => {
+                          const quantity = parseEntitlementQuantity(event.target.value, record.nodeCount);
+                          if (quantity !== null) props.onEntitlementChange(record.id, field, quantity);
+                          else event.target.value = String(record[field]);
+                        }}
+                      />
+                    </td>
+                  ))}
                   <td>
                     <span
                       className="reference-status"
@@ -2884,7 +2956,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                 </label>
                 <label htmlFor="upgrade-entitlement">
                   <span>
-                    升级权益 <em>*</em>
+                    升级权益（含已锁定） <em>*</em>
                   </span>
                   <Input
                     id="upgrade-entitlement"
@@ -2901,7 +2973,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                 </label>
                 <label htmlFor="inspection-entitlement">
                   <span>
-                    巡检权益 <em>*</em>
+                    巡检权益（含已锁定） <em>*</em>
                   </span>
                   <Input
                     id="inspection-entitlement"

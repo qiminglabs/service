@@ -1,4 +1,4 @@
-import { defaultConfig, openDatabase } from './service-requests';
+import { defaultConfig, openDatabase, applyCatalogConfigRules } from './service-requests';
 import type { CatalogService, RequestConfig } from './service-requests';
 
 export type VersionedService = CatalogService & {
@@ -50,9 +50,9 @@ export async function commitCatalogVersion(
             tx.abort();
             return;
           }
-          const oldInternal = internal.result ?? defaultConfig(current);
+          const oldInternal = applyCatalogConfigRules(current, internal.result ?? defaultConfig(current));
           const oldCustomer =
-            customer.result?.payload ?? defaultConfig(current);
+            applyCatalogConfigRules(current, customer.result?.payload ?? defaultConfig(current));
           const entries: CatalogVersion['payload'][] =
             history.result?.payload ?? [];
           const now = new Date().toISOString();
@@ -71,9 +71,9 @@ export async function commitCatalogVersion(
               reason: '版本管理启用时的初始快照',
             });
           const nextInternal =
-            change.audience === 'internal' ? change.config! : oldInternal;
+            applyCatalogConfigRules(change.service ?? current, change.audience === 'internal' ? change.config! : oldInternal);
           const nextCustomer =
-            change.audience === 'customer' ? change.config! : oldCustomer;
+            applyCatalogConfigRules(change.service ?? current, change.audience === 'customer' ? change.config! : oldCustomer);
           const clean = (value: object) =>
             JSON.stringify(
               Object.fromEntries(

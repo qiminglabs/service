@@ -1,5 +1,6 @@
 'use client';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
+import { initializeRequestSamples } from '@/lib/demo-service-requests';
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
@@ -70,9 +71,11 @@ import {
   RequestIdentityError,
   businessObjectsEnabled,
   matchesObjectProduct,
+  objectEntitlementAvailability,
   defaultConfig,
   readRequestConfigs,
   resolveRequestConfig,
+  isEntitlementService,
   serviceAvailableForRequest,
   downloadFile,
   fieldLabels,
@@ -192,14 +195,18 @@ export function RequestWorkspace(props: Props) {
   const [returnDraftOpen, setReturnDraftOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   const [returnDraftReason, setReturnDraftReason] = useState('');
+  const [reservationRecords, setReservationRecords] = useState<ServiceRequest[]>([]);
   const [showIssues, setShowIssues] = useState(false);
   const handledToken = useRef(0);
   const saveLock = useRef(false);
 
   function load() {
-    return readLocal<ServiceRequest>('requests')
+    return initializeRequestSamples(props)
+      .catch(error => setNotice(error instanceof Error ? `样例初始化暂未完成：${error.message}` : '样例初始化暂未完成，请刷新后重试。'))
+      .then(() => readLocal<ServiceRequest>('requests'))
       .then(async (records) => {
         records = records.map(record => withRequestContact(record, props.contacts));
+        setReservationRecords(records);
         const repair = repairCustomerRequestApprover(records, props.users);
         if (repair && canAccessRequest(repair, access)) {
           await saveLocal('requests', repair, access);
@@ -247,6 +254,7 @@ export function RequestWorkspace(props: Props) {
     const next = withRequestContact({ ...record, updatedAt: new Date().toISOString() }, props.contacts);
     try {
       await saveLocal('requests', next, access);
+      setReservationRecords(previous => [next, ...previous.filter(record => record.id !== next.id)]);
       setRequests((old) => [next, ...old.filter((r) => r.id !== next.id)].filter((record) => canAccessRequest(record, access)));
       setDraft(canAccessRequest(next, access) ? next : null);
       setNotice(message);
@@ -1103,6 +1111,9 @@ export function RequestWorkspace(props: Props) {
                 </div>
                 <ItemBasicFields
                   value={pendingItem}
+                  reservationRecords={reservationRecords}
+                  requestId={draft?.id}
+                  priceUnit={props.services.find(service => service.id === pendingItem.serviceId)?.priceUnit}
                   objects={props.businessObjects.filter(
                     (o) => o.customerId === draft?.customerId,
                   )}
@@ -1323,6 +1334,9 @@ export function RequestWorkspace(props: Props) {
 }
 
 function ItemBasicFields({
+  reservationRecords,
+  requestId,
+  priceUnit,
   value,
   objects,
   customerId,
@@ -1330,6 +1344,9 @@ function ItemBasicFields({
   busy,
   update,
 }: {
+  reservationRecords: ServiceRequest[];
+  requestId?: string;
+  priceUnit?: string;
   value: RequestItem;
   objects: ObjectRef[];
   customerId: string;
@@ -1469,7 +1486,9 @@ function ItemBasicFields({
                       matchesObjectProduct(o, value.config)) ||
                     value.businessObjectIds.includes(o.id),
                 )
-                .map((o) => (
+                .map((o) => {
+                  const entitlement = objectEntitlementAvailability(o, priceUnit, reservationRecords, requestId);
+                  return (
                   <li key={o.id}>
                     <label>
                       <input
@@ -1497,6 +1516,13 @@ function ItemBasicFields({
                           {o.name}
                           <small>（{o.nodeCount} 节点）</small>
                         </span>
+                        {entitlement && (
+                          <span className="sr-object-entitlement" data-insufficient={entitlement.insufficient || undefined}>
+                            <span title="可用权益 / 集群节点数">{entitlement.name}（{entitlement.available ?? '未维护'}/{entitlement.required}）</span>
+                            {entitlement.insufficient && <span className="sr-object-entitlement-warning">权益不足，可继续申请</span>}
+                            {entitlement.available === undefined && <span className="sr-help">权益数量未维护，可继续申请</span>}
+                          </span>
+                        )}
                         <span className="sr-object-sn">
                           序列号：{o.sn?.trim() || '未填写'}
                         </span>
@@ -1506,7 +1532,8 @@ function ItemBasicFields({
                       </span>
                     </label>
                   </li>
-                ))}
+                );
+                })}
             </ul>
             {!objects.length && (
               <p className="sr-help">
@@ -1530,6 +1557,7 @@ export function RequestCatalogSettings({
   audience?: 'internal' | 'customer';
 }) {
   const configLabel = audience === 'internal' ? '内部申请' : '客户中心申请';
+  const lockedBusinessObject = isEntitlementService(service);
   const requestFields = useContext(RequestFieldsContext);
   const products = useContext(BusinessObjectProductsContext);
   const [config, setConfig] = useState<RequestConfig>(() =>
@@ -1619,7 +1647,7 @@ export function RequestCatalogSettings({
             <section className="sr-sheet-section">
               <h3>申请项字段</h3>
               <p className="sr-help">
-                字段来自后台字段配置。勾选后用于当前服务目录；单选和多选字段可进一步限制本目录可用的选项。
+                字段来自后台配置。勾选后用于当前服务目录；单选和多选字段可进一步限制本目录可用的选项。
               </p>
               <div className="sr-config-field-list">
                 <article className="sr-config-field">
@@ -1628,6 +1656,7 @@ export function RequestCatalogSettings({
                   <p className="sr-help">引用服务目录 · 不可在此编辑</p>
                 </article>
                 {(['description', 'businessObjects'] as const).map((key) => {
+                  const locked = key === 'businessObjects' && lockedBusinessObject;
                   const label = key === 'description' ? '需求说明' : '业务对象';
                   const setting = editing.basicFields?.[key] ?? {
                     enabled:
@@ -1648,7 +1677,7 @@ export function RequestCatalogSettings({
                       >
                         <input
                           type="checkbox"
-                          disabled={busy}
+                          disabled={busy || locked}
                           checked={setting.enabled}
                           onChange={(event) =>
                             setEditing({
@@ -1676,7 +1705,7 @@ export function RequestCatalogSettings({
                         <label className="sr-check-line">
                           <input
                             type="checkbox"
-                            disabled={busy}
+                            disabled={busy || locked}
                             checked={setting.required}
                             aria-label={`${label}是否必填`}
                             onChange={(event) =>
@@ -1698,7 +1727,7 @@ export function RequestCatalogSettings({
                       {key === 'businessObjects' && setting.enabled && (
                         <fieldset className="sr-config-option-set">
                           <legend>可搜索产品</legend>
-                          {products.map((product) => {
+                          {(locked ? ['SMTX OS 系统'] : products).map((product) => {
                             const setting = editing.basicFields
                               ?.businessObjects ?? {
                               enabled: true,
@@ -1710,7 +1739,7 @@ export function RequestCatalogSettings({
                               <label key={product}>
                                 <input
                                   type="checkbox"
-                                  disabled={busy}
+                                  disabled={busy || locked}
                                   checked={selectedProducts.includes(product)}
                                   onChange={(event) =>
                                     setEditing({
@@ -1733,7 +1762,8 @@ export function RequestCatalogSettings({
                               </label>
                             );
                           })}
-                          {!products.length && (
+                          {locked && <p>权益类服务固定必填业务对象，仅可选择 SMTX OS 系统，不可修改。</p>}
+                          {!locked && !products.length && (
                             <p>暂无产品，请先维护业务对象的产品字段。</p>
                           )}
                         </fieldset>
@@ -1858,7 +1888,7 @@ export function RequestCatalogSettings({
                   })}
                 {!requestFields.length && (
                   <p className="sr-help">
-                    后台尚未配置申请项字段，请先前往后台字段配置。
+                    后台尚未配置申请项字段，请先前往后台配置。
                   </p>
                 )}
               </div>

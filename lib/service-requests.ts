@@ -1,4 +1,5 @@
-import { effortPricingSaveIssue } from './request-pricing.ts';
+import { entitlementAvailable } from './request-entitlement-reservations.ts';
+import { effortPricingSaveIssue, entitlementPricingContext } from './request-pricing.ts';
 import { projectCreationSaveIssue } from './request-projects.ts';
 import { isInternal } from './request-operations.ts';
 import { supplementSaveIssue } from './request-supplements.ts';
@@ -21,6 +22,17 @@ export type CatalogService = {
   allowedInitiatorSites?: string[];
 };
 export type RequestAudience = 'internal' | 'customer';
+
+export function isEntitlementService(service: { priceUnit: string }) {
+  return ['巡检权益', '升级权益'].includes(service.priceUnit);
+}
+
+export function applyCatalogConfigRules(service: CatalogService, config: RequestConfig): RequestConfig {
+  if (!isEntitlementService(service)) return config;
+  return { ...config, basicFields: { ...config.basicFields, businessObjects: {
+    enabled: true, required: true, products: ['SMTX OS 系统'],
+  } } };
+}
 
 export function serviceAvailableForRequest(
   service: CatalogService,
@@ -64,9 +76,9 @@ export function resolveRequestConfig(
 ): RequestConfig {
   // The caller supplies only the selected audience's configs. Never fall back
   // from customer configuration to internal configuration, even for empty forms.
-  return normalizeRequestConfig(
+  return applyCatalogConfigRules(service, normalizeRequestConfig(
     configs.find((config) => config.serviceId === service.id) ?? defaultConfig(service),
-  );
+  ));
 }
 export type CustomerRef = { id: string; name: string; status: string; ownerUserId?: string };
 export type ContactRef = CustomerRef & {
@@ -84,9 +96,18 @@ export function contactDisplay(contact: ContactRef) {
 }
 export type ObjectRef = ContactRef & {
   nodeCount: number;
+  upgradeEntitlement?: number;
+  inspectionEntitlement?: number;
   product?: string;
   sn?: string;
 };
+export function objectEntitlementAvailability(object: ObjectRef, priceUnit?: string, records: ServiceRequest[] = [], exceptId = '') {
+  if (priceUnit !== '巡检权益' && priceUnit !== '升级权益') return null;
+  const quantity = entitlementAvailable(object, priceUnit === '巡检权益' ? 'inspection' : 'upgrade', records, exceptId);
+  const available = typeof quantity === 'number' && Number.isInteger(quantity) && quantity >= 0 ? quantity : undefined;
+  return { name: priceUnit, available, required: object.nodeCount,
+    insufficient: available !== undefined && available < object.nodeCount };
+}
 export function matchesObjectProduct(object: ObjectRef, config: RequestConfig) {
   const products = config.basicFields?.businessObjects?.products;
   return products === undefined || products.includes(object.product ?? '');
@@ -620,7 +641,9 @@ export function defaultConfig(service: CatalogService): RequestConfig {
     revision: 1,
     basicFields: {
       description: { enabled: true, required: true },
-      businessObjects: { enabled: false, required: false },
+      businessObjects: isEntitlementService(service)
+        ? { enabled: true, required: true, products: ['SMTX OS 系统'] }
+        : { enabled: false, required: false },
     },
     fields: installation ? ['edition', 'version', 'nodes'] : [],
     fieldNames: { ...fieldLabels },
@@ -644,12 +667,12 @@ export function newItem(
   service: CatalogService,
   config: RequestConfig,
 ): RequestItem {
-  const snapshot = structuredClone(normalizeRequestConfig(config));
+  const snapshot = structuredClone(applyCatalogConfigRules(service, normalizeRequestConfig(config)));
   return {
     id: crypto.randomUUID(),
     serviceId: service.id,
     serviceName: service.name,
-    priceCoefficient: service.priceCoefficient,
+    priceCoefficient: isEntitlementService(service) ? undefined : service.priceCoefficient,
     methods: [...service.deliveryMethods],
     method: service.deliveryMethods[0] ?? '',
     description: '',
@@ -881,6 +904,31 @@ export async function readLocal<T>(
     db.close();
   }
 }
+// Read and append a reference history in one transaction so concurrent tabs cannot overwrite versions.
+export async function updateLocalReference<T>(id: string, update: (previous: T | undefined) => T): Promise<T> {
+  const db = await openDatabase();
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      const transaction = db.transaction('references', 'readwrite');
+      const records = transaction.objectStore('references');
+      const request = records.get(id);
+      let result: T;
+      transaction.oncomplete = () => resolve(result);
+      transaction.onabort = () => reject(transaction.error ?? new Error('保存已中止'));
+      transaction.onerror = () => reject(transaction.error);
+      request.onsuccess = () => {
+        try {
+          result = update(request.result?.payload as T | undefined);
+          records.put({ id, payload: result });
+        } catch (error) {
+          reject(error);
+          transaction.abort();
+        }
+      };
+    });
+  } finally { db.close(); }
+}
+
 export async function saveLocal(
   store: 'requests' | 'configs' | 'references',
   record: ServiceRequest | RequestConfig | { id: string; payload: unknown },
@@ -925,16 +973,17 @@ export async function saveLocal(
 
             const all = records.getAll();
             all.onsuccess = () => {
-              const workspace = transaction.objectStore('references').get('workspace');
+              const workspace = transaction.objectStore('references').getAll();
               workspace.onsuccess = () => {
-                const removalIssue = customerOwnerRemovalIssue(serviceRequest, previous, workspace.result?.payload?.customers ?? []);
+                const workspacePayload = workspace.result.find((reference: { id: string }) => reference.id === 'workspace')?.payload;
+                const removalIssue = customerOwnerRemovalIssue(serviceRequest, previous, workspacePayload?.customers ?? []);
                 if (removalIssue) { reject(new RequestIdentityError(removalIssue)); transaction.abort(); return; }
-                if (!checkAssessment) { records.put(withRequestContact(serviceRequest, workspace.result?.payload?.contacts ?? [])); return; }
-                const ownerIssue = changedPlan ? planSalesOwnerIssue(serviceRequest, workspace.result?.payload?.customers ?? [], workspace.result?.payload?.users ?? []) : null;
-                const lockIssue = ownerIssue ?? effortPricingSaveIssue(serviceRequest, previous, workspace.result?.payload?.services ?? [])
-                  ?? assessmentLockIssue(serviceRequest, all.result.map(normalizeStoredRequest), workspace.result?.payload?.assets ?? []);
+                if (!checkAssessment) { records.put(withRequestContact(serviceRequest, workspacePayload?.contacts ?? [])); return; }
+                const ownerIssue = changedPlan ? planSalesOwnerIssue(serviceRequest, workspacePayload?.customers ?? [], workspacePayload?.users ?? []) : null;
+                const lockIssue = ownerIssue ?? effortPricingSaveIssue(serviceRequest, previous, workspacePayload?.services ?? [], entitlementPricingContext(workspace.result, all.result.map(normalizeStoredRequest)))
+                  ?? assessmentLockIssue(serviceRequest, all.result.map(normalizeStoredRequest), workspacePayload?.assets ?? [], workspacePayload?.businessObjects ?? []);
                 if (lockIssue) { reject(new RequestIdentityError(lockIssue)); transaction.abort(); }
-                else records.put(withRequestContact(serviceRequest, workspace.result?.payload?.contacts ?? []));
+                else records.put(withRequestContact(serviceRequest, workspacePayload?.contacts ?? []));
               };
             };
           }

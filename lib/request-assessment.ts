@@ -1,4 +1,5 @@
-import { roundDays, calculateEffortPricing, type EffortPricingLine, type EffortPricingInput } from './request-pricing.ts';
+import { effortEntitlementAllocations, entitlementLockIssue, type EntitlementAllocation } from './request-entitlement-reservations.ts';
+import { roundDays, calculateEffortPricing, type EffortPricingLine, type EffortPricingInput, type EntitlementPricingContext } from './request-pricing.ts';
 import { assetDayMethod, requestDayRequirements, allocationMethodIssue, planDayGaps, formatDayRequirements, type DayMethod, type DayRequirement } from './request-asset-coverage.ts';
 import { portalSwitchIdentities } from './portal-context.ts';
 import { operationIdentities } from './internal-users.ts';
@@ -7,6 +8,7 @@ import type {
   CatalogService,
   CustomerRef,
   InternalUser,
+  ObjectRef,
   StoredFile,
 } from './service-requests';
 import {
@@ -39,6 +41,7 @@ export type AssessmentRound = {
 };
 export type AssetAllocation = { assetId: string; name: string; days: number; method?: DayMethod };
 export type AssessmentPlan = {
+  entitlementAllocations?: EntitlementAllocation[];
   releasedAt?: string;
   id: string;
   roundId: string;
@@ -86,6 +89,7 @@ export type Assessment = {
     extraDaysByMethod?: DayRequirement[];
     externalNote?: string;
     allocations?: AssessmentPlan['allocations'];
+    entitlementAllocations?: EntitlementAllocation[];
   };
 };
 export type AssessmentAction =
@@ -235,10 +239,13 @@ export function assessmentLockIssue(
   record: ServiceRequest,
   records: ServiceRequest[],
   assets: RequestAsset[],
+  objects: ObjectRef[] = [],
 ): string | null {
   if (record.status === '已取消') return null;
   const plan = currentPlan(record);
   if (!plan) return null;
+  const entitlementIssue = entitlementLockIssue(record, records, objects);
+  if (entitlementIssue) return entitlementIssue;
   if (plan.effort !== assessedEffort(record)) return '服务依据与计价总人天不一致，请重新关联。';
   const methodIssue = allocationMethodIssue(record, plan.allocations, assets);
   if (methodIssue) return methodIssue;
@@ -270,6 +277,7 @@ export function applyAssessmentAction(
   now = new Date().toISOString(),
   services: CatalogService[] = [],
   customers: CustomerRef[] = [],
+  pricingContext?: EntitlementPricingContext,
 ): ServiceRequest {
   if (!actor.id || !isInternal(actor.role))
     throw new Error('仅内部人员可处理评估工作。');
@@ -365,7 +373,7 @@ export function applyAssessmentAction(
     manager();
     if (!assessment.rounds.some((r) => r.outcome === '评估通过'))
       throw new Error('请先完成材料评估。');
-    const pricing = calculateEffortPricing(record, action.items, services);
+    const pricing = calculateEffortPricing(record, action.items, services, pricingContext ? { ...pricingContext, records } : undefined);
     assessment.effort = {
       ...pricing,
       at: now,
@@ -373,21 +381,21 @@ export function applyAssessmentAction(
       note: action.note?.trim() ?? '',
     };
     const updatedRequirements = requestDayRequirements({ ...record, operations: { ...operationsOf(record), assessment } });
-    if (plan && (plan.effort !== pricing.days || JSON.stringify(updatedRequirements) !== JSON.stringify(requestDayRequirements(record)))) {
+    if (plan && (JSON.stringify(effortEntitlementAllocations(assessmentOf(record).effort?.lines)) !== JSON.stringify(effortEntitlementAllocations(pricing.lines)) || plan.effort !== pricing.days || JSON.stringify(updatedRequirements) !== JSON.stringify(requestDayRequirements(record)))) {
       assessment.plans.at(-1)!.releasedAt = now;
       assessment.approvals.forEach((a) => {
         if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
       });
     }
     title = '核定人天';
-    detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
+    detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.kind === 'entitlement' ? `差额权益 ${line.deficitEntitlements}` : line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
   } else if (action.type === 'plan') {
     manager();
     const round = assessment.rounds.find((r) => r.outcome === '评估通过');
     if (!round) throw new Error('请先完成材料评估。');
     const effort = assessedEffort(record);
     if (effort === undefined) throw new Error('请先核定人天，再关联服务依据。');
-    positive(effort);
+    if (!Number.isFinite(effort) || effort < 0 || effort > 100000) throw new Error('计价总人天无效，请重新核定。');
     const sales = customerOwner(record, customers, users);
     if (!sales) throw new Error('当前客户未配置有效的客户所有人，请先完善客户资料。');
     if (action.salesId && action.salesId !== sales.id) throw new Error('负责销售必须为当前客户所有人，请重新打开关联服务依据后保存。');
@@ -409,7 +417,9 @@ export function applyAssessmentAction(
       throw new Error('锁定人天不能超过计价总人天。');
     const methodIssue = allocationMethodIssue(record, allocations, assets);
     if (methodIssue) throw new Error(methodIssue);
+    if (plan) assessment.plans.at(-1)!.releasedAt = now;
     assessment.plans.push({
+      entitlementAllocations: effortEntitlementAllocations(assessment.effort?.lines),
       id: crypto.randomUUID(),
       roundId: round.id,
       effort: effort,
@@ -518,6 +528,7 @@ export function applyAssessmentAction(
       extraDaysByMethod: planDayGaps(plan),
       externalNote: action.externalNote?.trim() ?? '',
       allocations: structuredClone(plan.allocations),
+      entitlementAllocations: structuredClone(plan.entitlementAllocations ?? effortEntitlementAllocations(assessment.effort?.lines)),
     };
     status = '待确认';
     title = '发起客户确认';
@@ -531,7 +542,7 @@ export function applyAssessmentAction(
     operations: { ...operationsOf(record), assessment },
   };
   if (action.type === 'plan' || action.type === 'confirm') {
-    const issue = assessmentLockIssue(next, records, assets);
+    const issue = assessmentLockIssue(next, records, assets, pricingContext?.businessObjects);
     if (issue) throw new Error(issue);
   }
   return appendActivity(next, actor, category, title, detail, now);

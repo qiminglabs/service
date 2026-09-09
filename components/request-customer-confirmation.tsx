@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { activeEntitlementAllocations, entitlementLabel } from '@/lib/request-entitlement-reservations';
 import { applyCustomerDecision } from '@/lib/request-customer-decision';
 import type { ServiceRequest } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
@@ -24,6 +25,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
   const latest = record.operations?.customerDecisions?.at(-1);
   const canDecide = actor.role === '客户' && customerId === record.customerId && record.status === '待确认' && !!confirmation;
   const plan = record.operations?.assessment?.plans.find(plan => plan.id === confirmation?.planId);
+  const entitlements = confirmation?.entitlementAllocations ?? activeEntitlementAllocations(record);
   const allocations = confirmation?.allocations ?? plan?.allocations ?? [];
   async function submit() {
     if (!mode || disabled || lock.current) return;
@@ -53,7 +55,9 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
     {confirmation && <div className="sr-customer-confirmation-body">
       <section className="sr-customer-confirmation-assets">
       <h4 className="mb-3 font-medium">预计消耗资产</h4>
-      {allocations.length ? <div className="sr-assessment-allocations">{allocations.map(asset => <div key={asset.assetId}>
+      {allocations.length || entitlements.length ? <div className="sr-assessment-allocations">{entitlements.map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+        <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
+      </div>)}{allocations.map(asset => <div key={asset.assetId}>
         <span>{asset.name} <small>{asset.assetId}</small></span><strong>{Number(asset.days.toFixed(4))} 人天</strong>
       </div>)}</div> : <p className="sr-help">本次不消耗客户资产。</p>}
       </section>

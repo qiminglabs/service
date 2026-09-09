@@ -2,6 +2,7 @@
 
 import { createContext, useState } from 'react';
 import { Plus } from 'lucide-react';
+import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -85,11 +86,14 @@ export function RequestFieldSettings({
   fields,
   onChange,
   ready,
+  actor,
 }: {
+  actor: string;
   fields: RequestField[];
   onChange: (fields: RequestField[]) => void;
   ready: boolean;
 }) {
+  const [activeTab, setActiveTab] = useState('request-items');
   const [target, setTarget] = useState<string | null>(null);
   const [deletedField, setDeletedField] = useState<RequestField | null>(null);
   const [name, setName] = useState('');
@@ -165,8 +169,8 @@ export function RequestFieldSettings({
     setTarget(null);
   }
   return (
-    <section className="reference-panel" aria-label="后台字段配置">
-      <Tabs defaultValue="request-items">
+    <section className="reference-panel backend-settings-panel" aria-label="后台配置">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
           <TabsList
             variant="line"
@@ -176,15 +180,23 @@ export function RequestFieldSettings({
             <TabsTrigger value="request-items" className="reference-tab">
               申请项字段<span>{fields.length}</span>
             </TabsTrigger>
+            <TabsTrigger
+              value="entitlement-conversions"
+              className="reference-tab"
+            >
+              权益换算
+            </TabsTrigger>
           </TabsList>
-          <Button
-            className="ct-button ct-button--primary"
-            disabled={!ready}
-            onClick={() => open('new')}
-          >
-            <Plus />
-            新建字段
-          </Button>
+          {activeTab === 'request-items' && (
+            <Button
+              className="ct-button ct-button--primary"
+              disabled={!ready}
+              onClick={() => open('new')}
+            >
+              <Plus />
+              新建字段
+            </Button>
+          )}
         </div>
         <TabsContent value="request-items">
           <div className="table-scroll">
@@ -263,8 +275,11 @@ export function RequestFieldSettings({
             </table>
           </div>
         </TabsContent>
+        <TabsContent value="entitlement-conversions">
+          <EntitlementConversions actor={actor} />
+        </TabsContent>
       </Tabs>
-      {deletedField && (
+      {activeTab === 'request-items' && deletedField && (
         <output className="sr-help">
           已删除「{deletedField.name}」
           <Button

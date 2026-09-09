@@ -1,0 +1,64 @@
+import { buildRequestSamples, requestSamplesMarker } from './demo-service-requests.ts';
+import { openDatabase, defaultConfig, resolveRequestConfig, customerRequestConfigId } from './service-requests.ts';
+import type { CustomerRef, InternalUser } from './service-requests';
+import { ensureConversionHistory } from './entitlement-conversions.ts';
+
+export function initializeCustomerOwners<T extends CustomerRef>(customers: T[], users: InternalUser[]): T[] {
+  const sales = users.find(user => user.status === '启用' && /销售/.test(user.department));
+  return customers.map(customer => customer.ownerUserId && users.some(user => user.id === customer.ownerUserId && user.status === '启用')
+    ? customer : sales ? { ...customer, ownerUserId: sales.id } : customer);
+}
+
+type InitialWorkspace = Parameters<typeof buildRequestSamples>[0] & {
+  requestFields?: { id: string; name: string; options?: Array<string | { value: string; enabled: boolean }> }[];
+};
+
+// Call only after the explicit destructive confirmation. Validate/build first;
+// then replace this application's three stores in a single rollback-safe commit.
+export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T) {
+  const workspace = structuredClone(initial);
+  workspace.customers = initializeCustomerOwners(workspace.customers, workspace.users);
+  if (workspace.customers.some(customer => !customer.ownerUserId))
+    throw new Error('初始化失败：客户缺少可分配的销售经理。');
+  const configs = workspace.services.map(service => {
+    const config = structuredClone(defaultConfig(service));
+    for (const field of workspace.requestFields ?? []) {
+      config.fieldNames[field.id] = field.name;
+      config.fieldOptions[field.id] = (field.options ?? []).flatMap(option =>
+        typeof option === 'string' ? [option] : option.enabled ? [option.value] : []);
+    }
+    return resolveRequestConfig(service, [config]);
+  });
+  const references = [
+    { id: 'workspace', payload: { ...workspace, customerOwnersInitialized: true } },
+    ...configs.map(config => ({ id: customerRequestConfigId(config.serviceId), payload: structuredClone(config) })),
+    ...(['inspection', 'upgrade'] as const).map(kind => ({ id: `entitlement-conversion-${kind}`, payload: ensureConversionHistory(undefined) })),
+    { id: requestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
+  ];
+  const samples = buildRequestSamples(workspace, [], configs, references);
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(['requests', 'configs', 'references'], 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error ?? new Error('初始化未完成，原数据已保留。'));
+      tx.onerror = () => reject(tx.error);
+      try {
+        const requests = tx.objectStore('requests');
+        const settings = tx.objectStore('configs');
+        const refs = tx.objectStore('references');
+        requests.clear();
+        settings.clear();
+        refs.clear();
+        samples.forEach(record => requests.add(record));
+        configs.forEach(record => settings.add(record));
+        references.forEach(record => refs.add(record));
+      } catch (error) {
+        tx.abort();
+        reject(error);
+      }
+    });
+  } finally {
+    db.close();
+  }
+}
