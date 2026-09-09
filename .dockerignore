@@ -1,0 +1,15 @@
+.git
+.DS_Store
+.env*
+!.env.example
+.generated
+.next
+.vinext
+.wrangler
+dist
+node_modules
+outputs
+work
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*

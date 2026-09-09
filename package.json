@@ -2,6 +2,7 @@
   "name": "sites-project",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.26.0",
   "engines": {
     "node": ">=22.13.0"
   },
@@ -9,6 +10,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
+    "start:cloud-run": "node scripts/cloud-run-server.mjs",
     "lint": "oxlint",
     "format": "oxfmt",
     "index:assistant": "node scripts/build-assistant-index.mjs",
