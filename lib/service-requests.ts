@@ -1,4 +1,5 @@
 import { entitlementAvailable } from './request-entitlement-reservations.ts';
+import { workspaceDayQuantityIssue } from './day-quantity.ts';
 import { effortPricingSaveIssue, entitlementPricingContext } from './request-pricing.ts';
 import { projectCreationSaveIssue } from './request-projects.ts';
 import { isInternal } from './request-operations.ts';
@@ -919,6 +920,10 @@ export async function updateLocalReference<T>(id: string, update: (previous: T |
       request.onsuccess = () => {
         try {
           result = update(request.result?.payload as T | undefined);
+          if (id === 'workspace') {
+            const issue = workspaceDayQuantityIssue(result as Parameters<typeof workspaceDayQuantityIssue>[0], request.result?.payload);
+            if (issue) throw new Error(issue);
+          }
           records.put({ id, payload: result });
         } catch (error) {
           reject(error);
@@ -1005,6 +1010,8 @@ export async function saveLocal(
         };
         const current = records.get('workspace');
         current.onsuccess = () => {
+          const precisionIssue = workspaceDayQuantityIssue(incoming.payload, current.result?.payload);
+          if (precisionIssue) { reject(new Error(precisionIssue)); transaction.abort(); return; }
           const latest = current.result?.payload?.services as
             | (CatalogService & { version?: number; updatedAt?: string })[]
             | undefined;

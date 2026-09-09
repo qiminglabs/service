@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
+import { formatDays, parseDayQuantity } from '@/lib/day-quantity';
 import {
   Dialog,
   DialogContent,
@@ -47,7 +48,7 @@ type Props = {
   save: (r: ServiceRequest, message?: string) => Promise<boolean>;
 };
 type Mode = 'round' | 'effort' | 'plan' | 'gap' | 'decide' | null;
-const fmt = (n: number) => String(Number(n.toFixed(4)));
+const fmt = formatDays;
 const isMinimumDaysIssue = (message: string) => message.includes('预估人天不能小于当前最小人天数量');
 async function readCurrentPricingData() {
   const [references, records] = await Promise.all([readLocal<{ id: string; payload?: any }>('references'), readLocal<ServiceRequest>('requests')]);
@@ -679,7 +680,7 @@ function AssessmentForm({
   const entitlementItems = record.items.filter(item => !!itemEntitlementKind(item, services));
   const pricingInputs = record.items.map(item => itemEntitlementKind(item, services)
     ? { itemId: item.id, estimatedDays: 0 }
-    : { itemId: item.id, estimatedDays: Number(estimates[item.id]), priceCoefficient: itemPriceCoefficient(item, services) });
+    : { itemId: item.id, estimatedDays: parseDayQuantity(estimates[item.id] ?? '') ?? NaN, priceCoefficient: itemPriceCoefficient(item, services) });
   let pricingIssue = '';
   let pricing: ReturnType<typeof calculateEffortPricing> | undefined;
   try { pricing = calculateEffortPricing(record, pricingInputs, services, pricingContext); }
@@ -706,7 +707,7 @@ function AssessmentForm({
       ['启用', '使用中'].includes(v.status),
   );
   const allocationPreview = Object.entries(amounts).filter(([, value]) => value.trim() !== '' && Number(value) !== 0)
-    .map(([assetId, value]) => { const asset = customerAssets.find(asset => asset.id === assetId); return { assetId, days: Number(value), name: asset?.name ?? assetId, method: asset && assetDayMethod(asset) }; });
+    .map(([assetId, value]) => { const asset = customerAssets.find(asset => asset.id === assetId); return { assetId, days: parseDayQuantity(value) ?? NaN, name: asset?.name ?? assetId, method: asset && assetDayMethod(asset) }; });
   const coverage = coverageByMethod(requirements, allocationPreview);
   const allocationIssue = allocationMethodIssue(record, allocationPreview, customerAssets);
   const titles: Record<string, string> = {
@@ -741,7 +742,7 @@ function AssessmentForm({
         {mode !== 'round' && (
           <DialogDescription>
             {mode === 'effort'
-              ? '人天类按预估人天 × 计价系数计价；权益类按差额权益 × 换算系数计价。预估总人天仅汇总人天类，计价总人天汇总两类。'
+              ? '人天类按预估人天 × 计价系数计价；权益类按差额权益 × 换算系数计价。计价结果逐项四舍五入到一位小数后汇总。'
               : mode === 'plan'
                 ? '远程计价人天仅锁定远程资产，现场计价人天仅锁定现场资产；各类资产缺少数量分别核算。'
                 : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`}
@@ -787,7 +788,7 @@ function AssessmentForm({
                   ? calculateBillableDays(estimate, coefficient) : undefined;
                 return <tr key={item.id}>
                   <td><strong>{item.serviceName}</strong><small>{item.method}</small></td>
-                  <td><Input aria-label={`${item.serviceName} ${item.id} 预估人天`} aria-describedby={`minimum-days-${item.id}`} aria-invalid={belowMinimum} type="number" min={minimumDays ?? 0.01} max="100000" step="0.01"
+                  <td><Input aria-label={`${item.serviceName} ${item.id} 预估人天`} aria-describedby={`minimum-days-${item.id}`} aria-invalid={belowMinimum} type="number" min={minimumDays ?? 0.1} max="100000" step="0.1"
                     placeholder="填写人天" value={estimates[item.id] ?? ''} disabled={disabled || !pricingReady}
                     onChange={event => setEstimates(old => ({ ...old, [item.id]: event.target.value }))} />
                     <small id={`minimum-days-${item.id}`} className="sr-pricing-minimum" data-invalid={belowMinimum}>{minimumDays === undefined ? '最小人天数量未获取' : `最少 ${fmt(minimumDays)} 人天`}</small></td>
@@ -859,7 +860,7 @@ function AssessmentForm({
                       const maxDays = Math.max(0, Math.min(available ?? 0, row.days - (row.lockedDays - (Number(amounts[asset.id]) || 0))));
                       return <div key={asset.id}>
                         <span><strong>{asset.name}</strong><small>{asset.id} · {available === null ? '余额未维护' : `可锁定 ${fmt(available)} 人天`}</small></span>
-                        <Input aria-label={`${asset.name} ${asset.id} 锁定${row.method}人天`} placeholder="锁定人天" type="number" min="0" step="0.0001" max={maxDays}
+                        <Input aria-label={`${asset.name} ${asset.id} 锁定${row.method}人天`} placeholder="锁定人天，最多一位小数" type="number" min="0" step="0.1" max={maxDays}
                           disabled={disabled || available === null} value={amounts[asset.id] ?? ''}
                           onChange={event => setAmounts(old => ({ ...old, [asset.id]: event.target.value }))} />
                       </div>;

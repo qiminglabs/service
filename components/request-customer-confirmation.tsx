@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { activeEntitlementAllocations, entitlementLabel } from '@/lib/request-entitlement-reservations';
 import { applyCustomerDecision } from '@/lib/request-customer-decision';
+import { formatDays } from '@/lib/day-quantity';
 import type { ServiceRequest } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
 
@@ -58,7 +59,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
       {allocations.length || entitlements.length ? <div className="sr-assessment-allocations">{entitlements.map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
         <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
       </div>)}{allocations.map(asset => <div key={asset.assetId}>
-        <span>{asset.name} <small>{asset.assetId}</small></span><strong>{Number(asset.days.toFixed(4))} 人天</strong>
+        <span>{asset.name} <small>{asset.assetId}</small></span><strong>{formatDays(asset.days)} 人天</strong>
       </div>)}</div> : <p className="sr-help">本次不消耗客户资产。</p>}
       </section>
       {confirmation.externalNote && <section className="sr-customer-confirmation-note">

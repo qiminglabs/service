@@ -1,4 +1,5 @@
 import { defaultConfig, openDatabase, applyCatalogConfigRules } from './service-requests';
+import { workspaceDayQuantityIssue } from './day-quantity.ts';
 import type { CatalogService, RequestConfig } from './service-requests';
 
 export type VersionedService = CatalogService & {
@@ -51,6 +52,10 @@ export async function commitCatalogVersion(
             return;
           }
           const oldInternal = applyCatalogConfigRules(current, internal.result ?? defaultConfig(current));
+          if (change.service) {
+            const issue = workspaceDayQuantityIssue({ services: [change.service] }, { services: [current] });
+            if (issue) throw new Error(issue);
+          }
           const oldCustomer =
             applyCatalogConfigRules(current, customer.result?.payload ?? defaultConfig(current));
           const entries: CatalogVersion['payload'][] =

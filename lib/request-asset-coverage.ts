@@ -1,7 +1,8 @@
 import type { ServiceRequest } from './service-requests';
 import type { RequestAsset } from './request-operations';
 import type { AssetAllocation, AssessmentPlan } from './request-assessment';
-import { effortTotalsByMethod, roundDays } from './request-pricing.ts';
+import { effortTotalsByMethod } from './request-pricing.ts';
+import { isDayQuantity, formatDays, sumDays } from './day-quantity.ts';
 
 export type DayMethod = '远程' | '现场';
 export type DayRequirement = { method: DayMethod; days: number };
@@ -25,9 +26,9 @@ export function requestDayRequirements(record: ServiceRequest): DayRequirement[]
 }
 export function coverageByMethod(requirements: DayRequirement[], allocations: AssetAllocation[]) {
   return requirements.map(requirement => {
-    const lockedDays = roundDays(allocations.filter(allocation => (allocation.method ?? assetDayMethod(allocation)) === requirement.method)
-      .reduce((sum, allocation) => sum + allocation.days, 0));
-    return { ...requirement, lockedDays, gap: roundDays(Math.max(0, requirement.days - lockedDays)) };
+    const lockedDays = sumDays(allocations.filter(allocation => (allocation.method ?? assetDayMethod(allocation)) === requirement.method)
+      .map(allocation => allocation.days));
+    return { ...requirement, lockedDays, gap: Math.max(0, sumDays([requirement.days, -lockedDays])) };
   });
 }
 export function planDayGaps(plan?: AssessmentPlan): DayRequirement[] {
@@ -35,14 +36,15 @@ export function planDayGaps(plan?: AssessmentPlan): DayRequirement[] {
     .filter(row => row.gap > 0).map(row => ({ method: row.method, days: row.gap })) : [];
 }
 export function formatDayRequirements(requirements: DayRequirement[]) {
-  return requirements.map(row => `${row.method} ${row.days} 人天`).join('、');
+  return requirements.map(row => `${row.method} ${formatDays(row.days)} 人天`).join('、');
 }
 export function allocationMethodIssue(record: ServiceRequest, allocations: AssetAllocation[], assets: RequestAsset[]): string | null {
   const requirements = requestDayRequirements(record);
   if (!requirements.length) return '无法区分远程、现场计价人天，请先按服务方式重新核定人天。';
+  if (requirements.some(row => !isDayQuantity(row.days))) return '计价人天须最多一位小数，请重新核定。';
   const resolved: AssetAllocation[] = [];
   for (const allocation of allocations) {
-    if (!Number.isFinite(allocation.days) || allocation.days <= 0) return '锁定人天必须为有效正数。';
+    if (!isDayQuantity(allocation.days) || allocation.days <= 0) return '锁定人天必须为有效正数，最多一位小数。';
     const asset = assets.find(asset => asset.id === allocation.assetId);
     const method = asset && assetDayMethod(asset);
     if (!asset || !method) return `${allocation.name} 无法识别人天类别，请选择远程或现场人天资产。`;

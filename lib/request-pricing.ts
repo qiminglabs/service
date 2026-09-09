@@ -1,4 +1,6 @@
 import { entitlementAvailable } from './request-entitlement-reservations.ts';
+import { isDayQuantity, roundDays, sumDays } from './day-quantity.ts';
+export { roundDays } from './day-quantity.ts';
 import type { CatalogService, RequestItem, ServiceRequest, ObjectRef } from './service-requests';
 
 export type EntitlementPricingContext = {
@@ -35,7 +37,6 @@ export type EffortPricingLine = {
   priceCoefficient: number;
   billableDays: number;
 };
-export const roundDays = (days: number) => Math.round(days * 10000) / 10000;
 export function effortTotalsByMethod(record: ServiceRequest, lines: EffortPricingLine[]) {
   const totals = new Map<string, { method: string; estimatedDays: number; days: number }>();
   for (const line of lines) {
@@ -49,14 +50,13 @@ export function effortTotalsByMethod(record: ServiceRequest, lines: EffortPricin
     }
     if (method !== '远程' && method !== '现场') method = '未区分';
     const total = totals.get(method) ?? { method, estimatedDays: 0, days: 0 };
-    total.estimatedDays = roundDays(total.estimatedDays + line.estimatedDays);
-    total.days = roundDays(total.days + line.billableDays);
+    total.estimatedDays = sumDays([total.estimatedDays, line.estimatedDays]);
+    total.days = sumDays([total.days, line.billableDays]);
     totals.set(method, total);
   }
   return ['远程', '现场', '未区分'].flatMap(method => totals.has(method) ? [totals.get(method)!] : []);
 }
-const validInput = (value: number) => Number.isFinite(value) && value > 0 && value <= 100000
-  && Math.abs(value * 100 - Math.round(value * 100)) < 1e-7;
+const validInput = (value: number) => isDayQuantity(value) && value > 0 && value <= 100000;
 export function itemMinimumDays(item: RequestItem, services: CatalogService[]): number | undefined {
   // Always use the current catalog. Never read a request or pricing snapshot.
   const minimum = services.find(service => service.id === item.serviceId)?.defaultQuantity;
@@ -65,10 +65,11 @@ export function itemMinimumDays(item: RequestItem, services: CatalogService[]): 
 export function itemPriceCoefficient(item: RequestItem, services: CatalogService[]): number | undefined {
   const service = services.find(service => service.id === item.serviceId);
   const value = service ? service.priceCoefficient : item.priceCoefficient;
-  return typeof value === 'number' && validInput(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 100000
+    && Math.abs(value * 100 - Math.round(value * 100)) < 1e-7 ? value : undefined;
 }
 export function calculateBillableDays(estimatedDays: number, coefficient: number) {
-  return roundDays((Math.round(estimatedDays * 100) * Math.round(coefficient * 100)) / 10000);
+  return Math.round((Math.round(estimatedDays * 100) * Math.round(coefficient * 100)) / 1000) / 10;
 }
 export function calculateEntitlementPricing(record: ServiceRequest, item: RequestItem, services: CatalogService[], context?: EntitlementPricingContext, used = new Map<string, number>()): EffortPricingLine {
   const kind = itemEntitlementKind(item, services);
@@ -88,8 +89,7 @@ export function calculateEntitlementPricing(record: ServiceRequest, item: Reques
     return { objectId: object.id, name: object.name, nodes: object.nodeCount, available, deficit: Math.max(0, object.nodeCount - available) };
   });
   const conversion = context?.conversions[kind];
-  if (!conversion || !Number.isFinite(conversion.days) || conversion.days <= 0 || conversion.days > 1000000
-    || Math.abs(conversion.days * 10000 - Math.round(conversion.days * 10000)) > 1e-6)
+  if (!conversion || !isDayQuantity(conversion.days) || conversion.days <= 0 || conversion.days > 1000000)
     throw new Error(`${item.serviceName}：无法获取有效的权益换算系数。`);
   const deficit = objects.reduce((sum, object) => sum + object.deficit, 0);
   return { itemId: item.id, serviceId: item.serviceId, serviceName: item.serviceName,
@@ -110,7 +110,7 @@ export function calculateEffortPricing(record: ServiceRequest, inputs: EffortPri
     if (itemEntitlementKind(item, services)) return entitlementLines.find(line => line.itemId === item.id)!;
     const input = inputs.find(input => input.itemId === item.id);
     if (!input || !validInput(input.estimatedDays))
-      throw new Error(`${item.serviceName}：预估人天须为大于 0、最多两位小数的数字。`);
+      throw new Error(`${item.serviceName}：预估人天须为大于 0、最多一位小数的数字。`);
     const minimumDays = itemMinimumDays(item, services);
     if (minimumDays === undefined)
       throw new Error(`${item.serviceName}：无法获取目录最新的最小人天数量，请维护服务目录后重试。`);

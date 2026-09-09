@@ -72,7 +72,7 @@ export function EntitlementConversions({ actor }: { actor: string }) {
     if (!editing || !ready || saveLock.current) return;
     const parsed = parseConversionDays(days);
     if (parsed === null) {
-      setFormError('请输入大于 0、不超过 1000000 的系数，最多四位小数。');
+      setFormError('请输入大于 0、不超过 1000000 的人天数，最多一位小数。');
       return;
     }
     saveLock.current = true;
@@ -194,9 +194,9 @@ export function EntitlementConversions({ actor }: { actor: string }) {
               <Input
                 id="conversion-days"
                 type="number"
-                min="0.0001"
+                min="0.1"
                 max="1000000"
-                step="0.0001"
+                step="0.1"
                 required
                 disabled={busy}
                 value={days}

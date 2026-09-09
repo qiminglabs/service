@@ -1,3 +1,5 @@
+import { parseDayQuantity } from './day-quantity.ts';
+
 export const entitlementNames = {
   inspection: '巡检权益',
   upgrade: '升级权益',
@@ -12,9 +14,8 @@ export type ConversionVersion = {
   note: string;
 };
 export function parseConversionDays(value: string): number | null {
-  if (!/^\d+(\.\d{1,4})?$/.test(value.trim())) return null;
-  const days = Number(value);
-  return Number.isFinite(days) && days > 0 && days <= 1000000 ? days : null;
+  const days = parseDayQuantity(value);
+  return days !== null && days > 0 && days <= 1000000 ? days : null;
 }
 export function appendConversionVersion(
   history: ConversionVersion[],
@@ -23,7 +24,7 @@ export function appendConversionVersion(
   note: string,
 ): ConversionVersion[] {
   if (parseConversionDays(String(days)) === null)
-    throw new Error('请输入大于 0、不超过 1000000 的系数，最多四位小数。');
+    throw new Error('请输入大于 0、不超过 1000000 的人天数，最多一位小数。');
   if (history.at(-1)?.days === days)
     throw new Error('换算系数未变化，无需生成新版本。');
   return [

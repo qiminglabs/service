@@ -1,5 +1,6 @@
 import { effortEntitlementAllocations, entitlementLockIssue, type EntitlementAllocation } from './request-entitlement-reservations.ts';
-import { roundDays, calculateEffortPricing, type EffortPricingLine, type EffortPricingInput, type EntitlementPricingContext } from './request-pricing.ts';
+import { isDayQuantity, sumDays } from './day-quantity.ts';
+import { calculateEffortPricing, type EffortPricingLine, type EffortPricingInput, type EntitlementPricingContext } from './request-pricing.ts';
 import { assetDayMethod, requestDayRequirements, allocationMethodIssue, planDayGaps, formatDayRequirements, type DayMethod, type DayRequirement } from './request-asset-coverage.ts';
 import { portalSwitchIdentities } from './portal-context.ts';
 import { operationIdentities } from './internal-users.ts';
@@ -208,10 +209,10 @@ export function planSalesOwnerIssue(record: ServiceRequest, customers: CustomerR
     ? '负责销售必须为当前客户所有人，请重新打开关联服务依据后保存。' : null;
 }
 export const planAssetDays = (plan?: AssessmentPlan) =>
-  roundDays(plan?.allocations.reduce((sum, a) => sum + a.days, 0) ?? 0);
+  sumDays(plan?.allocations.map(a => a.days) ?? []);
 export const planGap = (plan?: AssessmentPlan) =>
-  plan?.requirements ? roundDays(planDayGaps(plan).reduce((sum, row) => sum + row.days, 0))
-    : roundDays(Math.max(0, (plan?.effort ?? 0) - planAssetDays(plan)));
+  plan?.requirements ? sumDays(planDayGaps(plan).map(row => row.days))
+    : Math.max(0, sumDays([plan?.effort ?? 0, -planAssetDays(plan)]));
 export function assetAvailable(
   asset: RequestAsset,
   records: ServiceRequest[],
@@ -233,7 +234,8 @@ export function assetAvailable(
           .reduce((n, a) => n + a.days, 0) ?? 0),
       0,
     );
-  return roundDays(Math.max(0, asset.balanceDays - locked));
+  // Never round an old fractional remainder up into spendable credit.
+  return Math.floor((Math.max(0, asset.balanceDays - locked) + 1e-8) * 10) / 10;
 }
 export function assessmentLockIssue(
   record: ServiceRequest,
@@ -295,8 +297,8 @@ export function applyAssessmentAction(
     if (!s.trim()) throw new Error(`请填写${label}。`);
   };
   const positive = (n: number) => {
-    if (!Number.isFinite(n) || n <= 0 || n > 100000)
-      throw new Error('人天必须为有效正数。');
+    if (!isDayQuantity(n) || n <= 0 || n > 100000)
+      throw new Error('人天必须为有效正数，最多一位小数。');
   };
   let title = '',
     detail = '',
@@ -395,7 +397,7 @@ export function applyAssessmentAction(
     if (!round) throw new Error('请先完成材料评估。');
     const effort = assessedEffort(record);
     if (effort === undefined) throw new Error('请先核定人天，再关联服务依据。');
-    if (!Number.isFinite(effort) || effort < 0 || effort > 100000) throw new Error('计价总人天无效，请重新核定。');
+    if (!isDayQuantity(effort) || effort > 100000) throw new Error('计价总人天须最多一位小数，请重新核定。');
     const sales = customerOwner(record, customers, users);
     if (!sales) throw new Error('当前客户未配置有效的客户所有人，请先完善客户资料。');
     if (action.salesId && action.salesId !== sales.id) throw new Error('负责销售必须为当前客户所有人，请重新打开关联服务依据后保存。');

@@ -1,5 +1,7 @@
 'use client';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
+import { parseDayQuantity, formatDays } from '@/lib/day-quantity';
+import { calculateBillableDays } from '@/lib/request-pricing';
 import { isEntitlementService } from '@/lib/service-requests';
 import { CatalogHistory } from '@/components/catalog-history';
 import { InitializeDataButton } from '@/components/initialize-data-button';
@@ -1028,8 +1030,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     }
     if (referenceTab === 'assets') {
       if (!customerId) return setReferenceFormError('请选择所属客户。');
-      const balanceDays = Number(referenceForm.balanceDays);
-      if (!referenceForm.balanceDays?.trim() || !Number.isFinite(balanceDays) || balanceDays < 0) return setReferenceFormError('请填写有效的余额人天。');
+      const balanceDays = parseDayQuantity(referenceForm.balanceDays ?? '');
+      if (balanceDays === null) return setReferenceFormError('余额人天须为非负数，最多一位小数。');
       setAssets((records) => [
         ...records,
         {
@@ -1300,12 +1302,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
       catalogForm.allowedInitiatorSites.length;
     const validNumbers = isEntitlementService(catalogForm) || (
       decimalPattern.test(catalogForm.priceCoefficient) &&
-      decimalPattern.test(catalogForm.defaultQuantity) &&
+      parseDayQuantity(catalogForm.defaultQuantity) !== null &&
+      Number(catalogForm.defaultQuantity) <= 999.9 &&
       Number(catalogForm.priceCoefficient) > 0 &&
       Number(catalogForm.defaultQuantity) > 0);
     if (!allFieldsComplete || !validNumbers) {
       setFormError(
-        '请填写全部字段；计价系数和最小人天数量须为大于 0、最多两位小数的数字。',
+        '请填写全部字段；计价系数须大于 0、最多两位小数；最小人天数量须大于 0、不超过 999.9，最多一位小数。',
       );
       return;
     }
@@ -1761,7 +1764,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                         defaultQuantity: event.target.value,
                       }))
                     }
-                    placeholder="例如：5.00"
+                    placeholder="例如：0.5，最多一位小数"
                   />
                 </label>
                 </>}
@@ -2128,12 +2131,12 @@ function CatalogDetail({
               </div>
               <div>
                 <dt>最小人天数量</dt>
-                <dd>{service.defaultQuantity?.toFixed(2) ?? '—'} 人天</dd>
+                <dd>{service.defaultQuantity === undefined ? '—' : formatDays(service.defaultQuantity)} 人天</dd>
               </div>
               <div>
                 <dt>最小计价人天</dt>
                 <dd>
-                  {Number(((service.priceCoefficient ?? 0) * (service.defaultQuantity ?? 0)).toFixed(4))} 人天
+                  {calculateBillableDays(service.defaultQuantity ?? 0, service.priceCoefficient ?? 0)} 人天
                 </dd>
               </div>
               </>}
@@ -2413,10 +2416,10 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <strong>{customerNames.get(record.customerId)}</strong>
                   </td>
                   <td>{record.name}</td>
-                  <td><Input key={`${record.id}:${record.balanceDays}`} aria-label={`${record.id} 余额人天`} type="number" min="0" step="0.01" placeholder="待维护" defaultValue={record.balanceDays ?? ''} onBlur={event => {
-                    const value = Number(event.target.value);
-                    if (event.target.value.trim() && Number.isFinite(value) && value >= 0) props.onAssetBalanceChange(record.id, value);
-                    else event.target.value = record.balanceDays === undefined ? '' : String(record.balanceDays);
+                  <td><Input key={`${record.id}:${record.balanceDays}`} aria-label={`${record.id} 余额人天`} type="number" min="0" step="0.1" placeholder="待维护" defaultValue={record.balanceDays ?? ''} onChange={event => event.target.setCustomValidity('')} onBlur={event => {
+                    const value = parseDayQuantity(event.target.value);
+                    if (value !== null) props.onAssetBalanceChange(record.id, value);
+                    else { event.target.setCustomValidity('余额人天须为非负数，最多一位小数。'); event.target.reportValidity(); event.target.value = record.balanceDays === undefined ? '' : String(record.balanceDays); }
                   }} /></td>
                   <td>
                     <span
@@ -2878,7 +2881,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   <option>现场人天</option>
                 </select>
               </label>
-              <label htmlFor="asset-balance"><span>余额人天 <em>*</em></span><Input id="asset-balance" type="number" min="0" step="0.01" value={props.form.balanceDays ?? ''} onChange={event => update('balanceDays', event.target.value)} placeholder="请输入实际余额人天" /></label>
+              <label htmlFor="asset-balance"><span>余额人天 <em>*</em></span><Input id="asset-balance" type="number" min="0" step="0.1" value={props.form.balanceDays ?? ''} onChange={event => update('balanceDays', event.target.value)} placeholder="请输入实际余额人天，最多一位小数" /></label>
               <label htmlFor="asset-status">
                 <span>
                   状态 <em>*</em>

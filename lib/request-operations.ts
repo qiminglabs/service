@@ -1,4 +1,5 @@
 import type { Assessment } from './request-assessment';
+import { isDayQuantity } from './day-quantity.ts';
 import type { ServiceRequest, StoredFile } from './service-requests';
 
 // Same-day local times, with minute precision. Historical logs may lack times.
@@ -367,8 +368,8 @@ export function applyRequestAction(
       throw new Error('仅待评估阶段可调整评估或服务依据。');
   };
   const quantity = (n: number) => {
-    if (!Number.isFinite(n) || n <= 0 || n > 100000)
-      throw new Error('请填写有效的正数数量。');
+    if (!isDayQuantity(n) || n <= 0 || n > 100000)
+      throw new Error('请填写有效的正数人天，最多一位小数。');
   };
   const assignedReviewer = (approverId?: string, creatorId?: string) => {
     if (!canApprove(actor.role) || actor.id !== approverId)
