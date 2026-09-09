@@ -92,6 +92,8 @@ export function matchesObjectProduct(object: ObjectRef, config: RequestConfig) {
   return products === undefined || products.includes(object.product ?? '');
 }
 export type StoredFile = {
+  uploadedById?: string;
+  uploaderAudience?: RequestAudience;
   id: string;
   name: string;
   size: number;
@@ -119,6 +121,40 @@ export type MaterialRequirement = {
   templateUrl?: string;
   onlineTemplateUrl?: string;
 };
+export function visibleMaterialFiles(material: ItemMaterial | undefined, audience: RequestAudience = 'internal', actorId?: string): StoredFile[] {
+  return materialFiles(material).filter(file => audience === 'internal'
+    || (!!actorId && file.uploaderAudience === 'customer' && file.uploadedById === actorId));
+}
+export function attributeMaterialFile(file: StoredFile, actor: OperationActor): StoredFile {
+  return { ...file, uploadedById: actor.id, uploaderAudience: actor.role === '客户' ? 'customer' : 'internal' };
+}
+export function customerMaterialSaveIssue(record: ServiceRequest, previous: ServiceRequest | undefined, actor?: OperationActor): string | null {
+  if (actor?.role !== '客户' || !previous) return null;
+  for (const item of record.items) {
+    const old = previous.items.find(entry => entry.id === item.id);
+    for (const material of old?.materials ?? []) {
+      const nextFiles = materialFiles(item.materials.find(entry => entry.requirementId === material.requirementId));
+      for (const file of materialFiles(material)) {
+        if (file.uploaderAudience === 'customer' && file.uploadedById === actor.id) continue;
+        if (JSON.stringify(nextFiles.find(entry => entry.id === file.id)) !== JSON.stringify(file))
+          return '客户只能修改自己上传的材料。';
+      }
+    }
+  }
+  return null;
+}
+export function attributeRequestMaterials(record: ServiceRequest, previous: ServiceRequest | undefined, actor?: OperationActor): ServiceRequest {
+  if (!actor?.id) return record;
+  return { ...record, items: record.items.map(item => ({ ...item, materials: item.materials.map(material => {
+    const old = previous?.items.find(entry => entry.id === item.id)?.materials.find(entry => entry.requirementId === material.requirementId);
+    return withMaterialFiles(material, materialFiles(material).map(file => {
+      const before = materialFiles(old).find(entry => entry.id === file.id);
+      // Preserve unseen originals, including their bytes, when a customer saves the request.
+      if (before && actor.role === '客户' && !(before.uploaderAudience === 'customer' && before.uploadedById === actor.id)) return before;
+      return before && JSON.stringify(before) === JSON.stringify(file) ? before : attributeMaterialFile(file, actor);
+    }));
+  }) })) };
+}
 export type RequestConfig = {
   basicFields?: {
     description?: { enabled: boolean; required: boolean };
@@ -417,8 +453,11 @@ export function newRequest(
     items: [],
   };
 }
+export function canCheckRequestCompleteness(record: ServiceRequest, actor: OperationActor): boolean {
+  return actor.role !== '客户' || (!!actor.id && record.createdById === actor.id);
+}
 export function canEditRequestItems(record: ServiceRequest, actor?: OperationActor): boolean {
-  if (record.status === '草稿') return true;
+  if (record.status === '草稿') return !actor || canCheckRequestCompleteness(record, actor);
   const assessment = record.operations?.assessment;
   return record.status === '待评估' && !!actor?.id && actor.role === 'SmartX 项目经理'
     && (!assessment?.managerId || assessment.managerId === actor.id)
@@ -440,6 +479,11 @@ export function requestIdentityIssue(
       || existing.createdById !== record.createdById
     )
       return '创建人和创建时间不支持修改。';
+    if (existing.status === '草稿' && actor?.role === '客户' && !canCheckRequestCompleteness(existing, actor)) {
+      const fields = ['title', 'contactId', 'description', 'expectedServiceDate', 'items', 'status', 'submittedAt'] as const;
+      if (fields.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
+        return '非本人发起的服务申请仅支持只读查看，不允许修改或提交。';
+    }
     if (existing.status !== '草稿') {
       if (record.status === '草稿') {
         const returned = record.operations?.draftReturns?.at(-1);
@@ -708,13 +752,13 @@ export function normalizeRequestConfig(
     ),
   };
 }
-export function itemIssues(item: RequestItem): string[] {
+export function itemIssues(item: RequestItem, audience: RequestAudience = 'internal', actorId?: string): string[] {
   const issues = itemBasicIssues(item);
   for (const requirement of item.config.materials.filter((m) => m.required)) {
     const material = item.materials.find(
       (m) => m.requirementId === requirement.id,
     );
-    if (!materialFiles(material).length) issues.push(`上传${requirement.name}`);
+    if (!visibleMaterialFiles(material, audience, actorId).length) issues.push(`上传${requirement.name}`);
   }
   return issues;
 }
@@ -726,6 +770,7 @@ export function requestIssues(
     businessObjects: ObjectRef[];
     services: CatalogService[];
     audience?: RequestAudience;
+    currentActor?: OperationActor;
   },
 ): string[] {
   const issues: string[] = [];
@@ -748,7 +793,7 @@ export function requestIssues(
   if (!request.items.length) issues.push('至少添加一个申请项');
   request.items.forEach((item, index) => {
     const prefix = `申请项 ${index + 1}：`;
-    issues.push(...itemIssues(item).map((issue) => prefix + issue));
+    issues.push(...itemIssues(item, refs.audience, refs.currentActor?.id).map((issue) => prefix + issue));
     const service = refs.services.find((s) => s.id === item.serviceId);
     if (!service || service.status !== '已启用')
       issues.push(prefix + '服务目录已停用或不存在');
@@ -847,7 +892,7 @@ export async function saveLocal(
       const transaction = db.transaction(store === 'requests' ? ['requests', 'references'] : store, 'readwrite');
       const records = transaction.objectStore(store);
       if (store === 'requests') {
-        const serviceRequest = normalizeStoredRequest(record as ServiceRequest);
+        let serviceRequest = normalizeStoredRequest(record as ServiceRequest);
         const current = records.get(serviceRequest.id);
         current.onsuccess = () => {
           const previous = current.result ? normalizeStoredRequest(current.result) : undefined;
@@ -866,12 +911,13 @@ export async function saveLocal(
           const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
           const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId);
           const projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor);
-          const issue = requestContactRemovalIssue(serviceRequest, previous) ?? projectIssue ?? supplementIssue ?? decisionIssue ?? (access ? customerCollaborationIssue(serviceRequest, previous ?? { ...serviceRequest, externalCollaborators: [] }, access) : null)
+          const issue = customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? requestContactRemovalIssue(serviceRequest, previous) ?? projectIssue ?? supplementIssue ?? decisionIssue ?? (access ? customerCollaborationIssue(serviceRequest, previous ?? { ...serviceRequest, externalCollaborators: [] }, access) : null)
             ?? requestIdentityIssue(serviceRequest, previous, access?.actor);
           if (issue) {
             reject(new RequestIdentityError(issue));
             transaction.abort();
           } else {
+            serviceRequest = attributeRequestMaterials(serviceRequest, previous, access?.actor);
             const changedPlan = JSON.stringify(currentPlan(serviceRequest)) !== JSON.stringify(previous ? currentPlan(previous) : undefined);
             const startingConfirmation = serviceRequest.operations?.assessment?.confirmation && !previous?.operations?.assessment?.confirmation;
             const changedEffort = JSON.stringify(serviceRequest.operations?.assessment?.effort) !== JSON.stringify(previous?.operations?.assessment?.effort);

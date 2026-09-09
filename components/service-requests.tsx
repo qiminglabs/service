@@ -55,6 +55,7 @@ import {
 import {
   canAccessRequest,
   canEditRequestItems,
+  canCheckRequestCompleteness,
   canAddExternalCollaborators,
   customerCollaborationIssue,
   customerOwnerRemovalIssue,
@@ -77,6 +78,7 @@ import {
   fieldLabels,
   fileAccept,
   itemIssues,
+  visibleMaterialFiles,
   materialFiles,
   itemSummary,
   itemBasicIssues,
@@ -367,10 +369,11 @@ export function RequestWorkspace(props: Props) {
     );
     return ok;
   }
-  const readonly = draft?.status !== '草稿';
+  const showCompleteness = !!draft && canCheckRequestCompleteness(draft, props.currentActor);
+  const readonly = draft?.status !== '草稿' || !showCompleteness;
   const itemsReadonly = !draft || !canEditRequestItems(draft, props.currentActor);
   const returnNotice = draft ? requestReturnNotice(draft) : null;
-  const issues = draft ? requestIssues(draft, { ...props, audience }) : [];
+  const issues = draft && showCompleteness ? requestIssues(draft, { ...props, audience }) : [];
   const materialItem = draft?.items.find(
     (item) => item.id === materialTarget?.itemId,
   );
@@ -761,7 +764,7 @@ export function RequestWorkspace(props: Props) {
                     <h3>
                       申请项 <span>{draft.items.length}</span>
                     </h3>
-                    <p>{itemsReadonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
+                    <p>{!showCompleteness ? '申请内容只读，可查看基础信息。' : itemsReadonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
                   </div>
                   {!itemsReadonly && (
                     <Button
@@ -788,7 +791,7 @@ export function RequestWorkspace(props: Props) {
                 ) : (
                   <div className="sr-item-list">
                     {draft.items.map((item, index) => {
-                      const missing = itemIssues(item);
+                      const missing = showCompleteness ? itemIssues(item, audience, props.currentActor.id) : [];
                       const summary = itemSummary(item);
                       return (
                         <article key={item.id} className="sr-item-entry">
@@ -799,15 +802,15 @@ export function RequestWorkspace(props: Props) {
                             <div className="sr-item-copy">
                               <h4>
                                 {item.serviceName}
-                                <span
+                                {showCompleteness && <span
                                   className="sr-badge"
                                   data-tone={missing.length ? 'amber' : 'green'}
                                 >
                                   {missing.length ? '待完善' : '已完整'}
-                                </span>
+                                </span>}
                               </h4>
                               {summary && <p>{summary}</p>}
-                              {itemBasicIssues(item).length > 0 && (
+                              {showCompleteness && itemBasicIssues(item).length > 0 && (
                                 <p className="sr-missing">
                                   待补充：{itemBasicIssues(item).join('、')}
                                 </p>
@@ -817,7 +820,8 @@ export function RequestWorkspace(props: Props) {
                                   (m) => m.requirementId === requirement.id,
                                 );
                                 const complete =
-                                  materialFiles(material).length > 0;
+                                  visibleMaterialFiles(material, audience, props.currentActor.id).length > 0;
+                                if (!showCompleteness && !complete) return null;
                                 return (
                                   <div
                                     key={requirement.id}
@@ -825,18 +829,18 @@ export function RequestWorkspace(props: Props) {
                                   >
                                     <span
                                       className={
-                                        complete
+                                        !showCompleteness ? 'sr-help' : complete
                                           ? 'sr-complete'
                                           : requirement.required
                                             ? 'sr-missing'
                                             : 'sr-help'
                                       }
                                     >
-                                      {complete
+                                      {showCompleteness && (complete
                                         ? '已完成：'
                                         : requirement.required
                                           ? '待补充：上传'
-                                          : '选填：'}
+                                          : '选填：')}
                                       {requirement.name}
                                     </span>
                                     <button
@@ -925,11 +929,12 @@ export function RequestWorkspace(props: Props) {
         </>
       )}
 
-      {materialItem && materialRequirement && (
+      {materialItem && materialRequirement && (showCompleteness || visibleMaterialFiles(materialItem.materials.find(material => material.requirementId === materialRequirement.id), audience, props.currentActor.id).length > 0) && (
         <RequestMaterialDialog
           key={materialItem.id + ':' + materialRequirement.id}
           item={materialItem}
           requirement={materialRequirement}
+          actor={props.currentActor}
           readonly={itemsReadonly}
           busy={busy}
           error={error}

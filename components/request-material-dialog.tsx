@@ -30,6 +30,8 @@ import {
 } from '@/components/ui/dialog';
 import {
   checkFile,
+  visibleMaterialFiles,
+  attributeMaterialFile,
   downloadFile,
   fileAccept,
   storedFile,
@@ -50,6 +52,8 @@ import {
   templateText,
 } from '@/lib/online-material';
 
+import type { OperationActor } from '@/lib/request-operations';
+
 type OnlineDocument = NonNullable<StoredFile['onlineDocument']>;
 const LocalDocumentEditor = lazy(() =>
   import('@/components/local-document-editor').then((module) => ({
@@ -57,6 +61,7 @@ const LocalDocumentEditor = lazy(() =>
   })),
 );
 export function RequestMaterialDialog({
+  actor,
   item,
   requirement,
   readonly,
@@ -65,6 +70,7 @@ export function RequestMaterialDialog({
   onSave,
   onClose,
 }: {
+  actor: OperationActor;
   item: RequestItem;
   requirement: MaterialRequirement;
   readonly: boolean;
@@ -94,7 +100,8 @@ export function RequestMaterialDialog({
   const [discardOpen, setDiscardOpen] = useState(false);
   const uploadRef = useRef<HTMLInputElement>(null);
   const lock = useRef(false);
-  const files = materialFiles(material);
+  const internal = actor.role !== '客户';
+  const files = visibleMaterialFiles(material, internal ? 'internal' : 'customer', actor.id);
   const blocked = busy || loading || saving;
   const templateName =
     requirement.template?.name ?? requirement.templateUrl ?? '';
@@ -165,9 +172,9 @@ export function RequestMaterialDialog({
     setSaving(true);
     setProblem('');
     try {
-      let next = withMaterialFiles(material, files);
+      let next = withMaterialFiles(material, materialFiles(material));
       if (editor && editorChanged) {
-        const file = onlineMaterialFile(editor);
+        const file = attributeMaterialFile(onlineMaterialFile(editor), actor);
         next = saveMaterialFile(next, file, editingFileId);
       }
       if (await onSave(next)) onClose();
@@ -200,6 +207,12 @@ export function RequestMaterialDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="sr-document-body">
+          {internal && !readonly && (
+            <div className="sr-material-visibility-notice" role="note">
+              <span className="sr-assessment-badge">仅内部可见</span>
+              <span>此处上传或在线填写的材料仅内部人员可见，不会展示给客户。</span>
+            </div>
+          )}
           {!editing && (
             <>
               <div className="sr-document-instructions">
@@ -324,7 +337,7 @@ export function RequestMaterialDialog({
                           : '',
                       );
                       if (invalid) return;
-                      const additions = selected.map(storedFile);
+                      const additions = selected.map(file => attributeMaterialFile(storedFile(file), actor));
                       setMaterial((m) =>
                         withMaterialFiles(m, [
                           ...materialFiles(m),
