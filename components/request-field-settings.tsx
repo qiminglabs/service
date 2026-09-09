@@ -167,7 +167,7 @@ export function RequestFieldSettings({
   return (
     <section className="reference-panel" aria-label="后台字段配置">
       <Tabs defaultValue="request-items">
-        <div className="reference-toolbar">
+        <div className="reference-toolbar request-field-toolbar">
           <TabsList
             variant="line"
             className="reference-tabs"

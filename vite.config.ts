@@ -1,7 +1,9 @@
+import { assistantSourceIndexPlugin } from './scripts/build-assistant-index.mjs';
 import { sites } from '@openai/sites-vite-plugin';
 import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv, type ViteDevServer } from 'vite';
+import { startAssistantDevProxy } from './scripts/assistant-dev-proxy.mjs';
 import hostingConfig from './.openai/hosting.json';
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
@@ -34,7 +36,7 @@ const localBindingConfig = {
     : [],
 };
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command, mode }) => {
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
@@ -44,7 +46,13 @@ export default defineConfig(async () => {
   // Wrangler snapshots its log path while the Cloudflare plugin is imported.
   const { cloudflare } = await import('@cloudflare/vite-plugin');
 
+  const proxyAddress = command === 'serve' ? loadEnv(mode, process.cwd(), '').ASSISTANT_HTTP_PROXY : undefined;
+  const relay = proxyAddress ? await startAssistantDevProxy(proxyAddress) : undefined;
   return {
+    define: {
+      __ASSISTANT_DEV_RELAY_URL__: JSON.stringify(relay?.url || ''),
+      __ASSISTANT_DEV_RELAY_TOKEN__: JSON.stringify(relay?.token || ''),
+    },
     css: { postcss: { plugins: [tailwindcss()] } },
     server: {
       host: '0.0.0.0',
@@ -53,6 +61,8 @@ export default defineConfig(async () => {
         : {}),
     },
     plugins: [
+      assistantSourceIndexPlugin(),
+      { name: 'assistant-dev-proxy-lifecycle', configureServer(server: ViteDevServer) { server.httpServer?.once('close', () => relay?.close()); } },
       vinext(),
       sites(),
       cloudflare({

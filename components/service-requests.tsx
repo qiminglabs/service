@@ -1,4 +1,5 @@
 'use client';
+import { commitCatalogVersion } from '@/lib/catalog-versions';
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
@@ -19,8 +20,22 @@ import {
 import type { RequestField } from '@/components/request-field-settings';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
 import { RequestContactField } from '@/components/request-contact-field';
+import { RequestStatusProgress } from '@/components/request-status-progress';
+import { DateField } from '@/components/date-field';
+import { RequestProjectDialog, RequestProjects } from '@/components/request-projects';
+import { isProjectCreationEligible } from '@/lib/request-projects';
+import { RequestOperationsTabs } from '@/components/request-operations';
+import { emptyAssessment, applyAssessmentAction, isProjectManager, repairCustomerRequestApprover } from '@/lib/request-assessment';
+import { operationIdentities } from '@/lib/internal-users';
+import { requestReturnNotice, appendActivity, operationsOf, isInternal, migrateRoleLabel } from '@/lib/request-operations';
+import type { OperationActor, RequestAsset } from '@/lib/request-operations';
+import {
+  RequestExternalCollaborators,
+  RequestInternalInfo,
+} from '@/components/request-internal-info';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
@@ -38,12 +53,26 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
+  canAccessRequest,
+  canEditRequestItems,
+  canAddExternalCollaborators,
+  customerCollaborationIssue,
+  customerOwnerRemovalIssue,
+  withRequestContact,
+  requestContactRemovalIssue,
+  canCreateRequest,
+  requestCreationAccessIssue,
   checkFile,
   requestCreationIssue,
+  requestStatuses,
+  requestStatusTone,
   RequestIdentityError,
   businessObjectsEnabled,
   matchesObjectProduct,
   defaultConfig,
+  readRequestConfigs,
+  resolveRequestConfig,
+  serviceAvailableForRequest,
   downloadFile,
   fieldLabels,
   fileAccept,
@@ -63,6 +92,7 @@ import type {
   CatalogService,
   ContactRef,
   CustomerRef,
+  InternalUser,
   ItemMaterial,
   ObjectRef,
   RequestConfig,
@@ -76,7 +106,13 @@ type Props = {
   customers: CustomerRef[];
   contacts: ContactRef[];
   businessObjects: ObjectRef[];
+  users: InternalUser[];
+  assets: RequestAsset[];
   currentRole: string;
+  currentActor: OperationActor;
+  identityDirectory: { id: string; name: string }[];
+  currentCustomerId?: string;
+  partnerCollaborators: { id: string; name: string; phone: string; email: string; status: string }[];
   createToken: number;
 };
 const dateLabel = (value: string) =>
@@ -117,8 +153,12 @@ function configForEditing(
 }
 
 export function RequestWorkspace(props: Props) {
+  const access = { actor: props.currentActor, directory: props.identityDirectory, customerId: props.currentCustomerId, contacts: props.contacts };
+  const customerPortal = props.currentActor.role === '客户';
+  const audience = customerPortal ? 'customer' : 'internal';
+  const availableServices = props.services.filter((service) => serviceAvailableForRequest(service, audience));
+  const canCreate = canCreateRequest(access);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
-  const [configs, setConfigs] = useState<RequestConfig[]>([]);
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -128,7 +168,8 @@ export function RequestWorkspace(props: Props) {
   const [draft, setDraft] = useState<ServiceRequest | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createTitle, setCreateTitle] = useState('');
-  const [createCustomer, setCreateCustomer] = useState('');
+  const [selectedCustomer, setCreateCustomer] = useState('');
+  const createCustomer = customerPortal ? (props.currentCustomerId ?? '') : selectedCustomer;
   const [createContact, setCreateContact] = useState('');
   const createContacts = props.contacts.filter(
     (contact) =>
@@ -137,6 +178,8 @@ export function RequestWorkspace(props: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState('');
   const [pendingItem, setPendingItem] = useState<RequestItem | null>(null);
+  const pendingService = props.services.find((service) => service.id === pendingItem?.serviceId);
+  const pendingServiceContent = pendingService?.description?.trim();
   const [itemError, setItemError] = useState('');
   const [materialTarget, setMaterialTarget] = useState<{
     itemId: string;
@@ -144,20 +187,31 @@ export function RequestWorkspace(props: Props) {
   } | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [returnDraftOpen, setReturnDraftOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [returnDraftReason, setReturnDraftReason] = useState('');
   const [showIssues, setShowIssues] = useState(false);
   const handledToken = useRef(0);
   const saveLock = useRef(false);
 
   function load() {
-    return Promise.all([
-      readLocal<ServiceRequest>('requests'),
-      readLocal<RequestConfig>('configs'),
-    ])
-      .then(([records, settings]) => {
-        setRequests(
-          records.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-        );
-        setConfigs(settings.map(normalizeRequestConfig));
+    return readLocal<ServiceRequest>('requests')
+      .then(async (records) => {
+        records = records.map(record => withRequestContact(record, props.contacts));
+        const repair = repairCustomerRequestApprover(records, props.users);
+        if (repair && canAccessRequest(repair, access)) {
+          await saveLocal('requests', repair, access);
+          records = records.map(record => record.id === repair.id ? repair : record);
+          setDraft(current => current?.id === repair.id ? repair : current);
+        }
+        const visible = records.filter((record) => canAccessRequest(record, access));
+        setRequests(visible.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+        setDraft((current) => {
+          if (!current) return current;
+          const latest = visible.find(record => record.id === current.id);
+          if (!latest) return null;
+          return current.status === '待评估' ? latest : current;
+        });
         setReady(true);
         setError('');
       })
@@ -166,14 +220,19 @@ export function RequestWorkspace(props: Props) {
       });
   }
   useEffect(() => {
-    void load();
+    let active = true;
+    const refresh = () => { if (active) void load(); };
+    refresh();
+    window.addEventListener('focus', refresh);
+    window.addEventListener('catalog-version-saved', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); window.removeEventListener('catalog-version-saved', refresh); };
   }, []);
   useEffect(() => {
-    if (props.createToken > handledToken.current) {
+    if (canCreate && props.createToken > handledToken.current) {
       handledToken.current = props.createToken;
       setCreateTitle('');
       setCreateCustomer('');
-      setCreateContact('');
+      setCreateContact(customerPortal ? props.currentActor.id : '');
       setCreateOpen(true);
     }
   }, [props.createToken]);
@@ -183,11 +242,11 @@ export function RequestWorkspace(props: Props) {
     saveLock.current = true;
     setBusy(true);
     setError('');
-    const next = { ...record, updatedAt: new Date().toISOString() };
+    const next = withRequestContact({ ...record, updatedAt: new Date().toISOString() }, props.contacts);
     try {
-      await saveLocal('requests', next);
-      setRequests((old) => [next, ...old.filter((r) => r.id !== next.id)]);
-      setDraft(next);
+      await saveLocal('requests', next, access);
+      setRequests((old) => [next, ...old.filter((r) => r.id !== next.id)].filter((record) => canAccessRequest(record, access)));
+      setDraft(canAccessRequest(next, access) ? next : null);
       setNotice(message);
       return true;
     } catch (error) {
@@ -201,14 +260,17 @@ export function RequestWorkspace(props: Props) {
     }
   }
   async function createDraft() {
-    if (!ready || busy) return;
+    if (!ready || busy || !canCreate) return;
     const record = newRequest(
       createTitle,
       createCustomer,
-      props.currentRole,
+      props.currentActor.name || props.currentRole,
       createContact,
+      props.currentActor.id,
+      props.currentActor.role,
+      props.users.find(user => user.id === props.customers.find(customer => customer.id === createCustomer)?.ownerUserId),
     );
-    const issue = requestCreationIssue(record, props);
+    const issue = requestCreationAccessIssue(record, access) ?? requestCreationIssue(record, props);
     if (issue) {
       setError(issue);
       return;
@@ -219,18 +281,22 @@ export function RequestWorkspace(props: Props) {
       setShowIssues(false);
     }
   }
-  function selectItemService(service: CatalogService) {
+  async function selectItemService(service: CatalogService) {
+    if (!ready || busy || !serviceAvailableForRequest(service, audience)) return;
     setItemError('');
-    setPendingItem(
-      newItem(
-        service,
-        configs.find((c) => c.serviceId === service.id) ??
-          defaultConfig(service),
-      ),
-    );
+    setBusy(true);
+    try {
+      // Read at selection time as configuration may have changed in another tab.
+      const latest = await readRequestConfigs(audience);
+      setPendingItem(newItem(service, resolveRequestConfig(service, latest)));
+    } catch {
+      setItemError('无法读取申请配置，请重试。');
+    } finally {
+      setBusy(false);
+    }
   }
   async function savePendingItem() {
-    if (!draft || !pendingItem || draft.status !== '草稿') return;
+    if (!draft || !pendingItem || !canEditRequestItems(draft, props.currentActor)) return;
     const missing = itemBasicIssues(pendingItem);
     if (missing.length) {
       setItemError(`请补充：${missing.join('、')}`);
@@ -238,10 +304,10 @@ export function RequestWorkspace(props: Props) {
     }
     if (
       !props.services.some(
-        (s) => s.id === pendingItem.serviceId && s.status === '已启用',
+        (s) => s.id === pendingItem.serviceId && serviceAvailableForRequest(s, audience),
       )
     ) {
-      setItemError('该服务目录已停用或不存在，请重新选择。');
+      setItemError('该服务目录已停用、不存在或未开放给当前申请站点，请重新选择。');
       return;
     }
     if (
@@ -264,7 +330,7 @@ export function RequestWorkspace(props: Props) {
     }
     const exists = draft.items.some((i) => i.id === pendingItem.id);
     if (
-      await persist(
+      await persistItemChanges(
         {
           ...draft,
           items: exists
@@ -282,9 +348,15 @@ export function RequestWorkspace(props: Props) {
       setItemError('');
     }
   }
+  async function persistItemChanges(record: ServiceRequest, message: string) {
+    const next = record.status === '待评估'
+      ? appendActivity(record, props.currentActor, '评估', '修改申请项', message)
+      : record;
+    return persist(next, message);
+  }
   async function saveItemMaterials(id: string, materials: ItemMaterial[]) {
-    if (!draft || draft.status !== '草稿') return false;
-    const ok = await persist(
+    if (!draft || !canEditRequestItems(draft, props.currentActor)) return false;
+    const ok = await persistItemChanges(
       {
         ...draft,
         items: draft.items.map((existing) =>
@@ -296,16 +368,17 @@ export function RequestWorkspace(props: Props) {
     return ok;
   }
   const readonly = draft?.status !== '草稿';
-  const issues = draft ? requestIssues(draft, props) : [];
+  const itemsReadonly = !draft || !canEditRequestItems(draft, props.currentActor);
+  const returnNotice = draft ? requestReturnNotice(draft) : null;
+  const issues = draft ? requestIssues(draft, { ...props, audience }) : [];
   const materialItem = draft?.items.find(
     (item) => item.id === materialTarget?.itemId,
   );
   const materialRequirement = materialItem?.config.materials.find(
     (m) => m.id === materialTarget?.requirementId,
   );
-  const completeCount =
-    draft?.items.filter((item) => !itemIssues(item).length).length ?? 0;
   const filtered = requests.filter((record) => {
+    if (!canAccessRequest(record, access)) return false;
     const customer =
       props.customers.find((c) => c.id === record.customerId)?.name ?? '';
     return (
@@ -315,13 +388,48 @@ export function RequestWorkspace(props: Props) {
         .includes(query.toLowerCase().trim())
     );
   });
-  function updateDraft(patch: Partial<Omit<ServiceRequest, 'customerId'>>) {
-    setDraft((record) => (record ? { ...record, ...patch } : record));
+  function updateDraft(
+    patch: Partial<
+      Pick<
+        ServiceRequest,
+        | 'title'
+        | 'contactId'
+        | 'description'
+        | 'expectedServiceDate'
+        | 'externalCollaborators'
+        | 'internalParticipants'
+      >
+    >,
+  ) {
+    setDraft((record) => (record ? withRequestContact({ ...record, ...patch }, props.contacts) : record));
     setNotice('有未保存的修改');
   }
 
-  return (
-    <div className="sr-workspace">
+  function updateCollaborators(patch: Partial<Pick<ServiceRequest, 'externalCollaborators' | 'internalParticipants'>>) {
+    if (!draft || busy) return;
+    const removalIssue = requestContactRemovalIssue({ ...draft, ...patch }, draft) ?? customerOwnerRemovalIssue({ ...draft, ...patch }, draft, props.customers);
+    if (removalIssue) { setError(removalIssue); return; }
+    const customerAddition = props.currentRole === '客户' && 'externalCollaborators' in patch && !('internalParticipants' in patch);
+    if (customerAddition) {
+      if (!canAddExternalCollaborators(draft, access)) return;
+      const issue = customerCollaborationIssue({ ...draft, ...patch }, draft, access);
+      if (issue) { setError(issue); return; }
+    } else if (!isInternal(props.currentRole)) return;
+    if ('externalCollaborators' in patch) {
+      const issue = customerCollaborationIssue({ ...draft, ...patch }, draft, access);
+      if (issue) { setError(issue); return; }
+    }
+    if (!props.currentActor.id) { setError('请先在右上角选择一个启用的内部用户。'); return; }
+    if (!readonly && !customerAddition) { updateDraft(patch); return; }
+    const external = 'externalCollaborators' in patch;
+    const before = external ? (draft.externalCollaborators ?? []).map(p => p.name) : (draft.internalParticipants ?? []).map(p => p.name);
+    const after = external ? (patch.externalCollaborators ?? []).map(p => p.name) : (patch.internalParticipants ?? []).map(p => p.name);
+    const detail = `变更前：${before.join('、') || '无'}；变更后：${after.join('、') || '无'}`;
+    void persist(appendActivity({ ...draft, ...patch }, props.currentActor, '协作', external ? '更新客户协作人' : '更新内部协作人', detail), '协作人已保存');
+  }
+
+  const feedback = (
+    <>
       {error && (
         <div className="sr-error" role="alert">
           {error}
@@ -333,9 +441,22 @@ export function RequestWorkspace(props: Props) {
         </div>
       )}
       {notice && <output className="sr-notice">{notice}</output>}
+    </>
+  );
+
+  return (
+    <div
+      className={
+        draft
+          ? 'sr-workspace sr-workspace--detail catalog-detail'
+          : 'sr-workspace'
+      }
+    >
       {!draft ? (
         <>
-          <div className="sr-toolbar">
+          {feedback}
+          <section className="sr-panel sr-request-list-panel">
+          <div className="sr-toolbar app-list-toolbar">
             <div className="sr-filter-group">
               <div className="sr-search">
                 <Search size={16} />
@@ -352,24 +473,25 @@ export function RequestWorkspace(props: Props) {
                 onChange={(e) => setStatus(e.target.value)}
               >
                 <option>全部状态</option>
-                <option>草稿</option>
-                <option>待评估</option>
+                {requestStatuses.map((state) => (
+                  <option key={state}>{state}</option>
+                ))}
               </select>
             </div>
-            <Button
+            {canCreate && <Button
+              className="ct-button ct-button--primary"
               disabled={!ready || busy}
               onClick={() => {
                 setCreateTitle('');
                 setCreateCustomer('');
-                setCreateContact('');
+                setCreateContact(customerPortal ? props.currentActor.id : '');
                 setCreateOpen(true);
               }}
             >
               <Plus size={16} />
               新建服务请求
-            </Button>
+            </Button>}
           </div>
-          <section className="sr-panel">
             <div className="sr-table-scroll">
               <table className="sr-table app-list-table">
                 <thead>
@@ -377,7 +499,7 @@ export function RequestWorkspace(props: Props) {
                     <th>申请主题 / 编号</th>
                     <th>客户</th>
                     <th>申请项</th>
-                    <th>材料准备</th>
+                    <th>期望服务日期</th>
                     <th>状态</th>
                     <th>最近更新</th>
                     <th>操作</th>
@@ -388,9 +510,9 @@ export function RequestWorkspace(props: Props) {
                     <tr key={record.id}>
                       <td>
                         <button
-                          className="sr-title-link"
+                          className="sr-title-link app-list-link"
                           onClick={() => {
-                            setDraft(structuredClone(record));
+                                                  setDraft(structuredClone(record));
                             setMaterialTarget(null);
                             setShowIssues(false);
                             setNotice('');
@@ -405,32 +527,25 @@ export function RequestWorkspace(props: Props) {
                           ?.name ?? '待选择'}
                       </td>
                       <td>{record.items.length} 项</td>
-                      <td>
-                        {
-                          record.items.filter((i) => !itemIssues(i).length)
-                            .length
-                        }{' '}
-                        / {record.items.length} 项完整
-                      </td>
+                      <td>{record.expectedServiceDate || '—'}</td>
                       <td>
                         <span
                           className="sr-badge"
-                          data-tone={
-                            record.status === '草稿' ? 'muted' : 'blue'
-                          }
+                          data-tone={requestStatusTone(record.status)}
                         >
                           {record.status}
                         </span>
                       </td>
                       <td>
                         {dateLabel(record.updatedAt)}
-                        <small>{record.owner}</small>
+                        <small>{migrateRoleLabel(record.owner)}</small>
                       </td>
                       <td>
                         <Button
                           variant="ghost"
+                          className="app-list-link"
                           onClick={() => {
-                            setDraft(structuredClone(record));
+                                                  setDraft(structuredClone(record));
                             setMaterialTarget(null);
                             setShowIssues(false);
                             setNotice('');
@@ -462,25 +577,48 @@ export function RequestWorkspace(props: Props) {
         </>
       ) : (
         <>
-          <div className="sr-detail-top">
-            <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={async () => {
-                if (readonly || (await persist(draft))) {
-                  setDraft(null);
-                  setNotice('');
-                }
-              }}
-            >
-              <ArrowLeft size={16} />
-              返回列表
-            </Button>
-            <div className="sr-actions">
+          <header className="detail-heading" data-assistant-status={draft.status}>
+            <div>
+              <button
+                type="button"
+                className="detail-back"
+                disabled={busy}
+                onClick={async () => {
+                  if (readonly || (await persist(draft))) {
+                    setDraft(null);
+                    setNotice('');
+                  }
+                }}
+              >
+                <ArrowLeft aria-hidden="true" />
+                返回服务请求
+              </button>
+              <div className="detail-title-row">
+                <h2>{draft.title || '未命名服务请求'}</h2>
+                <span
+                  className="sr-badge"
+                  data-tone={requestStatusTone(draft.status)}
+                >
+                  {draft.status}
+                </span>
+              </div>
+              <p>
+                {draft.id} ·{' '}
+                {props.customers.find(
+                  (customer) => customer.id === draft.customerId,
+                )?.name ?? '未关联客户'}
+              </p>
+            </div>
+            <div className="detail-actions">
+              {isProjectCreationEligible(draft, props.currentActor) && <Button className="ct-button ct-button--primary" disabled={busy} onClick={() => setProjectOpen(true)}><Plus size={16} />创建服务项目</Button>}
+              {draft.status === '待评估' && isProjectManager(props.currentActor) && (!draft.operations?.assessment?.managerId || draft.operations.assessment.managerId === props.currentActor.id) && (
+                <Button variant="outline" className="ct-button ct-button--ordinary" disabled={busy} onClick={() => { setError(''); setReturnDraftReason(''); setReturnDraftOpen(true); }}>退回草稿</Button>
+              )}
               {!readonly && (
                 <>
                   <Button
                     variant="outline"
+                    className="ct-button ct-button--ordinary"
                     disabled={busy}
                     onClick={() => {
                       void persist(draft);
@@ -490,6 +628,7 @@ export function RequestWorkspace(props: Props) {
                     保存草稿
                   </Button>
                   <Button
+                    className="ct-button ct-button--primary"
                     disabled={busy}
                     onClick={() => {
                       setShowIssues(true);
@@ -501,33 +640,9 @@ export function RequestWorkspace(props: Props) {
                 </>
               )}
             </div>
-          </div>
-          <header className="sr-request-heading">
-            <div>
-              <p>{draft.id}</p>
-              <h2>
-                {draft.title || '未命名服务请求'}{' '}
-                <span
-                  className="sr-badge"
-                  data-tone={readonly ? 'blue' : 'muted'}
-                >
-                  {draft.status}
-                </span>
-              </h2>
-              <p>
-                {readonly
-                  ? `已于 ${dateLabel(draft.submittedAt!)} 提交，等待 PMO 评估。`
-                  : '完善基本信息及每个申请项，准备完成后整单提交。'}
-              </p>
-            </div>
-            <div className="sr-progress">
-              <strong>
-                {completeCount}
-                <span> / {draft.items.length}</span>
-              </strong>
-              <p>申请项已完整</p>
-            </div>
           </header>
+          <RequestStatusProgress status={draft.status} />
+          {feedback}
           {showIssues && !readonly && issues.length > 0 && (
             <section className="sr-error" role="alert">
               <strong>尚未提交，请补充以下内容</strong>
@@ -541,202 +656,272 @@ export function RequestWorkspace(props: Props) {
               </p>
             </section>
           )}
-          <section className="sr-panel">
-            <div className="sr-panel-heading">
-              <h3>基本信息</h3>
-            </div>
-            <fieldset disabled={readonly || busy} className="sr-form-grid">
-              <label htmlFor="sr-title">
-                申请主题 <em>*</em>
-                <Input
-                  id="sr-title"
-                  value={draft.title}
-                  onChange={(e) => updateDraft({ title: e.target.value })}
-                  placeholder="例如：生产环境新装与巡检"
-                />
-              </label>
-              <label htmlFor="sr-customer-readonly">
-                客户
-                <Input
-                  id="sr-customer-readonly"
-                  readOnly
-                  value={
-                    props.customers.find((c) => c.id === draft.customerId)
-                      ?.name ??
-                    (draft.customerId || '历史草稿未选择客户')
-                  }
-                />
-                <small>
-                  {draft.customerId
-                    ? '创建后不可修改客户。'
-                    : '此历史草稿未关联客户，请重新创建请求。'}
-                </small>
-              </label>
-              <RequestContactField
-                id="sr-request-contact"
-                contacts={props.contacts.filter(
-                  (c) =>
-                    c.customerId === draft.customerId &&
-                    (c.status === '启用' || c.id === draft.contactId),
-                )}
-                value={draft.contactId}
-                onChange={(contactId) => updateDraft({ contactId })}
-                disabled={busy || !draft.customerId}
-                readonly={readonly}
+              <RequestOperationsTabs customers={props.customers} services={props.services} key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
+            <aside className="sr-collaboration-column" aria-label="协作人">
+              <RequestExternalCollaborators
+                primaryContactId={draft.contactId}
+                contacts={props.contacts.filter(contact => contact.customerId === draft.customerId)}
+                description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。"
+                value={draft.externalCollaborators ?? []}
+                readonly={!canAddExternalCollaborators(draft, access)}
+                allowRemove={props.currentRole !== '客户'}
+                busy={busy}
+                onChange={(externalCollaborators) =>
+                  updateCollaborators({ externalCollaborators })
+                }
               />
-              <label htmlFor="sr-owner">
-                发起人
-                <Input id="sr-owner" value={draft.owner} disabled />
-              </label>
-              <label className="sr-span">
-                申请背景 <em>*</em>
-                <textarea
-                  value={draft.description}
-                  onChange={(e) => updateDraft({ description: e.target.value })}
-                  placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。"
-                  rows={3}
-                />
-              </label>
-            </fieldset>
-          </section>
-          <section className="sr-panel">
-            <div className="sr-panel-heading">
-              <div>
-                <h3>
-                  申请项 <span>{draft.items.length}</span>
-                </h3>
-                <p>点击申请项中的材料入口，在弹窗中填写或上传。</p>
-              </div>
-              {!readonly && (
-                <Button
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => {
-                    setCatalogQuery('');
-                    setPendingItem(null);
-                    setItemError('');
-                    setAddOpen(true);
-                  }}
-                >
-                  <Plus size={15} />
-                  添加申请项
-                </Button>
-              )}
-            </div>
-            {!draft.items.length ? (
-              <div className="sr-empty">
-                <FileText size={30} />
-                <h3>还没有申请项</h3>
-                <p>从服务目录添加所需服务。同一种服务可以分项申请。</p>
-              </div>
-            ) : (
-              <div className="sr-item-list">
-                {draft.items.map((item, index) => {
-                  const missing = itemIssues(item);
-                  const summary = itemSummary(item);
-                  return (
-                    <article key={item.id} className="sr-item-entry">
-                      <div className="sr-item-row">
-                        <span className="sr-item-number">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-                        <div className="sr-item-copy">
-                          <h4>
-                            {item.serviceName}
-                            <span
-                              className="sr-badge"
-                              data-tone={missing.length ? 'amber' : 'green'}
-                            >
-                              {missing.length ? '待完善' : '已完整'}
+              {isInternal(props.currentRole) && <RequestInternalInfo
+                ownerUserId={props.customers.find(customer => customer.id === draft.customerId)?.ownerUserId}
+                users={props.users}
+                value={draft.internalParticipants ?? []}
+                readonly={false}
+                busy={busy}
+                onChange={(internalParticipants) =>
+                  updateCollaborators({ internalParticipants })
+                }
+              />}
+            </aside>
+              }>
+              {isInternal(props.currentActor.role) && <RequestProjects record={draft} />}
+              {returnNotice && <section className="sr-panel sr-ops-panel" role="status">
+                <div className="sr-ops-heading"><div>
+                  <h3>{returnNotice.title}</h3>
+                  <p className="whitespace-pre-wrap break-words">{returnNotice.reason}</p>
+                </div></div>
+              </section>}
+              <section className="sr-panel">
+                <div className="sr-panel-heading">
+                  <h3>基本信息</h3>
+                </div>
+                <fieldset disabled={readonly || busy} className="sr-form-grid">
+                  <label htmlFor="sr-title">
+                    申请主题 <em>*</em>
+                    <Input
+                      id="sr-title"
+                      value={draft.title}
+                      onChange={(e) => updateDraft({ title: e.target.value })}
+                      placeholder="例如：生产环境新装与巡检"
+                    />
+                  </label>
+                  <label htmlFor="sr-customer-readonly">
+                    客户
+                    <Input
+                      id="sr-customer-readonly"
+                      readOnly
+                      value={
+                        props.customers.find((c) => c.id === draft.customerId)
+                          ?.name ??
+                        (draft.customerId || '历史草稿未选择客户')
+                      }
+                    />
+                    <small>
+                      {draft.customerId
+                        ? '创建后不可修改客户。'
+                        : '此历史草稿未关联客户，请重新创建请求。'}
+                    </small>
+                  </label>
+                  <RequestContactField
+                    id="sr-request-contact"
+                    contacts={props.contacts.filter(
+                      (c) =>
+                        c.customerId === draft.customerId &&
+                        (c.status === '启用' || c.id === draft.contactId),
+                    )}
+                    value={draft.contactId}
+                    onChange={(contactId) => updateDraft({ contactId })}
+                    disabled={busy || !draft.customerId}
+                    readonly={readonly}
+                  />
+                  <DateField
+                    id="sr-expected-service-date"
+                    label="期望服务日期"
+                    value={draft.expectedServiceDate ?? ''}
+                    readonly={readonly}
+                    disabled={busy}
+                    onChange={(expectedServiceDate) =>
+                      updateDraft({ expectedServiceDate })
+                    }
+                  />
+                  <label className="sr-span">
+                    申请说明（选填）
+                    <textarea
+                      value={draft.description}
+                      onChange={(e) =>
+                        updateDraft({ description: e.target.value })
+                      }
+                      placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。"
+                      rows={3}
+                    />
+                  </label>
+                </fieldset>
+              </section>
+              <section className="sr-panel">
+                <div className="sr-panel-heading">
+                  <div>
+                    <h3>
+                      申请项 <span>{draft.items.length}</span>
+                    </h3>
+                    <p>{itemsReadonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
+                  </div>
+                  {!itemsReadonly && (
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        setCatalogQuery('');
+                        setPendingItem(null);
+                        setItemError('');
+                        setAddOpen(true);
+                      }}
+                    >
+                      <Plus size={15} />
+                      添加申请项
+                    </Button>
+                  )}
+                </div>
+                {!draft.items.length ? (
+                  <div className="sr-empty">
+                    <FileText size={30} />
+                    <h3>还没有申请项</h3>
+                    <p>从服务目录添加所需服务。同一种服务可以分项申请。</p>
+                  </div>
+                ) : (
+                  <div className="sr-item-list">
+                    {draft.items.map((item, index) => {
+                      const missing = itemIssues(item);
+                      const summary = itemSummary(item);
+                      return (
+                        <article key={item.id} className="sr-item-entry">
+                          <div className="sr-item-row">
+                            <span className="sr-item-number">
+                              {String(index + 1).padStart(2, '0')}
                             </span>
-                          </h4>
-                          {summary && <p>{summary}</p>}
-                          {itemBasicIssues(item).length > 0 && (
-                            <p className="sr-missing">
-                              待补充：{itemBasicIssues(item).join('、')}
-                            </p>
-                          )}
-                          {item.config.materials.map((requirement) => {
-                            const material = item.materials.find(
-                              (m) => m.requirementId === requirement.id,
-                            );
-                            const complete = materialFiles(material).length > 0;
-                            return (
-                              <div
-                                key={requirement.id}
-                                className="sr-material-entry"
-                              >
+                            <div className="sr-item-copy">
+                              <h4>
+                                {item.serviceName}
                                 <span
-                                  className={
-                                    complete
-                                      ? 'sr-complete'
-                                      : requirement.required
-                                        ? 'sr-missing'
-                                        : 'sr-help'
-                                  }
+                                  className="sr-badge"
+                                  data-tone={missing.length ? 'amber' : 'green'}
                                 >
-                                  {complete
-                                    ? '已完成：'
-                                    : requirement.required
-                                      ? '待补充：上传'
-                                      : '选填：'}
-                                  {requirement.name}
+                                  {missing.length ? '待完善' : '已完整'}
                                 </span>
-                                <button
-                                  className="sr-material-link"
-                                  disabled={busy}
-                                  onClick={() =>
-                                    setMaterialTarget({
-                                      itemId: item.id,
-                                      requirementId: requirement.id,
-                                    })
-                                  }
-                                  aria-label={
-                                    requirement.name +
-                                    (readonly || complete
-                                      ? '，查看材料'
-                                      : '，补充材料')
-                                  }
-                                >
-                                  {readonly || complete
-                                    ? '查看材料'
-                                    : '补充材料'}
-                                  <ChevronRight size={13} />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="sr-item-actions">
-                          <Button
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => {
-                              setPendingItem(structuredClone(item));
-                              setItemError('');
-                              setAddOpen(true);
-                            }}
-                          >
-                            {readonly ? '查看基础信息' : '编辑基础信息'}
-                          </Button>
+                              </h4>
+                              {summary && <p>{summary}</p>}
+                              {itemBasicIssues(item).length > 0 && (
+                                <p className="sr-missing">
+                                  待补充：{itemBasicIssues(item).join('、')}
+                                </p>
+                              )}
+                              {item.config.materials.map((requirement) => {
+                                const material = item.materials.find(
+                                  (m) => m.requirementId === requirement.id,
+                                );
+                                const complete =
+                                  materialFiles(material).length > 0;
+                                return (
+                                  <div
+                                    key={requirement.id}
+                                    className="sr-material-entry"
+                                  >
+                                    <span
+                                      className={
+                                        complete
+                                          ? 'sr-complete'
+                                          : requirement.required
+                                            ? 'sr-missing'
+                                            : 'sr-help'
+                                      }
+                                    >
+                                      {complete
+                                        ? '已完成：'
+                                        : requirement.required
+                                          ? '待补充：上传'
+                                          : '选填：'}
+                                      {requirement.name}
+                                    </span>
+                                    <button
+                                      className="sr-material-link"
+                                      disabled={busy}
+                                      onClick={() =>
+                                        setMaterialTarget({
+                                          itemId: item.id,
+                                          requirementId: requirement.id,
+                                        })
+                                      }
+                                      aria-label={
+                                        requirement.name +
+                                        (itemsReadonly || complete
+                                          ? '，查看材料'
+                                          : '，补充材料')
+                                      }
+                                    >
+                                      {itemsReadonly || complete
+                                        ? '查看材料'
+                                        : '补充材料'}
+                                      <ChevronRight size={13} />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="sr-item-actions">
+                              <Button
+                                variant="outline"
+                                disabled={busy}
+                                onClick={() => {
+                                  setPendingItem(structuredClone(item));
+                                  setItemError('');
+                                  setAddOpen(true);
+                                }}
+                              >
+                                {itemsReadonly ? '查看基础信息' : '编辑基础信息'}
+                              </Button>
 
-                          {!readonly && (
-                            <button
-                              className="sr-muted-button"
-                              disabled={busy}
-                              onClick={() => setRemoveId(item.id)}
-                            >
-                              移除
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            )}
-          </section>
+                              {!itemsReadonly && (
+                                <button
+                                  className="sr-muted-button"
+                                  disabled={busy}
+                                  onClick={() => setRemoveId(item.id)}
+                                >
+                                  移除
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+              <section className="sr-panel" aria-labelledby="sr-system-heading">
+                <div className="sr-panel-heading">
+                  <h3 id="sr-system-heading">系统信息</h3>
+                </div>
+                <dl className="sr-system-info">
+                  <div>
+                    <dt>创建时间</dt>
+                    <dd>{dateLabel(draft.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>更新时间</dt>
+                    <dd>{dateLabel(draft.updatedAt)}</dd>
+                  </div>
+                  <div>
+                    <dt>提交时间</dt>
+                    <dd>
+                      {draft.submittedAt
+                        ? dateLabel(draft.submittedAt)
+                        : '未提交'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>创建人</dt>
+                    <dd>{migrateRoleLabel(draft.createdBy ?? draft.owner ?? '—')}</dd>
+                  </div>
+                </dl>
+              </section>
+              </RequestOperationsTabs>
         </>
       )}
 
@@ -745,7 +930,7 @@ export function RequestWorkspace(props: Props) {
           key={materialItem.id + ':' + materialRequirement.id}
           item={materialItem}
           requirement={materialRequirement}
-          readonly={readonly}
+          readonly={itemsReadonly}
           busy={busy}
           error={error}
           onClose={() => setMaterialTarget(null)}
@@ -760,7 +945,7 @@ export function RequestWorkspace(props: Props) {
         />
       )}
       <Dialog
-        open={createOpen}
+        open={canCreate && createOpen}
         onOpenChange={(open) => {
           if (!busy) setCreateOpen(open);
         }}
@@ -784,7 +969,7 @@ export function RequestWorkspace(props: Props) {
                 placeholder="填写本次申请主题"
               />
             </label>
-            <label>
+            {!customerPortal && <label>
               客户 <em>*</em>
               <select
                 required
@@ -812,7 +997,7 @@ export function RequestWorkspace(props: Props) {
               >
                 创建后不可修改客户
               </span>
-            </label>
+            </label>}
             <RequestContactField
               id="sr-create-contact"
               contacts={createContacts}
@@ -850,7 +1035,7 @@ export function RequestWorkspace(props: Props) {
               取消
             </Button>
             <Button
-              disabled={!ready || busy}
+              disabled={!ready || busy || !canCreate}
               onClick={() => void createDraft()}
             >
               {busy ? '正在保存…' : '创建草稿'}
@@ -874,7 +1059,7 @@ export function RequestWorkspace(props: Props) {
         <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog">
           <DialogHeader>
             <DialogTitle>
-              {readonly && pendingItem
+              {itemsReadonly && pendingItem
                 ? '申请项基础信息'
                 : pendingItem &&
                     draft?.items.some((i) => i.id === pendingItem.id)
@@ -891,10 +1076,12 @@ export function RequestWorkspace(props: Props) {
                 <div className="sr-selected-service">
                   <div>
                     <strong>{pendingItem.serviceName}</strong>
-                    <p>
-                      {pendingItem.serviceId} · 配置版本 v
-                      {pendingItem.config.revision}
-                    </p>
+                    <p>{pendingItem.serviceId} · 目录版本 {pendingService ? `v${pendingService.version ?? 1}` : '—'}</p>
+                    {pendingServiceContent && (
+                      <p className="sr-selected-service-content">
+                        服务内容：{pendingServiceContent}
+                      </p>
+                    )}
                   </div>
                   {!draft?.items.some((i) => i.id === pendingItem.id) && (
                     <Button
@@ -915,7 +1102,7 @@ export function RequestWorkspace(props: Props) {
                     (o) => o.customerId === draft?.customerId,
                   )}
                   customerId={draft?.customerId ?? ''}
-                  readonly={readonly}
+                  readonly={itemsReadonly}
                   busy={busy}
                   update={(patch) =>
                     setPendingItem((item) =>
@@ -933,7 +1120,7 @@ export function RequestWorkspace(props: Props) {
                   placeholder="搜索服务名称或编码"
                 />
                 <div className="sr-catalog-options">
-                  {props.services
+                  {availableServices
                     .filter(
                       (s) =>
                         s.status === '已启用' &&
@@ -957,14 +1144,14 @@ export function RequestWorkspace(props: Props) {
                         </div>
                         <Button
                           variant="outline"
-                          disabled={busy}
+                          disabled={busy || !ready}
                           onClick={() => selectItemService(service)}
                         >
                           选择
                         </Button>
                       </div>
                     ))}
-                  {!props.services.some(
+                  {!availableServices.some(
                     (s) =>
                       s.status === '已启用' &&
                       (s.id + ' ' + s.name)
@@ -990,9 +1177,9 @@ export function RequestWorkspace(props: Props) {
                 setItemError('');
               }}
             >
-              {readonly ? '关闭' : '取消'}
+              {itemsReadonly ? '关闭' : '取消'}
             </Button>
-            {pendingItem && !readonly && (
+            {pendingItem && !itemsReadonly && (
               <Button disabled={busy} onClick={() => void savePendingItem()}>
                 <Save size={15} />
                 {busy ? '正在保存…' : '保存申请项'}
@@ -1012,7 +1199,7 @@ export function RequestWorkspace(props: Props) {
           <DialogHeader>
             <DialogTitle>移除此申请项？</DialogTitle>
             <DialogDescription>
-              该项的填写内容和已保存附件将一并从草稿中移除，其他申请项不受影响。
+              该项的填写内容和已保存附件将一并从请求中移除，其他申请项不受影响。
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -1030,11 +1217,11 @@ export function RequestWorkspace(props: Props) {
             </Button>
             <Button
               variant="destructive"
-              disabled={busy}
+              disabled={busy || itemsReadonly}
               onClick={async () => {
                 if (
-                  draft &&
-                  (await persist(
+                  draft && !itemsReadonly &&
+                  (await persistItemChanges(
                     {
                       ...draft,
                       items: draft.items.filter((i) => i.id !== removeId),
@@ -1051,6 +1238,23 @@ export function RequestWorkspace(props: Props) {
         </DialogContent>
       </Dialog>
 
+      {projectOpen && draft && <RequestProjectDialog objects={props.businessObjects} key={`${draft.id}:${props.currentActor.id}`} record={draft} actor={props.currentActor} busy={busy} save={persist} close={() => setProjectOpen(false)} />}
+
+      <Dialog open={returnDraftOpen} onOpenChange={open => { if (!busy) setReturnDraftOpen(open); }}>
+        <DialogContent className="sr-ops-dialog" showCloseButton={!busy}>
+          <DialogHeader><DialogTitle>退回草稿</DialogTitle><DialogDescription>退回后可修改申请信息和材料；已锁定资产将释放，相关特批失效，评估历史保留。</DialogDescription></DialogHeader>
+          <label className="sr-ops-field"><span>退回原因 *</span><Textarea value={returnDraftReason} disabled={busy} onChange={event => setReturnDraftReason(event.target.value)} rows={3} placeholder="说明需要补充或修改的内容" /></label>
+          {error && <p className="sr-error" role="alert">{error}</p>}
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setReturnDraftOpen(false)}>取消</Button><Button disabled={busy || !returnDraftReason.trim()} onClick={async () => {
+            if (!draft) return;
+            setError('');
+            try {
+              const next = applyAssessmentAction(draft, { type: 'return-draft', reason: returnDraftReason }, props.currentActor, props.assets, props.users, []);
+              if (await persist(next, '已退回草稿，可补充申请后重新提交')) { setReturnDraftOpen(false); setShowIssues(false); }
+            } catch (issue) { setError(issue instanceof Error ? issue.message : '退回失败，请重试。'); }
+          }}>确认退回草稿</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={submitOpen}
         onOpenChange={(open) => {
@@ -1062,8 +1266,7 @@ export function RequestWorkspace(props: Props) {
             <DialogTitle>确认提交服务请求</DialogTitle>
             <DialogDescription>
               共 {draft?.items.length}{' '}
-              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 PMO
-              核查材料、服务范围和依据。这不是客户对计费的确认。
+              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX 核查材料、服务范围和依据。
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -1088,14 +1291,16 @@ export function RequestWorkspace(props: Props) {
                   setShowIssues(true);
                   return;
                 }
+                const projectManager = operationIdentities(props.users).find(user => user.role === 'SmartX 项目经理');
                 if (
                   await persist(
-                    {
+                    appendActivity({
                       ...draft,
                       status: '待评估',
+                      operations: { ...operationsOf(draft), assessment: { ...emptyAssessment(), managerId: projectManager?.id ?? '', manager: projectManager?.name ?? '' } },
                       submittedAt: new Date().toISOString(),
-                    },
-                    '已提交，等待 PMO 评估',
+                    }, props.currentActor, '提交', '提交服务请求', '请求进入待评估，基本信息和申请项已锁定'),
+                    '已提交，等待项目经理评估',
                   )
                 ) {
                   setSubmitOpen(false);
@@ -1314,9 +1519,12 @@ function ItemBasicFields({
 
 export function RequestCatalogSettings({
   service,
+  audience = 'internal',
 }: {
   service: CatalogService;
+  audience?: 'internal' | 'customer';
 }) {
+  const configLabel = audience === 'internal' ? '内部申请' : '客户中心申请';
   const requestFields = useContext(RequestFieldsContext);
   const products = useContext(BusinessObjectProductsContext);
   const [config, setConfig] = useState<RequestConfig>(() =>
@@ -1330,14 +1538,11 @@ export function RequestCatalogSettings({
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     let active = true;
-    readLocal<RequestConfig>('configs')
+    readRequestConfigs(audience)
       .then((records) => {
         if (active) {
           setConfig(
-            normalizeRequestConfig(
-              records.find((c) => c.serviceId === service.id) ??
-                defaultConfig(service),
-            ),
+            resolveRequestConfig(service, records),
           );
           setReady(true);
         }
@@ -1348,12 +1553,12 @@ export function RequestCatalogSettings({
     return () => {
       active = false;
     };
-  }, [service]);
+  }, [service, audience]);
   return (
     <section className="detail-card detail-card--wide sr-config-card">
       <div className="sr-panel-heading">
         <div>
-          <h3>申请配置</h3>
+          <h3>{configLabel}配置</h3>
           <p>配置申请项所需参数与文档，不改变服务计价字段。</p>
         </div>
         <Button
@@ -1366,7 +1571,7 @@ export function RequestCatalogSettings({
           }}
         >
           <Settings2 size={15} />
-          配置申请资料
+          配置{configLabel}
         </Button>
       </div>
       <p>
@@ -1386,10 +1591,6 @@ export function RequestCatalogSettings({
           .map((m) => `${m.name}（${m.required ? '必填' : '选填'}）`)
           .join('、') || '无'}
       </p>
-      <p className="sr-help">
-        当前 v{config.revision} ·
-        修改仅影响后续新增的申请项，已有申请项保留原配置和模板。
-      </p>
       {saved && <output className="sr-complete">申请配置已保存到本机</output>}
       {error && (
         <p role="alert" className="sr-error">
@@ -1404,7 +1605,7 @@ export function RequestCatalogSettings({
       >
         <SheetContent className="sr-item-sheet">
           <SheetHeader>
-            <SheetTitle>配置申请资料</SheetTitle>
+            <SheetTitle>配置{configLabel}</SheetTitle>
             <SheetDescription>
               {service.name} · 保存后用于新添加的申请项；不影响已创建项目。
             </SheetDescription>
@@ -1935,8 +2136,12 @@ export function RequestCatalogSettings({
                   ),
                 };
                 try {
-                  await saveLocal('configs', next);
-                  setConfig(next);
+                  const savedConfig = await commitCatalogVersion(service.id, {
+                    config: next,
+                    audience,
+                    reason: `修改${configLabel}配置`,
+                  });
+                  setConfig(savedConfig ?? next);
                   setSaved(true);
                   setOpen(false);
                 } catch {
