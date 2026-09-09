@@ -3514,6 +3514,33 @@ body {
   padding: 20px 24px;
   border-bottom: 1px solid #edf0f5;
 }
+.sr-customer-visible-panel,
+.sr-confirmation-preview section.sr-customer-visible-panel {
+  border-left: 2px solid #93c5fd;
+}
+.sr-panel-title-with-visibility {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sr-customer-visible-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}
+.sr-customer-visible-badge svg {
+  flex-shrink: 0;
+}
 .sr-panel-heading h2,
 .sr-panel-heading h3,
 .sr-sheet-section h3 {
@@ -5671,6 +5698,8 @@ body:has(.sr-document-dialog) [data-slot='dialog-overlay'] {
 .sr-confirmation-preview { display: grid; gap: 20px; max-height: 55vh; overflow-y: auto; }
 .sr-confirmation-preview section { border: 1px solid #dce6f3; border-radius: 8px; padding: 16px; }
 .sr-confirmation-preview h4 { margin: 0 0 14px; font-size: 15px; font-weight: 600; color: #24364b; }
+.sr-confirmation-preview .sr-panel-title-with-visibility { margin-bottom: 14px; }
+.sr-confirmation-preview .sr-panel-title-with-visibility h4 { margin: 0; }
 .sr-confirmation-preview dl { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px 12px; font-size: 14px; }
 .sr-confirmation-preview dt { color: #8491a4; }
 .sr-confirmation-preview dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

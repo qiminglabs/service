@@ -4,6 +4,7 @@ import { Paperclip, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { storedFile, downloadFile, type ServiceRequest, type StoredFile } from '@/lib/service-requests';
 import { isInternal, meetingAttachmentAccept, meetingAttachmentIssue, type OperationActor } from '@/lib/request-operations';
 import { addSupplement, canAddSupplement, visibleSupplements } from '@/lib/request-supplements';
@@ -61,7 +62,7 @@ export function RequestSupplements({ record, actor, customerId, busy, save }: {
       </div> : <p className="sr-help">当前阶段仅可查看已提交的补充资料。</p>}
       <div className="sr-supplement-records">
         {[...items].reverse().map(item => <article key={item.id} className="sr-assessment-plan">
-          <div className="sr-assessment-round-title"><strong>{item.author}</strong><time className="sr-help" dateTime={item.at}>{new Date(item.at).toLocaleString('zh-CN', { hour12: false })}</time>{isInternal(actor.role) && <span className="sr-assessment-badge">{item.externalVisible ? '客户可见' : '仅内部可见'}</span>}</div>
+          <div className="sr-assessment-round-title"><strong>{item.author}</strong><time className="sr-help" dateTime={item.at}>{new Date(item.at).toLocaleString('zh-CN', { hour12: false })}</time>{isInternal(actor.role) && (item.externalVisible ? <CustomerVisibleBadge /> : <span className="sr-assessment-badge">仅内部可见</span>)}</div>
           {item.comment && <p className="whitespace-pre-wrap break-words my-3">{item.comment}</p>}
           {item.files.map(file => <div key={file.id} className="sr-supplement-file"><FileText size={16} aria-hidden="true" /><span title={file.name}>{file.name}</span><Button variant="ghost" onClick={() => downloadFile(file)}>下载</Button></div>)}
         </article>)}

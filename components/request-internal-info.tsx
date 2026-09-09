@@ -5,6 +5,7 @@ import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { fixedIdentityRoles } from '@/lib/internal-users';
 import {
   Dialog,
@@ -39,6 +40,7 @@ function CollaboratorCard({
   onAdd,
   onRemove,
   allowRemove = true,
+  showCustomerVisibility = false,
 }: {
   title: string;
   description: string;
@@ -50,6 +52,7 @@ function CollaboratorCard({
   onAdd: (ids: string[]) => void;
   onRemove: (id: string) => void;
   allowRemove?: boolean;
+  showCustomerVisibility?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -66,11 +69,14 @@ function CollaboratorCard({
       .includes(query.toLowerCase().trim()),
   );
   return (
-    <section className="sr-panel sr-collaboration-card" aria-labelledby={id}>
+    <section className={`sr-panel sr-collaboration-card${showCustomerVisibility ? ' sr-customer-visible-panel' : ''}`} aria-labelledby={id}>
       <div className="sr-panel-heading">
-        <h3 id={id}>
-          {title} <span>{selected.length}</span>
-        </h3>
+        <div className="sr-panel-title-with-visibility">
+          <h3 id={id}>
+            {title} <span>{selected.length}</span>
+          </h3>
+          {showCustomerVisibility && <CustomerVisibleBadge />}
+        </div>
         {!readonly && (
           <Dialog
             open={open}
@@ -215,6 +221,7 @@ export function RequestExternalCollaborators({
   busy,
   onChange,
   allowRemove = true,
+  showCustomerVisibility = false,
   description = '搜索当前客户联系人，勾选后确认添加。',
 }: {
   primaryContactId?: string;
@@ -223,6 +230,7 @@ export function RequestExternalCollaborators({
   value: ExternalCollaborator[];
   readonly: boolean;
   allowRemove?: boolean;
+  showCustomerVisibility?: boolean;
   busy: boolean;
   onChange: (value: ExternalCollaborator[]) => void;
 }) {
@@ -230,6 +238,7 @@ export function RequestExternalCollaborators({
   return (
     <CollaboratorCard
       title="客户协作人"
+      showCustomerVisibility={showCustomerVisibility}
       description={description}
       placeholder="搜索姓名、手机号或邮箱"
       options={contacts.map((contact) => ({

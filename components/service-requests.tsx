@@ -22,6 +22,7 @@ import type { RequestField } from '@/components/request-field-settings';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
 import { RequestContactField } from '@/components/request-contact-field';
 import { RequestStatusProgress } from '@/components/request-status-progress';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { DateField } from '@/components/date-field';
 import { RequestProjectDialog, RequestProjects } from '@/components/request-projects';
 import { isProjectCreationEligible } from '@/lib/request-projects';
@@ -670,6 +671,7 @@ export function RequestWorkspace(props: Props) {
               <RequestOperationsTabs customers={props.customers} services={props.services} key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
             <aside className="sr-collaboration-column" aria-label="协作人">
               <RequestExternalCollaborators
+                showCustomerVisibility={isInternal(props.currentRole)}
                 primaryContactId={draft.contactId}
                 contacts={props.contacts.filter(contact => contact.customerId === draft.customerId)}
                 description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。"
@@ -700,9 +702,12 @@ export function RequestWorkspace(props: Props) {
                   <p className="whitespace-pre-wrap break-words">{returnNotice.reason}</p>
                 </div></div>
               </section>}
-              <section className="sr-panel">
+              <section className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}>
                 <div className="sr-panel-heading">
-                  <h3>基本信息</h3>
+                  <div className="sr-panel-title-with-visibility">
+                    <h3>基本信息</h3>
+                    {isInternal(props.currentRole) && <CustomerVisibleBadge />}
+                  </div>
                 </div>
                 <fieldset disabled={readonly || busy} className="sr-form-grid">
                   <label htmlFor="sr-title">
@@ -766,12 +771,15 @@ export function RequestWorkspace(props: Props) {
                   </label>
                 </fieldset>
               </section>
-              <section className="sr-panel">
+              <section className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}>
                 <div className="sr-panel-heading">
                   <div>
-                    <h3>
-                      申请项 <span>{draft.items.length}</span>
-                    </h3>
+                    <div className="sr-panel-title-with-visibility">
+                      <h3>
+                        申请项 <span>{draft.items.length}</span>
+                      </h3>
+                      {isInternal(props.currentRole) && <CustomerVisibleBadge />}
+                    </div>
                     <p>{!showCompleteness ? '申请内容只读，可查看基础信息。' : itemsReadonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
                   </div>
                   {!itemsReadonly && (
@@ -906,9 +914,12 @@ export function RequestWorkspace(props: Props) {
                   </div>
                 )}
               </section>
-              <section className="sr-panel" aria-labelledby="sr-system-heading">
+              <section className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`} aria-labelledby="sr-system-heading">
                 <div className="sr-panel-heading">
-                  <h3 id="sr-system-heading">系统信息</h3>
+                  <div className="sr-panel-title-with-visibility">
+                    <h3 id="sr-system-heading">系统信息</h3>
+                    {isInternal(props.currentRole) && <CustomerVisibleBadge />}
+                  </div>
                 </div>
                 <dl className="sr-system-info">
                   <div>

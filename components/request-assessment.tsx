@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import {
   Dialog,
   DialogContent,
@@ -560,8 +561,11 @@ export function RequestAssessment({
                 <DialogDescription>请核对以下请求与预计消耗资产，确认后将提交给客户确认。</DialogDescription>
               </DialogHeader>
               <div className="sr-confirmation-preview">
-                <section>
-                  <h4>请求概览</h4>
+                <section className="sr-customer-visible-panel">
+                  <div className="sr-panel-title-with-visibility">
+                    <h4>请求概览</h4>
+                    <CustomerVisibleBadge />
+                  </div>
                   <dl>
                     <dt>请求名称</dt><dd>{record.title}</dd>
                     <dt>请求编号</dt><dd>{record.id}</dd>
@@ -572,8 +576,11 @@ export function RequestAssessment({
                     ))}</dd>
                   </dl>
                 </section>
-                <section>
-                  <h4>待客户确认的服务资产消耗</h4>
+                <section className="sr-customer-visible-panel">
+                  <div className="sr-panel-title-with-visibility">
+                    <h4>待客户确认的服务资产消耗</h4>
+                    <CustomerVisibleBadge />
+                  </div>
                   {plan && (plan.allocations.length || activeEntitlementAllocations(record).length) ? (
                     <>
                       <div className="sr-assessment-allocations">
@@ -590,10 +597,10 @@ export function RequestAssessment({
                     </>
                   ) : <p className="sr-help">本次不消耗客户资产。</p>}
                 </section>
-                <section>
+                <section className="sr-customer-visible-panel">
                   <div className="sr-confirmation-note-label">
                     <label htmlFor="customer-confirmation-note">说明（选填）</label>
-                    <span className="sr-assessment-badge" id="customer-confirmation-note-hint">客户可见</span>
+                    <CustomerVisibleBadge id="customer-confirmation-note-hint" />
                   </div>
                   <Textarea id="customer-confirmation-note" aria-describedby="customer-confirmation-note-hint" value={externalNote} onChange={event => setExternalNote(event.target.value)} disabled={disabled} rows={4} placeholder="填写给客户的服务说明，提交后将在客户中心显示" />
                 </section>
