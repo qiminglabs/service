@@ -132,6 +132,7 @@ export function RequestAssessment({
     plan = currentPlan(record),
     effort = assessedEffort(record);
   const effortTotals = effortTotalsByMethod(record, a.effort?.lines ?? []);
+  const entitlementAllocations = activeEntitlementAllocations(record);
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
   const customerConfirmed = ['待受理', '已转服务项目'].includes(record.status);
   const latestDecision = record.operations?.customerDecisions?.at(-1);
@@ -423,40 +424,36 @@ export function RequestAssessment({
           )}
           {plan ? (
             <>
-              <div className="sr-assessment-amounts">
-                <span>
-                  客户资产已锁定
-                  <strong>
-                    {fmt(planAssetDays(plan))} <small>人天</small>
-                  </strong>
-                </span>
-                {dayGaps.length ? dayGaps.map(row => <span key={row.method}>{row.method}资产缺少<strong>{fmt(row.days)} <small>人天</small></strong></span>) : <span>资产缺少<strong>{fmt(gap)} <small>人天</small></strong></span>}
+              <div className="sr-basis-assets">
+                <div className="sr-basis-assets-heading">
+                  <h5>客户资产占用</h5>
+                  {plan.allocations.length > 0 && <span>人天资产合计：{fmt(planAssetDays(plan))} 人天</span>}
+                </div>
+                {plan.allocations.length || entitlementAllocations.length ? (
+                  <ul className="sr-basis-asset-list" aria-label="已锁定人天资产及已冻结权益">
+                    {plan.allocations.map(asset => (
+                      <li key={asset.assetId}>
+                        <span className="sr-basis-asset-kind">人天资产</span>
+                        <div className="sr-basis-asset-name"><strong>{asset.name}</strong><small>{asset.assetId}</small></div>
+                        <strong className="sr-basis-asset-quantity">{fmt(asset.days)} <small>人天</small></strong>
+                        <Badge>已锁定</Badge>
+                      </li>
+                    ))}
+                    {entitlementAllocations.map(allocation => (
+                      <li key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+                        <span className="sr-basis-asset-kind">{entitlementLabel(allocation.kind)}</span>
+                        <div className="sr-basis-asset-name"><strong>{allocation.name}</strong></div>
+                        <strong className="sr-basis-asset-quantity" aria-label={`冻结权益数量 ${allocation.quantity}`}>{allocation.quantity}</strong>
+                        <Badge>已冻结</Badge>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="sr-help">{plan.effort > 0 ? '暂无已锁定的客户资产。' : '本次无需占用客户资产。'}</p>}
               </div>
-              <div className="sr-assessment-allocations">
-                {plan.allocations.length ? (
-                  plan.allocations.map((v) => (
-                    <div key={v.assetId}>
-                      <span>
-                        {v.name} <small>{v.assetId}</small>
-                      </span>
-                      <strong>{fmt(v.days)} 人天</strong>
-                      <Badge>已锁定</Badge>
-                    </div>
-                  ))
-                ) : (
-                  <p>{plan.effort > 0 ? '未锁定人天资产，计价人天需额度特批。' : '本次无需锁定人天资产。'}</p>
-                )}
-              </div>
-              {!!activeEntitlementAllocations(record).length && <div className="sr-assessment-allocations" aria-label="已冻结权益">
-                {activeEntitlementAllocations(record).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
-                  <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>已冻结 {allocation.quantity}</strong>
-                </div>)}
-              </div>}
-              <p className="sr-help">负责销售：{plan.salesName}</p>
               {gap > 1e-8 && (
                 <div className="sr-assessment-gap">
                   <div>
-                    <strong>资产缺少：{gapDescription}</strong>
+                    <strong>人天资产缺口：{gapDescription}</strong>
                     <p>
                       {approved
                         ? '额度特批已通过，可发起客户确认。'
@@ -476,6 +473,7 @@ export function RequestAssessment({
                     )}
                 </div>
               )}
+              <p className="sr-basis-owner">负责销售：{plan.salesName}</p>
             </>
           ) : (
             <p className="sr-help">

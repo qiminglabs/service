@@ -5649,6 +5649,26 @@ body:has(.sr-document-dialog) [data-slot='dialog-overlay'] {
 .sr-assessment-amounts strong { font-size: 26px; color: #26374f; font-weight: 500; }
 .sr-assessment-allocations > div { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid #edf0f5; font-size: 14px; }
 .sr-assessment-allocations > div > span:first-child { flex: 1; }
+.sr-basis-assets-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 10px; }
+.sr-basis-assets-heading h5 { margin: 0; color: #475569; font-size: 14px; font-weight: 500; }
+.sr-basis-assets-heading > span { color: #64748b; font-size: 13px; }
+.sr-basis-assets > .sr-help { margin: 0; line-height: 24px; }
+.sr-basis-asset-list { list-style: none; padding: 0; margin: 0; }
+.sr-basis-asset-list > li { display: grid; grid-template-columns: 88px minmax(0, 1fr) 104px 64px; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid #edf0f5; font-size: 14px; }
+.sr-basis-asset-kind { color: #64748b; }
+.sr-basis-asset-name { min-width: 0; }
+.sr-basis-asset-name > strong { display: block; color: #26374f; font-weight: 500; overflow-wrap: anywhere; }
+.sr-basis-asset-name > small { display: block; margin-top: 3px; overflow-wrap: anywhere; }
+.sr-basis-asset-quantity { color: #26374f; font-size: 16px; font-weight: 500; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sr-basis-asset-list .sr-assessment-badge { justify-self: end; }
+.sr-basis-owner { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #edf0f5; color: #8491a4; font-size: 13px; line-height: 22px; }
+@media (max-width: 600px) {
+  .sr-basis-asset-list > li { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .sr-basis-asset-kind { grid-column: 1; grid-row: 1; font-size: 13px; }
+  .sr-basis-asset-name { grid-column: 1; grid-row: 2; }
+  .sr-basis-asset-quantity { grid-column: 2; grid-row: 2; }
+  .sr-basis-asset-list .sr-assessment-badge { grid-column: 2; grid-row: 1; }
+}
 .sr-assessment-gap, .sr-assessment-confirm { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px; background: #f3f7fc; border-radius: 8px; margin-top: 18px; }
 .sr-assessment-gap strong { font-size: 15px; }
 .sr-assessment-gap p, .sr-assessment-confirm p { font-size: 14px; color: #667085; margin: 6px 0 0; }
