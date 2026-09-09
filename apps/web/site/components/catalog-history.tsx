@@ -21,7 +21,7 @@ const labels: Record<string, string> = {
   deliveryMethods: '支持服务方式',
   priceUnit: '计价单位',
   priceCoefficient: '计价系数',
-  defaultQuantity: '默认计价数量',
+  defaultQuantity: '最小人天数量',
   certifications: '认证要求',
   providers: '支持服务方',
   allowedInitiatorSites: '可发起站点',

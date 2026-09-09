@@ -1258,7 +1258,7 @@ export default function Home() {
       Number(catalogForm.defaultQuantity) > 0;
     if (!allFieldsComplete || !validNumbers) {
       setFormError(
-        '请填写全部字段；计价系数和默认计价数量须为大于 0、最多两位小数的数字。',
+        '请填写全部字段；计价系数和最小人天数量须为大于 0、最多两位小数的数字。',
       );
       return;
     }
@@ -1344,7 +1344,7 @@ export default function Home() {
           onUserChange={switchIdentity}
           onOpenMenu={() => setMobileNavOpen(true)}
         />
-        <main className="content-area">
+        <main className="content-area" data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
           {referenceStorageError && (
             <p role="alert" className="sr-error">
               {referenceStorageError}
@@ -1697,7 +1697,7 @@ export default function Home() {
                 </label>
                 <label htmlFor="default-quantity">
                   <span>
-                    默认计价数量 <em>*</em>
+                    最小人天数量 <em>*</em>
                   </span>
                   <Input
                     id="default-quantity"
@@ -2072,16 +2072,13 @@ function CatalogDetail({
                 <dd>{service.priceCoefficient.toFixed(2)}</dd>
               </div>
               <div>
-                <dt>默认计价数量</dt>
-                <dd>{service.defaultQuantity.toFixed(2)}</dd>
+                <dt>最小人天数量</dt>
+                <dd>{service.defaultQuantity.toFixed(2)} 人天</dd>
               </div>
               <div>
-                <dt>默认核算结果</dt>
+                <dt>最小计价人天</dt>
                 <dd>
-                  {(service.priceCoefficient * service.defaultQuantity).toFixed(
-                    2,
-                  )}{' '}
-                  {service.priceUnit}
+                  {Number((service.priceCoefficient * service.defaultQuantity).toFixed(4))} 人天
                 </dd>
               </div>
             </dl>

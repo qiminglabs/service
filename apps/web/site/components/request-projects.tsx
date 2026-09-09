@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { itemDisplayFields, type ServiceRequest, type ObjectRef } from '@/lib/service-requests';
 import { RequestFieldsContext } from '@/components/request-field-settings';
 import type { OperationActor } from '@/lib/request-operations';
-import { canCreateServiceProjects, createServiceProjects, projectSplitIssue, moveProjectItem, type ProjectGroup } from '@/lib/request-projects';
+import { canCreateServiceProjects, createServiceProjects, projectSplitIssue, moveProjectItem, serviceProjectCreationEnabled, serviceProjectPendingMessage, type ProjectGroup } from '@/lib/request-projects';
 
 const groupId = () => `PRJ-${crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase()}`;
 export function RequestProjectDialog({ record, actor, busy, save, close, objects }: {
@@ -83,7 +83,7 @@ export function RequestProjectDialog({ record, actor, busy, save, close, objects
       <DialogFooter className="sr-project-footer">
         <span>{groups.length} 个项目 · {record.items.length} 个工单</span>
         <Button variant="outline" disabled={disabled} onClick={close}>取消</Button>
-        <Button disabled={disabled || !!issue || !canCreateServiceProjects(record, actor)} onClick={() => void submit()}>{working ? '创建中…' : '创建项目'}</Button>
+        <Button className={!serviceProjectCreationEnabled ? 'ct-button ct-button--project-pending' : undefined} title={!serviceProjectCreationEnabled ? serviceProjectPendingMessage : undefined} disabled={disabled || !!issue || !canCreateServiceProjects(record, actor)} onClick={() => void submit()}>{!serviceProjectCreationEnabled ? '创建项目（待开发）' : working ? '创建中…' : '创建项目'}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;

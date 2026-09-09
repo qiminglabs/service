@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { DemoAssistant } from '@/components/demo-assistant';
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -34,7 +35,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body>{children}</body>
+      <body>{children}<DemoAssistant /></body>
     </html>
   );
 }

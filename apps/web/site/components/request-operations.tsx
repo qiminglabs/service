@@ -31,6 +31,7 @@ import { downloadFile, storedFile } from '@/lib/service-requests';
 import type {
   ServiceRequest,
   CatalogService,
+  CustomerRef,
   InternalUser,
   StoredFile,
 } from '@/lib/service-requests';
@@ -58,6 +59,7 @@ import type {
 } from '@/lib/request-operations';
 
 type Props = {
+  customers: CustomerRef[];
   services: CatalogService[];
   record: ServiceRequest;
   users: InternalUser[];
@@ -131,6 +133,7 @@ function Summary({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function RequestOperationsTabs({
+  customers,
   services,
   record,
   users,
@@ -215,7 +218,7 @@ export function RequestOperationsTabs({
           aria-label="服务请求工作区"
         >
           {shownTabs.map(([value, label, count]) => (
-            <TabsTrigger key={value} value={value}>
+            <TabsTrigger key={value} value={value} data-assistant-tab={label}>
               {label}
               {count !== null && count > 0 && <span>{count}</span>}
             </TabsTrigger>
@@ -460,6 +463,7 @@ export function RequestOperationsTabs({
             </TabsContent>
             <TabsContent value="evaluations">
               <RequestAssessment
+                customers={customers}
                 services={services}
                 record={record}
                 users={users}

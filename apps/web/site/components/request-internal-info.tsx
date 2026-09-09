@@ -26,7 +26,7 @@ import type {
   InternalUser,
 } from '@/lib/service-requests';
 
-type CollaboratorOption = { id: string; name: string; details: string; disabled?: boolean };
+type CollaboratorOption = { id: string; name: string; details: string; disabled?: boolean; fixed?: boolean };
 
 function CollaboratorCard({
   title,
@@ -184,7 +184,8 @@ function CollaboratorCard({
                   </span>
                   <small title={person.details}>{person.details}</small>
                 </span>
-                {!readonly && allowRemove && (
+                {person.fixed && <span className="sr-help" title="客户所有人为固定内部协作人，不允许移除">客户所有人</span>}
+                {!readonly && allowRemove && !person.fixed && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -259,12 +260,14 @@ export function RequestExternalCollaborators({
 }
 
 export function RequestInternalInfo({
+  ownerUserId,
   users,
   value,
   readonly,
   busy,
   onChange,
 }: {
+  ownerUserId?: string;
   users: InternalUser[];
   value: InternalParticipant[];
   readonly: boolean;
@@ -288,6 +291,7 @@ export function RequestInternalInfo({
         const user = users.find((entry) => entry.id === person.userId);
         return {
           id: person.userId,
+          fixed: person.userId === ownerUserId,
           name: person.name,
           details: [
             fixedIdentityRoles[person.userId],
@@ -309,7 +313,7 @@ export function RequestInternalInfo({
         ])
       }
       onRemove={(id) =>
-        onChange(value.filter((person) => person.userId !== id))
+        id !== ownerUserId && onChange(value.filter((person) => person.userId !== id))
       }
     />
   );

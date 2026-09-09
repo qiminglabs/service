@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   assessmentOf,
+  customerOwner,
   gapApproverOptions,
   assessedEffort,
   currentPlan,
@@ -25,14 +26,16 @@ import {
   isSalesUser,
   applyAssessmentAction,
 } from '@/lib/request-assessment';
+import { assetDayMethod, requestDayRequirements, coverageByMethod, allocationMethodIssue, planDayGaps, formatDayRequirements } from '@/lib/request-asset-coverage';
 import type { AssessmentAction, GapApproval } from '@/lib/request-assessment';
 import { operationIdentities } from '@/lib/internal-users';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import { readLocal } from '@/lib/service-requests';
-import { itemPriceCoefficient, calculateBillableDays, calculateEffortPricing, effortTotalsByMethod } from '@/lib/request-pricing';
-import type { ServiceRequest, InternalUser, CatalogService } from '@/lib/service-requests';
+import { itemMinimumDays, itemPriceCoefficient, calculateBillableDays, calculateEffortPricing, effortTotalsByMethod } from '@/lib/request-pricing';
+import type { ServiceRequest, InternalUser, CatalogService, CustomerRef } from '@/lib/service-requests';
 
 type Props = {
+  customers: CustomerRef[];
   services: CatalogService[];
   record: ServiceRequest;
   actor: OperationActor;
@@ -43,6 +46,13 @@ type Props = {
 };
 type Mode = 'round' | 'effort' | 'plan' | 'gap' | 'decide' | null;
 const fmt = (n: number) => String(Number(n.toFixed(4)));
+const isMinimumDaysIssue = (message: string) => message.includes('预估人天不能小于当前最小人天数量');
+async function readCurrentPricingCatalog(): Promise<CatalogService[]> {
+  const references = await readLocal<{ id: string; payload?: { services?: CatalogService[] } }>('references');
+  const services = references.find(reference => reference.id === 'workspace')?.payload?.services;
+  if (!services) throw new Error('无法读取最新服务目录，请刷新后重试。');
+  return services;
+}
 const stamp = (s: string) => {
   const date = new Date(s);
   if (!Number.isFinite(date.getTime())) return '—';
@@ -107,6 +117,7 @@ function Badge({ children }: { children: ReactNode }) {
   return <span className="sr-assessment-badge">{children}</span>;
 }
 export function RequestAssessment({
+  customers,
   services,
   record,
   actor,
@@ -126,6 +137,8 @@ export function RequestAssessment({
     ? latestDecision : undefined;
   const confirmationLabel = record.status === '已取消' ? '已取消' : customerConfirmed ? '客户已确认' : '等待客户确认';
   const gap = planGap(plan);
+  const dayGaps = planDayGaps(plan);
+  const gapDescription = formatDayRequirements(dayGaps) || `${fmt(gap)} 人天`;
   const approved =
     plan &&
     a.approvals.some(
@@ -142,11 +155,35 @@ export function RequestAssessment({
   const canConfirm = manager && editable && confirmationReady;
   const [externalNote, setExternalNote] = useState('');
   const [dialog, setDialog] = useState<Mode | 'confirm'>(null);
+  const [liveServices, setLiveServices] = useState<CatalogService[]>([]);
+  const [catalogReady, setCatalogReady] = useState(false);
   const [approval, setApproval] = useState<GapApproval | null>(null);
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);
   const [records, setRecords] = useState<ServiceRequest[]>([]);
   const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (dialog !== 'effort') return;
+    let active = true;
+    let version = 0;
+    const refresh = async () => {
+      const current = ++version;
+      setCatalogReady(false);
+      try {
+        const latest = await readCurrentPricingCatalog();
+        if (active && current === version) {
+          setLiveServices(latest);
+          setCatalogReady(true);
+          setError('');
+        }
+      } catch (error) {
+        if (active && current === version) setError(error instanceof Error ? error.message : '无法读取最新服务目录。');
+      }
+    };
+    void refresh();
+    window.addEventListener('focus', refresh);
+    return () => { active = false; window.removeEventListener('focus', refresh); };
+  }, [dialog]);
   useEffect(() => {
     let active = true;
     readLocal<ServiceRequest>('requests')
@@ -172,15 +209,20 @@ export function RequestAssessment({
     setError('');
     try {
       const fresh = await readLocal<ServiceRequest>('requests');
+      const pricingServices = action.type === 'effort' ? await readCurrentPricingCatalog() : services;
+      if (action.type === 'effort') setLiveServices(pricingServices);
+      const references = action.type === 'plan' ? await readLocal<{ id: string; payload?: { customers?: CustomerRef[]; users?: InternalUser[] } }>('references') : [];
+      const workspace = references.find(reference => reference.id === 'workspace')?.payload;
       const next = applyAssessmentAction(
         record,
         action,
         actor,
         assets,
-        users,
+        action.type === 'plan' ? (workspace?.users ?? []) : users,
         fresh,
         undefined,
-        services,
+        pricingServices,
+        action.type === 'plan' ? (workspace?.customers ?? []) : customers,
       );
       const ok = await save(
         next,
@@ -200,6 +242,7 @@ export function RequestAssessment({
   }
   function open(v: Mode | 'confirm') {
     setError('');
+    if (v === 'effort') setCatalogReady(false);
     if (v === 'confirm') setExternalNote(a.confirmation?.externalNote ?? '');
     setDialog(v);
   }
@@ -381,12 +424,7 @@ export function RequestAssessment({
                     {fmt(planAssetDays(plan))} <small>人天</small>
                   </strong>
                 </span>
-                <span>
-                  需额外额度
-                  <strong>
-                    {fmt(gap)} <small>人天</small>
-                  </strong>
-                </span>
+                {dayGaps.length ? dayGaps.map(row => <span key={row.method}>{row.method}资产缺少<strong>{fmt(row.days)} <small>人天</small></strong></span>) : <span>资产缺少<strong>{fmt(gap)} <small>人天</small></strong></span>}
               </div>
               <div className="sr-assessment-allocations">
                 {plan.allocations.length ? (
@@ -407,7 +445,7 @@ export function RequestAssessment({
               {gap > 1e-8 && (
                 <div className="sr-assessment-gap">
                   <div>
-                    <strong>资产缺少 {fmt(gap)} 人天</strong>
+                    <strong>资产缺少：{gapDescription}</strong>
                     <p>
                       {approved
                         ? '额度特批已通过，可发起客户确认。'
@@ -440,7 +478,7 @@ export function RequestAssessment({
               {currentApprovals.map((v) => (
                 <article key={v.id}>
                   <div>
-                    <strong>{fmt(v.days)} 人天额度特批</strong>{' '}
+                    <strong>{formatDayRequirements(v.gaps ?? dayGaps) || `${fmt(v.days)} 人天`}额度特批</strong>{' '}
                     <Badge>{v.state}</Badge>
                     <p>{v.reason}</p>
                     <small>
@@ -558,7 +596,8 @@ export function RequestAssessment({
           ) : <AssessmentForm
             key={`${dialog}:${approval?.id}`}
             mode={dialog}
-            services={services}
+            customers={customers}
+            services={dialog === 'effort' ? liveServices : services}
             record={record}
             users={users}
             actor={actor}
@@ -566,6 +605,7 @@ export function RequestAssessment({
             records={records}
             approval={approval}
             disabled={disabled}
+            pricingReady={dialog !== 'effort' || catalogReady}
             error={error}
             run={run}
             close={() => setDialog(null)}
@@ -576,7 +616,9 @@ export function RequestAssessment({
   );
 }
 function AssessmentForm({
+  customers,
   services,
+  pricingReady,
   mode,
   record,
   users,
@@ -589,8 +631,10 @@ function AssessmentForm({
   run,
   close,
 }: {
+  customers: CustomerRef[];
   mode: Mode;
   services: CatalogService[];
+  pricingReady: boolean;
   record: ServiceRequest;
   users: InternalUser[];
   actor: OperationActor;
@@ -617,20 +661,14 @@ function AssessmentForm({
   catch (error) { pricingIssue = error instanceof Error ? error.message : '请填写完整的预估人天。'; }
 
   const [effortNote, setEffortNote] = useState(a.effort?.note ?? '');
+  const requirements = requestDayRequirements(record);
   const [amounts, setAmounts] = useState<Record<string, string>>(
     Object.fromEntries(
-      plan?.allocations.map((v) => [v.assetId, String(v.days)]) ?? [],
+      plan?.allocations.filter(v => { const asset = assets.find(asset => asset.id === v.assetId); return asset && requirements.some(row => row.method === assetDayMethod(asset)); }).map((v) => [v.assetId, String(v.days)]) ?? [],
     ),
   );
-  const salesUsers = users.filter(isSalesUser);
-  const [salesId, setSalesId] = useState(
-    plan?.salesId ??
-      (salesUsers.some((u) => u.id === record.createdById)
-        ? record.createdById!
-        : salesUsers.length === 1
-          ? salesUsers[0].id
-          : ''),
-  );
+  const sales = customerOwner(record, customers, users);
+  const salesId = sales?.id ?? '';
   const [approverId, setApproverId] = useState('');
   const approvers = gapApproverOptions(users, actor.id, a.managerId);
   const customerAssets = assets.filter(
@@ -638,6 +676,10 @@ function AssessmentForm({
       v.customerId === record.customerId &&
       ['启用', '使用中'].includes(v.status),
   );
+  const allocationPreview = Object.entries(amounts).filter(([, value]) => value.trim() !== '' && Number(value) !== 0)
+    .map(([assetId, value]) => { const asset = customerAssets.find(asset => asset.id === assetId); return { assetId, days: Number(value), name: asset?.name ?? assetId, method: asset && assetDayMethod(asset) }; });
+  const coverage = coverageByMethod(requirements, allocationPreview);
+  const allocationIssue = allocationMethodIssue(record, allocationPreview, customerAssets);
   const titles: Record<string, string> = {
     round: '材料评估',
     effort: '核定人天',
@@ -664,13 +706,16 @@ function AssessmentForm({
     <>
       <DialogHeader>
         <DialogTitle>{titles[mode ?? '']}</DialogTitle>
+        {mode === 'round' && (
+          <DialogDescription>材料评估通过后，申请项及材料将锁定，不再支持修改。</DialogDescription>
+        )}
         {mode !== 'round' && (
           <DialogDescription>
             {mode === 'effort'
-              ? '按服务目录填写预估人天，计价人天 = 预估人天 × 计价系数。后续按计价人天消耗资产；计价总人天变化后需重新关联服务依据。'
+              ? '预估人天不得低于目录最新的最小人天数量。计价人天 = 预估人天 × 计价系数；计价总人天变化后需重新关联服务依据。'
               : mode === 'plan'
-                ? '关联客户资产并锁定人天，不足部分由销售发起额度特批。'
-                : `额外额度 ${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}
+                ? '远程计价人天仅锁定远程资产，现场计价人天仅锁定现场资产；各类资产缺少数量分别核算。'
+                : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`}
           </DialogDescription>
         )}
       </DialogHeader>
@@ -704,14 +749,17 @@ function AssessmentForm({
               <thead><tr><th>服务目录</th><th>预估人天 <em>*</em></th><th>计价系数</th><th>计价人天</th></tr></thead>
               <tbody>{record.items.map(item => {
                 const coefficient = itemPriceCoefficient(item, services);
+                const minimumDays = itemMinimumDays(item, services);
                 const estimate = Number(estimates[item.id]);
+                const belowMinimum = !!estimates[item.id]?.trim() && Number.isFinite(estimate) && minimumDays !== undefined && estimate < minimumDays;
                 const billable = estimates[item.id]?.trim() && Number.isFinite(estimate) && estimate > 0 && coefficient !== undefined
                   ? calculateBillableDays(estimate, coefficient) : undefined;
                 return <tr key={item.id}>
                   <td><strong>{item.serviceName}</strong><small>{item.method}</small></td>
-                  <td><Input aria-label={`${item.serviceName} ${item.id} 预估人天`} type="number" min="0.01" max="100000" step="0.01"
-                    placeholder="填写人天" value={estimates[item.id] ?? ''} disabled={disabled}
-                    onChange={event => setEstimates(old => ({ ...old, [item.id]: event.target.value }))} /></td>
+                  <td><Input aria-label={`${item.serviceName} ${item.id} 预估人天`} aria-describedby={`minimum-days-${item.id}`} aria-invalid={belowMinimum} type="number" min={minimumDays ?? 0.01} max="100000" step="0.01"
+                    placeholder="填写人天" value={estimates[item.id] ?? ''} disabled={disabled || !pricingReady}
+                    onChange={event => setEstimates(old => ({ ...old, [item.id]: event.target.value }))} />
+                    <small id={`minimum-days-${item.id}`} className="sr-pricing-minimum" data-invalid={belowMinimum}>{minimumDays === undefined ? '最小人天数量未获取' : `最少 ${fmt(minimumDays)} 人天`}</small></td>
                   <td><span aria-label={`${item.serviceName} 计价系数（只读）`}>{coefficient === undefined ? '未配置' : `× ${fmt(coefficient)}`}</span></td>
                   <td><output aria-label={`${item.serviceName} 计价人天`}>{billable === undefined ? '—' : fmt(billable)}</output></td>
                 </tr>;
@@ -719,11 +767,11 @@ function AssessmentForm({
             </table></div>
             <div className="sr-pricing-totals" aria-live="polite">
               {pricing ? effortTotalsByMethod(record, pricing.lines).flatMap(total => [
-                <span key={`${total.method}-billable`}>计价{total.method}总人天 <strong>{fmt(total.days)}</strong></span>,
                 <span key={`${total.method}-estimated`}>预估{total.method}总人天 <strong>{fmt(total.estimatedDays)}</strong></span>,
-              ]) : <><span>计价总人天 <strong>—</strong></span><span>预估总人天 <strong>—</strong></span></>}
+                <span key={`${total.method}-billable`}>计价{total.method}总人天 <strong>{fmt(total.days)}</strong></span>,
+              ]) : <><span>预估总人天 <strong>—</strong></span><span>计价总人天 <strong>—</strong></span></>}
             </div>
-            {pricingIssue && <p className="sr-help">{pricingIssue}</p>}
+            {pricingIssue && !isMinimumDaysIssue(pricingIssue) && <p className="sr-help">{pricingIssue}</p>}
             <Field title="备注（选填）">
               <Textarea
                 value={effortNote}
@@ -737,73 +785,37 @@ function AssessmentForm({
         )}
         {mode === 'plan' && (
           <>
-            <div className="sr-ops-form-row">
-              <Field title="计价总人天">
-                <Input value={`${fmt(assessed ?? 0)} 人天`} readOnly />
-              </Field>
-              <Field title="负责销售 *">
-                <NativeSelect
-                  value={salesId}
-                  disabled={disabled}
-                  onChange={(e) => setSalesId(e.target.value)}
-                >
-                  <option value="">请选择销售</option>
-                  {salesUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </Field>
-            </div>
-            <div className="sr-assessment-asset-editor">
-              {customerAssets.map((v) => {
-                const available = assetAvailable(v, records, record.id);
-                return (
-                  <div key={v.id}>
-                    <span>
-                      <strong>{v.name}</strong>
-                      <small>
-                        {v.id} ·{' '}
-                        {available === null
-                          ? '余额未维护'
-                          : `可锁定 ${fmt(available)} 人天`}
-                      </small>
-                    </span>
-                    <Input
-                      aria-label={`${v.name} ${v.id} 锁定人天`}
-                      placeholder="锁定人天"
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      max={available ?? 0}
-                      disabled={disabled || available === null}
-                      value={amounts[v.id] ?? ''}
-                      onChange={(e) =>
-                        setAmounts({ ...amounts, [v.id]: e.target.value })
-                      }
-                    />
+            <Field title="负责销售">
+              <Input value={sales?.name ?? '未配置有效的客户所有人'} readOnly aria-readonly="true" />
+              <small className="sr-help">使用客户所有人，由客户资料统一维护。</small>
+            </Field>
+            <div className="sr-asset-method-groups">
+              {coverage.map(row => {
+                const matchingAssets = customerAssets.filter(asset => assetDayMethod(asset) === row.method);
+                return <section className="sr-asset-method-group" key={row.method} aria-label={`${row.method}人天资产`}>
+                  <div className="sr-asset-method-heading"><h4>{row.method}人天</h4><span>计价需求 <strong>{fmt(row.days)}</strong> 人天</span></div>
+                  <div className="sr-assessment-asset-editor">
+                    {matchingAssets.map(asset => {
+                      const available = assetAvailable(asset, records, record.id);
+                      const maxDays = Math.max(0, Math.min(available ?? 0, row.days - (row.lockedDays - (Number(amounts[asset.id]) || 0))));
+                      return <div key={asset.id}>
+                        <span><strong>{asset.name}</strong><small>{asset.id} · {available === null ? '余额未维护' : `可锁定 ${fmt(available)} 人天`}</small></span>
+                        <Input aria-label={`${asset.name} ${asset.id} 锁定${row.method}人天`} placeholder="锁定人天" type="number" min="0" step="0.0001" max={maxDays}
+                          disabled={disabled || available === null} value={amounts[asset.id] ?? ''}
+                          onChange={event => setAmounts(old => ({ ...old, [asset.id]: event.target.value }))} />
+                      </div>;
+                    })}
+                    {!matchingAssets.length && <p className="sr-help">暂无可用的{row.method}人天资产。</p>}
                   </div>
-                );
+                  <div className="sr-asset-method-summary" aria-live="polite">
+                    <span>已选锁定 {fmt(row.lockedDays)} 人天</span>
+                    {row.gap > 0 ? <strong className="sr-assessment-gap-preview">{row.method}资产缺少：{fmt(row.gap)} 人天</strong>
+                      : <span>{row.method}资产已足额覆盖</span>}
+                  </div>
+                </section>;
               })}
-              {!customerAssets.length && (
-                <p>当前客户暂无有效资产，可按全部人天发起额度特批。</p>
-              )}
             </div>
-            <p className="sr-assessment-gap-preview" aria-live="polite">
-              预计缺口：
-              {fmt(
-                Math.max(
-                  0,
-                  (assessed ?? 0) -
-                    Object.values(amounts).reduce(
-                      (s, v) => s + (Number(v) || 0),
-                      0,
-                    ),
-                ),
-              )}{' '}
-              人天。
-            </p>
+            {allocationIssue && <p className="sr-error" role="alert">{allocationIssue}</p>}
           </>
         )}
         {(mode === 'gap' || mode === 'decide') && (
@@ -837,7 +849,7 @@ function AssessmentForm({
             销售 {approval?.author} 发起：{approval?.reason}
           </p>
         )}
-        {error && (
+        {error && !(mode === 'effort' && isMinimumDaysIssue(error)) && (
           <p className="sr-error" role="alert">
             {error}
           </p>
@@ -878,7 +890,7 @@ function AssessmentForm({
             </Button>
           </>
         ) : (
-          <Button disabled={disabled || (mode === 'effort' && !!pricingIssue)} onClick={() => void submit()}>
+          <Button disabled={disabled || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!sales || !!allocationIssue))} onClick={() => void submit()}>
             {mode === 'round'
               ? '保存评估结论'
               : mode === 'effort'

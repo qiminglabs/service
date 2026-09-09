@@ -3,11 +3,12 @@ import { projectCreationSaveIssue } from './request-projects.ts';
 import { isInternal } from './request-operations.ts';
 import { supplementSaveIssue } from './request-supplements.ts';
 import { customerDecisionIssue } from './request-customer-decision.ts';
-import { assessmentLockIssue, currentPlan } from './request-assessment.ts';
+import { assessmentLockIssue, currentPlan, planSalesOwnerIssue } from './request-assessment.ts';
 import type { OperationActor, RequestOperations } from './request-operations';
 
 export type CatalogService = {
   id: string;
+  version?: number;
   name: string;
   description?: string;
   category: string;
@@ -15,6 +16,8 @@ export type CatalogService = {
   status: string;
   priceUnit: string;
   priceCoefficient?: number;
+  // Retain the catalog storage key; this is the live minimum estimated man-days.
+  defaultQuantity?: number;
   allowedInitiatorSites?: string[];
 };
 export type RequestAudience = 'internal' | 'customer';
@@ -245,6 +248,18 @@ export function requestParticipantsIssue(
     return '请为内部协作人选择有效用户。';
   return null;
 }
+export function customerOwnerRemovalIssue(
+  record: ServiceRequest,
+  previous: ServiceRequest | undefined,
+  customers: CustomerRef[],
+): string | null {
+  const ownerId = customers.find(customer => customer.id === (previous ?? record).customerId)?.ownerUserId;
+  if (ownerId && previous?.internalParticipants?.some(person => person.userId === ownerId)
+    && !record.internalParticipants?.some(person => person.userId === ownerId)) {
+    return '客户所有人为固定内部协作人，不允许移除。';
+  }
+  return null;
+}
 export function reconcileExternalCollaborators(
   contacts: ContactRef[],
 ): ExternalCollaborator[] {
@@ -385,6 +400,14 @@ export function newRequest(
     items: [],
   };
 }
+export function canEditRequestItems(record: ServiceRequest, actor?: OperationActor): boolean {
+  if (record.status === '草稿') return true;
+  const assessment = record.operations?.assessment;
+  return record.status === '待评估' && !!actor?.id && actor.role === 'SmartX 项目经理'
+    && (!assessment?.managerId || assessment.managerId === actor.id)
+    && !assessment?.rounds.some(round => round.outcome === '评估通过');
+}
+
 export function requestIdentityIssue(
   record: ServiceRequest,
   existing?: ServiceRequest,
@@ -416,9 +439,14 @@ export function requestIdentityIssue(
           && !currentPlan(record) && record.operations?.assessment?.rounds.length === 0;
         if (!validReturn) return '仅待评估阶段的负责项目经理可以退回草稿。';
       }
-      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'items'] as const;
+      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate'] as const;
       if (frozen.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
-        return '提交后基本信息和申请项只读，不支持修改。';
+        return '提交后基本信息只读，不支持修改。';
+      if (JSON.stringify(existing.items) !== JSON.stringify(record.items)
+        && (!canEditRequestItems(existing, actor) || !canEditRequestItems(record, actor)
+          || existing.status !== record.status
+          || JSON.stringify(existing.operations?.assessment) !== JSON.stringify(record.operations?.assessment)))
+        return '仅负责项目经理可在材料评估通过前修改申请项；通过后申请项只读锁定。';
       const history = existing.operations?.activities ?? [];
       if (history.some((event, index) => JSON.stringify(event) !== JSON.stringify(record.operations?.activities[index])))
         return '已记录的活动不支持修改或删除。';
@@ -826,12 +854,18 @@ export async function saveLocal(
             const changedPlan = JSON.stringify(currentPlan(serviceRequest)) !== JSON.stringify(previous ? currentPlan(previous) : undefined);
             const startingConfirmation = serviceRequest.operations?.assessment?.confirmation && !previous?.operations?.assessment?.confirmation;
             const changedEffort = JSON.stringify(serviceRequest.operations?.assessment?.effort) !== JSON.stringify(previous?.operations?.assessment?.effort);
-            if (!changedPlan && !startingConfirmation && !changedEffort) { records.put(serviceRequest); return; }
+            const changedParticipants = JSON.stringify(serviceRequest.internalParticipants) !== JSON.stringify(previous?.internalParticipants);
+            const checkAssessment = changedPlan || startingConfirmation || changedEffort;
+            if (!checkAssessment && !changedParticipants) { records.put(serviceRequest); return; }
             const all = records.getAll();
             all.onsuccess = () => {
               const workspace = transaction.objectStore('references').get('workspace');
               workspace.onsuccess = () => {
-                const lockIssue = effortPricingSaveIssue(serviceRequest, previous, workspace.result?.payload?.services ?? [])
+                const removalIssue = customerOwnerRemovalIssue(serviceRequest, previous, workspace.result?.payload?.customers ?? []);
+                if (removalIssue) { reject(new RequestIdentityError(removalIssue)); transaction.abort(); return; }
+                if (!checkAssessment) { records.put(serviceRequest); return; }
+                const ownerIssue = changedPlan ? planSalesOwnerIssue(serviceRequest, workspace.result?.payload?.customers ?? [], workspace.result?.payload?.users ?? []) : null;
+                const lockIssue = ownerIssue ?? effortPricingSaveIssue(serviceRequest, previous, workspace.result?.payload?.services ?? [])
                   ?? assessmentLockIssue(serviceRequest, all.result.map(normalizeStoredRequest), workspace.result?.payload?.assets ?? []);
                 if (lockIssue) { reject(new RequestIdentityError(lockIssue)); transaction.abort(); }
                 else records.put(serviceRequest);

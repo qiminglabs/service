@@ -12,10 +12,16 @@ export type ServiceProject = {
   managerId: string; manager: string; createdAt: string; status: '待启动'; workOrders: ServiceWorkOrder[];
 };
 export type ProjectCreation = { id: string; at: string; actorId: string; actor: string; projects: ServiceProject[] };
-export function canCreateServiceProjects(record: ServiceRequest, actor: OperationActor) {
+// Re-enable only after the service project module is ready.
+export const serviceProjectCreationEnabled: boolean = false;
+export const serviceProjectPendingMessage = '服务项目待开发，暂不可创建。';
+export function isProjectCreationEligible(record: ServiceRequest, actor: OperationActor) {
   return record.status === '待受理' && actor.role === 'SmartX 项目经理' && Boolean(actor.id)
     && (!record.operations?.assessment?.managerId || record.operations.assessment.managerId === actor.id)
     && !record.operations?.projectCreation;
+}
+export function canCreateServiceProjects(record: ServiceRequest, actor: OperationActor) {
+  return serviceProjectCreationEnabled && isProjectCreationEligible(record, actor);
 }
 export function projectSplitIssue(record: ServiceRequest, groups: ProjectGroup[]): string | null {
   if (!record.items.length) return '请求没有申请项，无法创建项目。';
@@ -36,6 +42,7 @@ export function projectSplitIssue(record: ServiceRequest, groups: ProjectGroup[]
   return null;
 }
 export function createServiceProjects(record: ServiceRequest, actor: OperationActor, groups: ProjectGroup[], id = crypto.randomUUID(), at = new Date().toISOString()): ServiceRequest {
+  if (!serviceProjectCreationEnabled) throw new Error(serviceProjectPendingMessage);
   if (!canCreateServiceProjects(record, actor)) throw new Error('仅待受理请求的负责项目经理可以创建服务项目，且不可重复创建。');
   const issue = projectSplitIssue(record, groups);
   if (issue) throw new Error(issue);
@@ -60,9 +67,10 @@ export function createServiceProjects(record: ServiceRequest, actor: OperationAc
 export function projectCreationSaveIssue(next: ServiceRequest, previous: ServiceRequest | undefined, actor?: OperationActor): string | null {
   const creation = next.operations?.projectCreation, existing = previous?.operations?.projectCreation;
   if (JSON.stringify(creation) === JSON.stringify(existing)) {
-    if (previous?.status === '待受理' && next.status === '已转服务项目') return '请通过创建服务项目完成受理。';
+    if (previous?.status === '待受理' && next.status === '已转服务项目') return serviceProjectCreationEnabled ? '请通过创建服务项目完成受理。' : serviceProjectPendingMessage;
     return null;
   }
+  if (!serviceProjectCreationEnabled) return serviceProjectPendingMessage;
   if (!previous || !actor || !creation || existing) return '已生成的项目和工单不能在请求中覆盖或重复创建。';
   try {
     const expected = createServiceProjects(previous, actor, creation.projects.map(project => ({ id: project.id, name: project.name, note: project.note, itemIds: project.workOrders.map(order => order.sourceItemId) })), creation.id, creation.at);

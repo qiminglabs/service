@@ -1,9 +1,11 @@
 import { roundDays, calculateEffortPricing, type EffortPricingLine, type EffortPricingInput } from './request-pricing.ts';
+import { assetDayMethod, requestDayRequirements, allocationMethodIssue, planDayGaps, formatDayRequirements, type DayMethod, type DayRequirement } from './request-asset-coverage.ts';
 import { portalSwitchIdentities } from './portal-context.ts';
 import { operationIdentities } from './internal-users.ts';
 import type {
   ServiceRequest,
   CatalogService,
+  CustomerRef,
   InternalUser,
   StoredFile,
 } from './service-requests';
@@ -35,13 +37,14 @@ export type AssessmentRound = {
   opinion: string;
   risks: string;
 };
-export type AssetAllocation = { assetId: string; name: string; days: number };
+export type AssetAllocation = { assetId: string; name: string; days: number; method?: DayMethod };
 export type AssessmentPlan = {
   releasedAt?: string;
   id: string;
   roundId: string;
   effort: number;
   allocations: AssetAllocation[];
+  requirements?: DayRequirement[];
   salesId: string;
   salesName: string;
   at: string;
@@ -51,6 +54,7 @@ export type GapApproval = {
   id: string;
   planId: string;
   days: number;
+  gaps?: DayRequirement[];
   reason: string;
   authorId: string;
   author: string;
@@ -79,6 +83,7 @@ export type Assessment = {
     effort: number;
     assetDays: number;
     extraDays: number;
+    extraDaysByMethod?: DayRequirement[];
     externalNote?: string;
     allocations?: AssessmentPlan['allocations'];
   };
@@ -113,7 +118,9 @@ export const assessmentOf = (record: ServiceRequest) =>
   record.operations?.assessment ?? emptyAssessment();
 export const currentPlan = (record: ServiceRequest) => {
   const plan = assessmentOf(record).plans.at(-1);
-  return plan?.releasedAt ? undefined : plan;
+  if (!plan || plan.releasedAt) return undefined;
+  const requirements = plan.requirements ?? requestDayRequirements(record);
+  return requirements.length && !plan.requirements ? { ...plan, requirements } : plan;
 };
 export const assessedEffort = (record: ServiceRequest) =>
   assessmentOf(record).effort?.days ?? currentPlan(record)?.effort;
@@ -184,10 +191,23 @@ export const isProjectManager = (actor: OperationActor) =>
   actor.role === 'SmartX 项目经理';
 export const isSalesUser = (user: InternalUser | undefined) =>
   !!user && user.status === '启用' && /销售/.test(user.department ?? '');
+export function customerOwner(record: ServiceRequest, customers: CustomerRef[], users: InternalUser[]) {
+  const ownerId = customers.find(customer => customer.id === record.customerId)?.ownerUserId;
+  return users.find(user => user.id === ownerId && user.status === '启用');
+}
+export function planSalesOwnerIssue(record: ServiceRequest, customers: CustomerRef[], users: InternalUser[]): string | null {
+  const plan = currentPlan(record);
+  if (!plan) return null;
+  const owner = customerOwner(record, customers, users);
+  if (!owner) return '当前客户未配置有效的客户所有人，请先完善客户资料。';
+  return plan.salesId !== owner.id || plan.salesName !== owner.name
+    ? '负责销售必须为当前客户所有人，请重新打开关联服务依据后保存。' : null;
+}
 export const planAssetDays = (plan?: AssessmentPlan) =>
   roundDays(plan?.allocations.reduce((sum, a) => sum + a.days, 0) ?? 0);
 export const planGap = (plan?: AssessmentPlan) =>
-  roundDays(Math.max(0, (plan?.effort ?? 0) - planAssetDays(plan)));
+  plan?.requirements ? roundDays(planDayGaps(plan).reduce((sum, row) => sum + row.days, 0))
+    : roundDays(Math.max(0, (plan?.effort ?? 0) - planAssetDays(plan)));
 export function assetAvailable(
   asset: RequestAsset,
   records: ServiceRequest[],
@@ -220,6 +240,10 @@ export function assessmentLockIssue(
   const plan = currentPlan(record);
   if (!plan) return null;
   if (plan.effort !== assessedEffort(record)) return '服务依据与计价总人天不一致，请重新关联。';
+  const methodIssue = allocationMethodIssue(record, plan.allocations, assets);
+  if (methodIssue) return methodIssue;
+  if (plan.requirements && JSON.stringify(plan.requirements) !== JSON.stringify(requestDayRequirements(record)))
+    return '远程、现场计价人天已变化，请重新关联服务依据。';
   for (const allocation of plan.allocations) {
     const asset = assets.find(
       (a) =>
@@ -245,6 +269,7 @@ export function applyAssessmentAction(
   records: ServiceRequest[],
   now = new Date().toISOString(),
   services: CatalogService[] = [],
+  customers: CustomerRef[] = [],
 ): ServiceRequest {
   if (!actor.id || !isInternal(actor.role))
     throw new Error('仅内部人员可处理评估工作。');
@@ -347,7 +372,8 @@ export function applyAssessmentAction(
       author: actor.name,
       note: action.note?.trim() ?? '',
     };
-    if (plan && plan.effort !== pricing.days) {
+    const updatedRequirements = requestDayRequirements({ ...record, operations: { ...operationsOf(record), assessment } });
+    if (plan && (plan.effort !== pricing.days || JSON.stringify(updatedRequirements) !== JSON.stringify(requestDayRequirements(record)))) {
       assessment.plans.at(-1)!.releasedAt = now;
       assessment.approvals.forEach((a) => {
         if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
@@ -362,8 +388,9 @@ export function applyAssessmentAction(
     const effort = assessedEffort(record);
     if (effort === undefined) throw new Error('请先核定人天，再关联服务依据。');
     positive(effort);
-    const sales = users.find((u) => u.id === action.salesId && isSalesUser(u));
-    if (!sales) throw new Error('请选择负责本请求的销售。');
+    const sales = customerOwner(record, customers, users);
+    if (!sales) throw new Error('当前客户未配置有效的客户所有人，请先完善客户资料。');
+    if (action.salesId && action.salesId !== sales.id) throw new Error('负责销售必须为当前客户所有人，请重新打开关联服务依据后保存。');
     const seen = new Set<string>();
     const allocations = action.allocations.map((a) => {
       positive(a.days);
@@ -376,15 +403,18 @@ export function applyAssessmentAction(
           ['启用', '使用中'].includes(v.status),
       );
       if (!asset) throw new Error('请选择当前客户有效的资产。');
-      return { ...a, name: asset.name };
+      return { ...a, name: asset.name, method: assetDayMethod(asset) };
     });
     if (allocations.reduce((sum, a) => sum + a.days, 0) > effort + 1e-8)
       throw new Error('锁定人天不能超过计价总人天。');
+    const methodIssue = allocationMethodIssue(record, allocations, assets);
+    if (methodIssue) throw new Error(methodIssue);
     assessment.plans.push({
       id: crypto.randomUUID(),
       roundId: round.id,
       effort: effort,
       allocations,
+      requirements: requestDayRequirements(record),
       salesId: sales.id,
       salesName: sales.name,
       at: now,
@@ -404,6 +434,8 @@ export function applyAssessmentAction(
       actor.role !== 'SmartX 销售经理'
     )
       throw new Error('仅方案指定的销售可发起额度特批。');
+    const methodIssue = allocationMethodIssue(record, plan.allocations, assets);
+    if (methodIssue) throw new Error(methodIssue);
     const gap = planGap(plan);
     positive(gap);
     text(action.reason, '特批原因');
@@ -430,6 +462,7 @@ export function applyAssessmentAction(
       id: crypto.randomUUID(),
       planId: plan.id,
       days: gap,
+      gaps: planDayGaps(plan),
       reason: action.reason.trim(),
       authorId: actor.id,
       author: actor.name,
@@ -440,7 +473,7 @@ export function applyAssessmentAction(
     });
     category = '审批';
     title = '销售发起额度特批';
-    detail = `缺口 ${gap} 人天 · ${action.reason}`;
+    detail = `缺口 ${formatDayRequirements(planDayGaps(plan)) || `${gap} 人天`} · ${action.reason}`;
   } else if (action.type === 'gap-decide') {
     const approval = assessment.approvals.find((a) => a.id === action.id);
     if (
@@ -482,6 +515,7 @@ export function applyAssessmentAction(
       effort: plan.effort,
       assetDays: planAssetDays(plan),
       extraDays: gap,
+      extraDaysByMethod: planDayGaps(plan),
       externalNote: action.externalNote?.trim() ?? '',
       allocations: structuredClone(plan.allocations),
     };

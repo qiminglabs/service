@@ -10,7 +10,10 @@
     "build": "vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
-    "format": "oxfmt"
+    "format": "oxfmt",
+    "index:assistant": "node scripts/build-assistant-index.mjs",
+    "predev": "npm run index:assistant",
+    "prebuild": "npm run index:assistant"
   },
   "dependencies": {
     "react": "19.2.6",

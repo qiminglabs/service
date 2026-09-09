@@ -23,7 +23,7 @@ import { RequestContactField } from '@/components/request-contact-field';
 import { RequestStatusProgress } from '@/components/request-status-progress';
 import { DateField } from '@/components/date-field';
 import { RequestProjectDialog, RequestProjects } from '@/components/request-projects';
-import { canCreateServiceProjects } from '@/lib/request-projects';
+import { isProjectCreationEligible } from '@/lib/request-projects';
 import { RequestOperationsTabs } from '@/components/request-operations';
 import { emptyAssessment, applyAssessmentAction, isProjectManager, repairCustomerRequestApprover } from '@/lib/request-assessment';
 import { operationIdentities } from '@/lib/internal-users';
@@ -54,8 +54,10 @@ import {
 } from '@/components/ui/sheet';
 import {
   canAccessRequest,
+  canEditRequestItems,
   canAddExternalCollaborators,
   customerCollaborationIssue,
+  customerOwnerRemovalIssue,
   canCreateRequest,
   requestCreationAccessIssue,
   checkFile,
@@ -174,9 +176,8 @@ export function RequestWorkspace(props: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState('');
   const [pendingItem, setPendingItem] = useState<RequestItem | null>(null);
-  const pendingServiceContent = props.services
-    .find((service) => service.id === pendingItem?.serviceId)
-    ?.description?.trim();
+  const pendingService = props.services.find((service) => service.id === pendingItem?.serviceId);
+  const pendingServiceContent = pendingService?.description?.trim();
   const [itemError, setItemError] = useState('');
   const [materialTarget, setMaterialTarget] = useState<{
     itemId: string;
@@ -202,7 +203,12 @@ export function RequestWorkspace(props: Props) {
         }
         const visible = records.filter((record) => canAccessRequest(record, access));
         setRequests(visible.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
-        setDraft((current) => current && !visible.some((record) => record.id === current.id) ? null : current);
+        setDraft((current) => {
+          if (!current) return current;
+          const latest = visible.find(record => record.id === current.id);
+          if (!latest) return null;
+          return current.status === '待评估' ? latest : current;
+        });
         setReady(true);
         setError('');
       })
@@ -287,7 +293,7 @@ export function RequestWorkspace(props: Props) {
     }
   }
   async function savePendingItem() {
-    if (!draft || !pendingItem || draft.status !== '草稿') return;
+    if (!draft || !pendingItem || !canEditRequestItems(draft, props.currentActor)) return;
     const missing = itemBasicIssues(pendingItem);
     if (missing.length) {
       setItemError(`请补充：${missing.join('、')}`);
@@ -321,7 +327,7 @@ export function RequestWorkspace(props: Props) {
     }
     const exists = draft.items.some((i) => i.id === pendingItem.id);
     if (
-      await persist(
+      await persistItemChanges(
         {
           ...draft,
           items: exists
@@ -339,9 +345,15 @@ export function RequestWorkspace(props: Props) {
       setItemError('');
     }
   }
+  async function persistItemChanges(record: ServiceRequest, message: string) {
+    const next = record.status === '待评估'
+      ? appendActivity(record, props.currentActor, '评估', '修改申请项', message)
+      : record;
+    return persist(next, message);
+  }
   async function saveItemMaterials(id: string, materials: ItemMaterial[]) {
-    if (!draft || draft.status !== '草稿') return false;
-    const ok = await persist(
+    if (!draft || !canEditRequestItems(draft, props.currentActor)) return false;
+    const ok = await persistItemChanges(
       {
         ...draft,
         items: draft.items.map((existing) =>
@@ -353,6 +365,7 @@ export function RequestWorkspace(props: Props) {
     return ok;
   }
   const readonly = draft?.status !== '草稿';
+  const itemsReadonly = !draft || !canEditRequestItems(draft, props.currentActor);
   const returnNotice = draft ? requestReturnNotice(draft) : null;
   const issues = draft ? requestIssues(draft, { ...props, audience }) : [];
   const materialItem = draft?.items.find(
@@ -391,6 +404,8 @@ export function RequestWorkspace(props: Props) {
 
   function updateCollaborators(patch: Partial<Pick<ServiceRequest, 'externalCollaborators' | 'internalParticipants'>>) {
     if (!draft || busy) return;
+    const removalIssue = customerOwnerRemovalIssue({ ...draft, ...patch }, draft, props.customers);
+    if (removalIssue) { setError(removalIssue); return; }
     const customerAddition = props.currentRole === '客户' && 'externalCollaborators' in patch && !('internalParticipants' in patch);
     if (customerAddition) {
       if (!canAddExternalCollaborators(draft, access)) return;
@@ -558,7 +573,7 @@ export function RequestWorkspace(props: Props) {
         </>
       ) : (
         <>
-          <header className="detail-heading">
+          <header className="detail-heading" data-assistant-status={draft.status}>
             <div>
               <button
                 type="button"
@@ -591,7 +606,7 @@ export function RequestWorkspace(props: Props) {
               </p>
             </div>
             <div className="detail-actions">
-              {canCreateServiceProjects(draft, props.currentActor) && <Button className="ct-button ct-button--primary" disabled={busy} onClick={() => setProjectOpen(true)}><Plus size={16} />创建服务项目</Button>}
+              {isProjectCreationEligible(draft, props.currentActor) && <Button className="ct-button ct-button--primary" disabled={busy} onClick={() => setProjectOpen(true)}><Plus size={16} />创建服务项目</Button>}
               {draft.status === '待评估' && isProjectManager(props.currentActor) && (!draft.operations?.assessment?.managerId || draft.operations.assessment.managerId === props.currentActor.id) && (
                 <Button variant="outline" className="ct-button ct-button--ordinary" disabled={busy} onClick={() => { setError(''); setReturnDraftReason(''); setReturnDraftOpen(true); }}>退回草稿</Button>
               )}
@@ -637,7 +652,7 @@ export function RequestWorkspace(props: Props) {
               </p>
             </section>
           )}
-              <RequestOperationsTabs services={props.services} key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
+              <RequestOperationsTabs customers={props.customers} services={props.services} key={draft.id} customerId={props.currentCustomerId} record={draft} users={props.users} assets={props.assets} actor={props.currentActor} busy={busy} save={persist} sidebar={
             <aside className="sr-collaboration-column" aria-label="协作人">
               <RequestExternalCollaborators
                 contacts={props.contacts.filter(contact => contact.customerId === draft.customerId)}
@@ -651,6 +666,7 @@ export function RequestWorkspace(props: Props) {
                 }
               />
               {isInternal(props.currentRole) && <RequestInternalInfo
+                ownerUserId={props.customers.find(customer => customer.id === draft.customerId)?.ownerUserId}
                 users={props.users}
                 value={draft.internalParticipants ?? []}
                 readonly={false}
@@ -740,9 +756,9 @@ export function RequestWorkspace(props: Props) {
                     <h3>
                       申请项 <span>{draft.items.length}</span>
                     </h3>
-                    <p>{readonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
+                    <p>{itemsReadonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
                   </div>
-                  {!readonly && (
+                  {!itemsReadonly && (
                     <Button
                       variant="outline"
                       disabled={busy}
@@ -829,12 +845,12 @@ export function RequestWorkspace(props: Props) {
                                       }
                                       aria-label={
                                         requirement.name +
-                                        (readonly || complete
+                                        (itemsReadonly || complete
                                           ? '，查看材料'
                                           : '，补充材料')
                                       }
                                     >
-                                      {readonly || complete
+                                      {itemsReadonly || complete
                                         ? '查看材料'
                                         : '补充材料'}
                                       <ChevronRight size={13} />
@@ -853,10 +869,10 @@ export function RequestWorkspace(props: Props) {
                                   setAddOpen(true);
                                 }}
                               >
-                                {readonly ? '查看基础信息' : '编辑基础信息'}
+                                {itemsReadonly ? '查看基础信息' : '编辑基础信息'}
                               </Button>
 
-                              {!readonly && (
+                              {!itemsReadonly && (
                                 <button
                                   className="sr-muted-button"
                                   disabled={busy}
@@ -909,7 +925,7 @@ export function RequestWorkspace(props: Props) {
           key={materialItem.id + ':' + materialRequirement.id}
           item={materialItem}
           requirement={materialRequirement}
-          readonly={readonly}
+          readonly={itemsReadonly}
           busy={busy}
           error={error}
           onClose={() => setMaterialTarget(null)}
@@ -1038,7 +1054,7 @@ export function RequestWorkspace(props: Props) {
         <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog">
           <DialogHeader>
             <DialogTitle>
-              {readonly && pendingItem
+              {itemsReadonly && pendingItem
                 ? '申请项基础信息'
                 : pendingItem &&
                     draft?.items.some((i) => i.id === pendingItem.id)
@@ -1055,7 +1071,7 @@ export function RequestWorkspace(props: Props) {
                 <div className="sr-selected-service">
                   <div>
                     <strong>{pendingItem.serviceName}</strong>
-                    <p>{pendingItem.serviceId}</p>
+                    <p>{pendingItem.serviceId} · 目录版本 {pendingService ? `v${pendingService.version ?? 1}` : '—'}</p>
                     {pendingServiceContent && (
                       <p className="sr-selected-service-content">
                         服务内容：{pendingServiceContent}
@@ -1081,7 +1097,7 @@ export function RequestWorkspace(props: Props) {
                     (o) => o.customerId === draft?.customerId,
                   )}
                   customerId={draft?.customerId ?? ''}
-                  readonly={readonly}
+                  readonly={itemsReadonly}
                   busy={busy}
                   update={(patch) =>
                     setPendingItem((item) =>
@@ -1156,9 +1172,9 @@ export function RequestWorkspace(props: Props) {
                 setItemError('');
               }}
             >
-              {readonly ? '关闭' : '取消'}
+              {itemsReadonly ? '关闭' : '取消'}
             </Button>
-            {pendingItem && !readonly && (
+            {pendingItem && !itemsReadonly && (
               <Button disabled={busy} onClick={() => void savePendingItem()}>
                 <Save size={15} />
                 {busy ? '正在保存…' : '保存申请项'}
@@ -1178,7 +1194,7 @@ export function RequestWorkspace(props: Props) {
           <DialogHeader>
             <DialogTitle>移除此申请项？</DialogTitle>
             <DialogDescription>
-              该项的填写内容和已保存附件将一并从草稿中移除，其他申请项不受影响。
+              该项的填写内容和已保存附件将一并从请求中移除，其他申请项不受影响。
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -1196,11 +1212,11 @@ export function RequestWorkspace(props: Props) {
             </Button>
             <Button
               variant="destructive"
-              disabled={busy}
+              disabled={busy || itemsReadonly}
               onClick={async () => {
                 if (
-                  draft &&
-                  (await persist(
+                  draft && !itemsReadonly &&
+                  (await persistItemChanges(
                     {
                       ...draft,
                       items: draft.items.filter((i) => i.id !== removeId),
@@ -1245,8 +1261,7 @@ export function RequestWorkspace(props: Props) {
             <DialogTitle>确认提交服务请求</DialogTitle>
             <DialogDescription>
               共 {draft?.items.length}{' '}
-              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX 销售经理
-              核查材料、服务范围和依据。这不是客户对计费的确认。
+              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX 核查材料、服务范围和依据。
             </DialogDescription>
           </DialogHeader>
           {error && (

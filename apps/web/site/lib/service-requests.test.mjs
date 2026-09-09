@@ -22,6 +22,7 @@ import {
   reconcileExternalCollaborators,
   reconcileParticipants,
   requestParticipantsIssue,
+  customerOwnerRemovalIssue,
   materialFiles,
   withMaterialFiles,
   saveMaterialFile,
@@ -257,7 +258,7 @@ test('客户协作人按联系人编号去重并保存联系方式快照', () =>
     },
   ]);
 });
-test('内部协作人按用户去重，只保存用户编号和姓名，可移除所有人', () => {
+test('内部协作人按用户去重，只保存用户编号和姓名，空列表格式有效', () => {
   const users = [
     {
       id: 'u1',
@@ -615,4 +616,23 @@ test('legacy converted requests keep their data and completed progress after sta
     const record = { ...normalized, status };
     assert.equal(normalizeStoredRequest(record), record);
   }
+});
+
+
+test('当前客户所有人已在内部协作人中时不可移除，其他成员仍可移除', () => {
+  const owner = { userId: 'owner', name: '客户所有人' };
+  const other = { userId: 'other', name: '协作人' };
+  const customers = [{ id: 'customer', ownerUserId: owner.userId }];
+  for (const status of requestStatuses) {
+    const before = { ...newRequest('请求', 'customer', '发起人'), status, internalParticipants: [owner, other] };
+    assert.match(customerOwnerRemovalIssue({ ...before, internalParticipants: [other] }, before, customers), /不允许移除/);
+    assert.match(customerOwnerRemovalIssue({ ...before, internalParticipants: undefined }, before, customers), /不允许移除/);
+    assert.equal(customerOwnerRemovalIssue({ ...before, internalParticipants: [owner] }, before, customers), null);
+    assert.equal(customerOwnerRemovalIssue(before, before, customers), null);
+    // 读取当前客户资料，不以旧所有人或其他客户的所有人锁定成员。
+    assert.equal(customerOwnerRemovalIssue({ ...before, internalParticipants: [other] }, before, [{ id: 'customer', ownerUserId: other.userId }]), null);
+    assert.equal(customerOwnerRemovalIssue({ ...before, internalParticipants: [] }, before, [{ id: 'another', ownerUserId: owner.userId }]), null);
+  }
+  const legacy = { ...newRequest('旧请求', 'customer', '发起人'), internalParticipants: [other] };
+  assert.equal(customerOwnerRemovalIssue(legacy, legacy, customers), null);
 });
