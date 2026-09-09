@@ -47,7 +47,8 @@ export function DemoAssistant() {
       const siteContent = await readSiteContent();
       if (controller.current !== pending) return;
       const response = await fetch('/api/assistant', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'omit',
+        // Preserve the same-origin session when the site is protected by IAP.
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
         body: JSON.stringify({ question: trimmed, context: snapshot, siteContent, history: previous.slice(-8).map(({ role, content }) => ({ role, content })) }),
         signal: AbortSignal.any([pending.signal, AbortSignal.timeout(100_000)]),
       });
