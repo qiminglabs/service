@@ -178,6 +178,8 @@ export function attributeRequestMaterials(record: ServiceRequest, previous: Serv
   }) })) };
 }
 export type RequestConfig = {
+  fieldOrder?: string[];
+  fieldWidths?: Record<string, 'full' | 'half'>;
   basicFields?: {
     description?: { enabled: boolean; required: boolean };
     businessObjects?: {

@@ -5,6 +5,14 @@ import { Plus } from 'lucide-react';
 import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from '@/components/ui/combobox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -23,6 +31,7 @@ export const fieldTypes = {
   integer: '整数',
   decimal: '小数',
   date: '日期',
+  lookup: '查找字段',
 } as const;
 export type RequestFieldType = keyof typeof fieldTypes;
 export type FieldOption = { value: string; enabled: boolean };
@@ -31,14 +40,31 @@ export type RequestField = {
   name: string;
   type: RequestFieldType;
   options: FieldOption[];
+  referenceTarget?: 'partners' | 'businessObjects';
 };
-const systemFields: Record<string, { name: string; type: RequestFieldType }> = {
+const systemFields: Record<
+  string,
+  {
+    name: string;
+    type: RequestFieldType;
+    referenceTarget?: 'partners' | 'businessObjects';
+  }
+> = {
   edition: { name: '产品版本', type: 'single' },
   version: { name: '产品版本号', type: 'single' },
   nodes: { name: '节点数', type: 'integer' },
   description: { name: '需求说明', type: 'textarea' },
-  businessObjects: { name: '业务对象', type: 'multiple' },
+  businessObjects: {
+    name: '业务对象',
+    type: 'lookup',
+    referenceTarget: 'businessObjects',
+  },
   method: { name: '服务方式', type: 'single' },
+  expectedProvider: {
+    name: '期望服务商',
+    type: 'lookup',
+    referenceTarget: 'partners',
+  },
 };
 export function isSystemField(id: string) {
   return Object.hasOwn(systemFields, id);
@@ -62,6 +88,8 @@ export function normalizeRequestFields(
       ...field,
       type: systemFields[field.id]?.type ?? field.type ?? 'single',
       name: systemFields[field.id]?.name ?? field.name,
+      referenceTarget:
+        systemFields[field.id]?.referenceTarget ?? field.referenceTarget,
       options: field.options.map((option) =>
         typeof option === 'string' ? { value: option, enabled: true } : option,
       ),
@@ -77,8 +105,21 @@ export const initialRequestFields = normalizeRequestFields([
   { id: 'version', name: '产品版本号', options: ['5.0.1', '5.0.2', '5.0.3'] },
   { id: 'nodes', name: '节点数', type: 'integer', options: [] },
   { id: 'description', name: '需求说明', type: 'textarea', options: [] },
-  { id: 'businessObjects', name: '业务对象', type: 'multiple', options: [] },
+  {
+    id: 'businessObjects',
+    name: '业务对象',
+    type: 'lookup',
+    referenceTarget: 'businessObjects',
+    options: [],
+  },
   { id: 'method', name: '服务方式', type: 'single', options: ['远程', '现场'] },
+  {
+    id: 'expectedProvider',
+    name: '期望服务商',
+    type: 'lookup',
+    referenceTarget: 'partners',
+    options: [],
+  },
 ]);
 export const RequestFieldsContext = createContext(initialRequestFields);
 
@@ -169,7 +210,10 @@ export function RequestFieldSettings({
     setTarget(null);
   }
   return (
-    <section className="reference-panel backend-settings-panel" aria-label="后台配置">
+    <section
+      className="reference-panel backend-settings-panel"
+      aria-label="后台配置"
+    >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
           <TabsList
@@ -222,6 +266,8 @@ export function RequestFieldSettings({
                     <td>
                       {field.id === 'businessObjects' ? (
                         '关联业务对象，可多选'
+                      ) : field.referenceTarget === 'partners' ? (
+                        '关联合作伙伴对象，单选'
                       ) : field.type === 'single' ||
                         field.type === 'multiple' ? (
                         <div className="request-field-options">
@@ -338,11 +384,13 @@ export function RequestFieldSettings({
                   setError('');
                 }}
               >
-                {Object.entries(fieldTypes).map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
+                {Object.entries(fieldTypes)
+                  .filter(([key]) => key !== 'lookup' || type === 'lookup')
+                  .map(([key, label]) => (
+                    <option key={key} value={key}>
+                      {label}
+                    </option>
+                  ))}
               </select>
             </label>
             {isChoice && (
@@ -461,12 +509,42 @@ export function RequestFieldControl({
   value,
   availableOptions,
   onChange,
+  disabled = false,
 }: {
   field: RequestField;
   value: string;
   availableOptions?: string[];
+  disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  if (field.referenceTarget === 'partners') {
+    const partners = field.options.map((option) => option.value);
+    return (
+      <Combobox
+        items={partners}
+        value={value || null}
+        onValueChange={(next) => onChange(next ?? '')}
+        disabled={disabled}
+      >
+        <ComboboxInput
+          aria-label={field.name}
+          placeholder="搜索并选择合作伙伴"
+          showClear
+          disabled={disabled}
+        />
+        <ComboboxContent>
+          <ComboboxEmpty>未找到匹配的合作伙伴</ComboboxEmpty>
+          <ComboboxList>
+            {(partner: string) => (
+              <ComboboxItem key={partner} value={partner}>
+                {partner}
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+        </ComboboxContent>
+      </Combobox>
+    );
+  }
   const optionIsAvailable = (option: FieldOption) =>
     option.enabled &&
     (availableOptions === undefined || availableOptions.includes(option.value));

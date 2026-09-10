@@ -768,6 +768,9 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const [referenceFormError, setReferenceFormError] = useState('');
   const [requestFields, setRequestFields] =
     useState<RequestField[]>(initialRequestFields);
+  const resolvedRequestFields = useMemo(() => requestFields.map(field => field.referenceTarget === 'partners'
+    ? { ...field, options: partners.map(partner => ({ value: partner.name, enabled: true })) }
+    : field), [requestFields, partners]);
   const [referencesReady, setReferencesReady] = useState(false);
   const [referenceStorageError, setReferenceStorageError] = useState('');
 
@@ -1424,7 +1427,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 
           {activeView === 'requests' ? (
             referencesReady && portal.views.includes('requests') ? (
-              <RequestFieldsContext.Provider value={requestFields}>
+              <RequestFieldsContext.Provider value={resolvedRequestFields}>
                 <RequestWorkspace
                   key={`${currentActor.id}:${portal.organizationId}`}
                   services={serviceRecords}
@@ -1460,7 +1463,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
             <BusinessObjectProductsContext.Provider
               value={[...businessObjectProducts]}
             >
-              <RequestFieldsContext.Provider value={requestFields}>
+              <RequestFieldsContext.Provider value={resolvedRequestFields}>
                 <CatalogView
                   toolbarActions={<div className="app-list-actions">
                 <search className="search-field">
