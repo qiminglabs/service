@@ -1,3 +1,4 @@
+import { demoSubmissionRuleReferences } from './demo-submission-rules.ts';
 import { buildRequestSamples, requestSamplesMarker } from './demo-service-requests.ts';
 import { openDatabase, defaultConfig, resolveRequestConfig, customerRequestConfigId } from './service-requests.ts';
 import type { CustomerRef, InternalUser } from './service-requests';
@@ -48,6 +49,7 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
     return resolved;
   });
   const references = [
+    ...demoSubmissionRuleReferences([]),
     { id: 'workspace', payload: { ...workspace, customerOwnersInitialized: true } },
     ...configs.map(config => ({ id: customerRequestConfigId(config.serviceId), payload: structuredClone(config) })),
     ...(['inspection', 'upgrade'] as const).map(kind => ({ id: `entitlement-conversion-${kind}`, payload: ensureConversionHistory(undefined) })),

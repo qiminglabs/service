@@ -1,3 +1,4 @@
+import { demoSubmissionRuleReferences } from './demo-submission-rules.ts';
 import { writeAddress } from './request-address.ts';
 import {
   businessObjectsEnabled, matchesObjectProduct, newItem, newRequest, openDatabase,
@@ -177,6 +178,12 @@ export async function initializeRequestSamples(sources: Sources) {
       const requests = tx.objectStore('requests');
       const refs = tx.objectStore('references');
       const marker = refs.get(requestSamplesMarker);
+      const ruleReferences = refs.getAll();
+      ruleReferences.onsuccess = () => {
+        try {
+          for (const reference of demoSubmissionRuleReferences(ruleReferences.result)) refs.put(reference);
+        } catch (error) { reject(error); tx.abort(); }
+      };
       tx.oncomplete = () => resolve();
       tx.onabort = () => reject(tx.error ?? new Error('初始化服务申请已中止。'));
       tx.onerror = () => reject(tx.error);
