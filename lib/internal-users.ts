@@ -59,7 +59,7 @@ export const fixedIdentityRoles: Readonly<Record<string, string>> =
   Object.freeze({
     'USR-006': 'SmartX 系统管理员',
     'USR-001': 'SmartX 销售经理',
-    'USR-002': 'SmartX 销售经理',
+    'USR-002': 'SmartX 售前工程师',
     'USR-005': 'SmartX 销售经理',
     'USR-007': 'SmartX 销售经理',
     'USR-003': 'SmartX 项目经理',

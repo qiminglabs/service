@@ -214,7 +214,7 @@ function CollaboratorCard({
 }
 
 export function RequestExternalCollaborators({
-  primaryContactId,
+  applicantId,
   contacts,
   value,
   readonly,
@@ -224,7 +224,7 @@ export function RequestExternalCollaborators({
   showCustomerVisibility = false,
   description = '搜索当前客户联系人，勾选后确认添加。',
 }: {
-  primaryContactId?: string;
+  applicantId?: string;
   contacts: ContactRef[];
   description?: string;
   value: ExternalCollaborator[];
@@ -247,12 +247,15 @@ export function RequestExternalCollaborators({
         name: contact.name,
         details: [contact.phone, contact.email].filter(Boolean).join(' · '),
       }))}
-      selected={value.map((person) => ({
-        id: person.contactId,
-        fixed: person.contactId === primaryContactId ? '客户联系人' : undefined,
-        name: person.name,
-        details: [person.phone, person.email].filter(Boolean).join(' · '),
-      }))}
+      selected={value.map((person) => {
+        const contact = contacts.find(entry => entry.id === person.contactId);
+        return {
+          id: person.contactId,
+          fixed: person.contactId === applicantId ? '申请人' : undefined,
+          name: contact?.name ?? person.name,
+          details: [contact?.phone ?? person.phone, contact?.email ?? person.email].filter(Boolean).join(' · '),
+        };
+      })}
       readonly={readonly}
       allowRemove={allowRemove}
       busy={busy}
@@ -265,13 +268,14 @@ export function RequestExternalCollaborators({
         ])
       }
       onRemove={(id) =>
-        id !== primaryContactId && onChange(value.filter((person) => person.contactId !== id))
+        id !== applicantId && onChange(value.filter((person) => person.contactId !== id))
       }
     />
   );
 }
 
 export function RequestInternalInfo({
+  applicantId,
   ownerUserId,
   users,
   value,
@@ -279,6 +283,7 @@ export function RequestInternalInfo({
   busy,
   onChange,
 }: {
+  applicantId?: string;
   ownerUserId?: string;
   users: InternalUser[];
   value: InternalParticipant[];
@@ -303,7 +308,7 @@ export function RequestInternalInfo({
         const user = users.find((entry) => entry.id === person.userId);
         return {
           id: person.userId,
-          fixed: person.userId === ownerUserId ? '客户所有人' : undefined,
+          fixed: person.userId === ownerUserId ? (person.userId === applicantId ? '客户所有人 · 申请人' : '客户所有人') : person.userId === applicantId ? '申请人' : undefined,
           name: person.name,
           details: [
             fixedIdentityRoles[person.userId],
@@ -325,7 +330,7 @@ export function RequestInternalInfo({
         ])
       }
       onRemove={(id) =>
-        id !== ownerUserId && onChange(value.filter((person) => person.userId !== id))
+        id !== ownerUserId && id !== applicantId && onChange(value.filter((person) => person.userId !== id))
       }
     />
   );

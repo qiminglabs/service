@@ -20,6 +20,7 @@ export function applyCustomerDecision(
 ): ServiceRequest {
   if (!actor.id || actor.role !== '客户' || customerId !== record.customerId)
     throw new Error('仅所属客户可以确认或拒绝服务请求。');
+  if (!record.externalCollaborators?.some(person => person.contactId === actor.id)) throw new Error('仅客户协作人可以确认或拒绝服务请求。');
   const confirmation = record.operations?.assessment?.confirmation;
   if (record.status !== '待确认' || !confirmation)
     throw new Error('请求已变更，请刷新后重试；仅待确认请求可以处理。');

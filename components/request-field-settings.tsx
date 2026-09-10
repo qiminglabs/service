@@ -1,7 +1,17 @@
 'use client';
 
-import { createContext, useState } from 'react';
+import { createContext, useId, useState } from 'react';
 import { Plus } from 'lucide-react';
+import {
+  readAddress,
+  writeAddress,
+  skipAddressChoice,
+} from '@/lib/request-address';
+import {
+  provinceNames,
+  provinceCities,
+  allCityNames,
+} from '@/lib/china-province-city';
 import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +42,7 @@ export const fieldTypes = {
   decimal: '小数',
   date: '日期',
   lookup: '查找字段',
+  address: '地址',
 } as const;
 export type RequestFieldType = keyof typeof fieldTypes;
 export type FieldOption = { value: string; enabled: boolean };
@@ -120,6 +131,16 @@ export const initialRequestFields = normalizeRequestFields([
     referenceTarget: 'partners',
     options: [],
   },
+  {
+    id: 'productForm',
+    name: '产品形态',
+    type: 'single',
+    options: ['纯软件', '一体机'],
+  },
+  { id: 'address', name: '地址', type: 'address', options: [] },
+  { id: 'tibCount', name: 'TiB 数', type: 'integer', options: [] },
+  { id: 'instanceCount', name: '实例数', type: 'integer', options: [] },
+  { id: 'clusterCount', name: '集群数', type: 'integer', options: [] },
 ]);
 export const RequestFieldsContext = createContext(initialRequestFields);
 
@@ -517,6 +538,74 @@ export function RequestFieldControl({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const addressDetailId = useId();
+  if (field.type === 'address') {
+    const address = readAddress(value);
+    const cities = provinceCities[address.province] ?? allCityNames;
+    return (
+      <fieldset
+        className="request-address"
+        disabled={disabled}
+        aria-label={field.name}
+      >
+        {(['province', 'city'] as const).map((key) => {
+          const label = key === 'province' ? '省' : '市';
+          const items = [
+            ...(key === 'province' ? provinceNames : cities),
+            skipAddressChoice,
+          ];
+          return (
+            <div key={key} className="request-address-choice">
+              <span>{label}</span>
+              <Combobox
+                items={items}
+                value={address[key] || null}
+                disabled={disabled}
+                onValueChange={(next) => {
+                  const selected = next ?? '';
+                  onChange(
+                    writeAddress(
+                      key === 'province'
+                        ? { ...address, province: selected, city: '' }
+                        : { ...address, city: selected },
+                    ),
+                  );
+                }}
+              >
+                <ComboboxInput
+                  aria-label={`${field.name}·${label}`}
+                  placeholder={`请选择或搜索${label}`}
+                  disabled={disabled}
+                />
+                <ComboboxContent>
+                  <ComboboxEmpty>未找到匹配的{label}</ComboboxEmpty>
+                  <ComboboxList>
+                    {(item: string) => (
+                      <ComboboxItem key={item} value={item}>
+                        {item}
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                </ComboboxContent>
+              </Combobox>
+            </div>
+          );
+        })}
+        <label className="request-address-detail" htmlFor={addressDetailId}>
+          详细地址
+          <Input
+            id={addressDetailId}
+            aria-label={`${field.name}·详细地址`}
+            value={address.detail}
+            onChange={(event) =>
+              onChange(writeAddress({ ...address, detail: event.target.value }))
+            }
+            placeholder="街道、门牌号等"
+          />
+        </label>
+      </fieldset>
+    );
+  }
   if (field.referenceTarget === 'partners') {
     const partners = field.options.map((option) => option.value);
     return (

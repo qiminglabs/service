@@ -1,4 +1,6 @@
 'use client';
+
+import { customerCollaboratorsIssue } from '@/lib/request-collaboration';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -54,7 +56,7 @@ async function readCurrentPricingData() {
   const [references, records] = await Promise.all([readLocal<{ id: string; payload?: any }>('references'), readLocal<ServiceRequest>('requests')]);
   const services = references.find(reference => reference.id === 'workspace')?.payload?.services;
   if (!services) throw new Error('无法读取最新服务目录，请刷新后重试。');
-  return { services: services as CatalogService[], context: entitlementPricingContext(references, records) };
+  return { contacts: references.find(reference => reference.id === 'workspace')?.payload?.contacts ?? [], services: services as CatalogService[], context: entitlementPricingContext(references, records) };
 }
 const stamp = (s: string) => {
   const date = new Date(s);
@@ -216,6 +218,10 @@ export function RequestAssessment({
     try {
       const fresh = await readLocal<ServiceRequest>('requests');
       const pricingData = ['effort', 'plan', 'confirm'].includes(action.type) ? await readCurrentPricingData() : { services, context: livePricingContext };
+      if (action.type === 'confirm') {
+        const issue = customerCollaboratorsIssue(record, 'contacts' in pricingData ? pricingData.contacts : []);
+        if (issue) throw new Error(issue);
+      }
       const pricingServices = pricingData.services;
       if (action.type === 'effort') { setLiveServices(pricingServices); setLivePricingContext(pricingData.context); }
       const references = action.type === 'plan' ? await readLocal<{ id: string; payload?: { customers?: CustomerRef[]; users?: InternalUser[] } }>('references') : [];

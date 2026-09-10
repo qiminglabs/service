@@ -1,10 +1,12 @@
+import { writeAddress } from './request-address.ts';
 import {
   businessObjectsEnabled, matchesObjectProduct, newItem, newRequest, openDatabase,
   requestIssues, resolveRequestConfig, serviceAvailableForRequest, withRequestContact,
 } from './service-requests.ts';
 import type { CatalogService, ContactRef, CustomerRef, InternalUser, ObjectRef, RequestConfig, ServiceRequest } from './service-requests';
 import { operationIdentities } from './internal-users.ts';
-import { appendActivity } from './request-operations.ts';
+import { appendActivity, applyRequestAction } from './request-operations.ts';
+import { addSupplement } from './request-supplements.ts';
 import type { OperationActor, RequestAsset } from './request-operations';
 import { applyAssessmentAction, assessmentOf, currentPlan, gapApproverOptions, planGap } from './request-assessment.ts';
 import type { AssessmentAction } from './request-assessment';
@@ -18,6 +20,7 @@ type Sources = {
   businessObjects: ObjectRef[];
   users: InternalUser[];
   assets: RequestAsset[];
+  partners?: { id: string; name?: string }[];
 };
 type Reference = { id: string; payload?: unknown };
 export const requestSamplesMarker = 'service-request-samples-v1';
@@ -57,7 +60,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     const at = new Date(now.getTime() - (6 - index) * 86400000).toISOString();
     const expected = new Date(now.getTime() + (7 + index * 2) * 86400000).toISOString().slice(0, 10);
     let record = newRequest(`【示例】${titles[index]}`, customer.id, sales.name, contact.id, sales.id, sales.role);
-    record = { ...record, id, createdAt: at, updatedAt: at, expectedServiceDate: expected,
+    record = { ...record, id, createdAt: at, updatedAt: at, expectedServiceDate: expected, businessImpact: '测试环境',
       description: '演示数据：用于展示服务申请、材料评估及客户确认流程，不代表真实交付承诺。',
       internalParticipants: [...new Map([sales, manager,
         identities.find(person => person.id === customer.ownerUserId)].filter(Boolean)
@@ -69,8 +72,24 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
         item.description = `申请${service.name}，请核对环境清单、确认维护窗口，并提供实施记录及服务报告。（示例）`;
         const object = sources.businessObjects.find(object => object.customerId === customer.id && object.status === '启用' && matchesObjectProduct(object, item.config));
         item.businessObjectIds = businessObjectsEnabled(item.config) && object ? [object.id] : [];
-        item.values = Object.fromEntries(item.config.fields.map(field => [field,
-          item.config.fieldOptions[field]?.[0] ?? ({ nodes: String(object?.nodeCount ?? 3), edition: '企业版', version: '6.3.0' }[field] ?? '示例内容')]));
+        const places = [
+          { province: '北京市', city: '北京市', detail: '海淀区中关村软件园 A 座 3 层（演示地址）' },
+          { province: '上海市', city: '上海市', detail: '浦东新区张江科技园 B 座 5 层（演示地址）' },
+          { province: '广东省', city: '深圳市', detail: '南山区科技园 C 座 8 层（演示地址）' },
+          { province: '浙江省', city: '杭州市', detail: '西湖区文三路 100 号（演示地址）' },
+          { province: '四川省', city: '成都市', detail: '高新区软件园 D 座 6 层（演示地址）' },
+        ];
+        const partners = (sources.partners ?? []).filter(partner => partner.name);
+        const values: Record<string, string> = {
+          nodes: String(object?.nodeCount ?? 3), edition: ['基础版', '敏捷版', '标准版', '企业版'][index % 4], version: ['5.0.1', '5.0.2', '5.0.3'][index % 3],
+          productForm: index % 2 ? '一体机' : '纯软件', address: writeAddress(places[index % places.length]),
+          tibCount: String(24 + index * 16 + itemIndex * 8), instanceCount: String(12 + index * 8 + itemIndex * 4), clusterCount: String(1 + itemIndex),
+          expectedProvider: partners[(index + itemIndex) % partners.length]?.name ?? '',
+        };
+        item.values = Object.fromEntries(item.config.fields.map(field => {
+          const options = item.config.fieldOptions[field];
+          return [field, options?.length ? options[(index + itemIndex) % options.length] : values[field] ?? '示例内容'];
+        }));
         item.materials = item.config.materials.map(requirement => {
           const content = `# ${requirement.name}（示例）\n\n客户：${customer.name}\n联系人：${contact.name}\n服务：${service.name}\n业务对象：${object?.name ?? '待规划环境'}\n期望服务日期：${expected}\n\n${item.description}\n\n仅用于 Demo，正式服务前需重新核对环境与材料。`;
           const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
@@ -80,12 +99,40 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
         return item;
       }),
     };
-    record = withRequestContact(record, sources.contacts);
+    record.externalCollaborators = [{ contactId: contact.id, name: contact.name, phone: contact.phone ?? '', email: contact.email ?? '' }];
+    const presales = identities.find(person => person.role === 'SmartX 售前工程师');
+    if (presales && !record.internalParticipants?.some(person => person.userId === presales.id)) record.internalParticipants = [...(record.internalParticipants ?? []), { userId: presales.id, name: presales.name }];
+    record = withRequestContact(record, sources.contacts, sources.customers, sources.users);
     const issues = requestIssues(record, { ...sources, audience: 'internal' });
     if (issues.length) throw new Error(`样例申请校验未通过：${issues.join('、')}`);
     record = appendActivity(record, sales, '提交', '创建示例申请', '本地初始化的演示数据。', at);
     if (index > 0) {
       record = appendActivity({ ...record, status: '待评估', submittedAt: at }, sales, '提交', '提交服务申请', '示例材料已准备，等待项目经理评估。', at);
+    }
+    const eventAt = (minutes: number) => new Date(Date.parse(at) + minutes * 60000).toISOString();
+    const attachment = (suffix: string, name: string, text: string) => {
+      const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
+      return { id: `${id}-${suffix}`, name, size: blob.size, blob, uploadedAt: eventAt(2), uploadedById: sales.id, uploaderAudience: 'internal' as const };
+    };
+    record = addSupplement(record, sales, undefined, {
+      id: `${id}-SUPPLEMENT-INTERNAL`, authorId: sales.id, author: sales.name, at: eventAt(2),
+      comment: '【演示】已与售前核对服务范围，正式排期前需复核资源清单、备份状态及变更窗口。此条仅内部可见。',
+      files: [attachment('ENVIRONMENT-NOTES', '环境核对清单（示例）.md', `# 环境核对清单\n\n客户：${customer.name}\n服务：${selected.map(service => service.name).join('、')}\n\n- 核对集群健康状态\n- 确认备份可恢复\n- 确认维护窗口\n\n仅用于演示。`)], externalVisible: false,
+    }, sources.users);
+    const customerActor: OperationActor = { id: contact.id, name: contact.name, role: '客户' };
+    record = addSupplement(record, customerActor, customer.id, {
+      id: `${id}-SUPPLEMENT-CUSTOMER`, authorId: contact.id, author: contact.name, at: eventAt(5),
+      comment: `【演示】已确认期望服务日期为 ${expected}。请在实施前一天再次确认维护窗口，我们将安排运维联系人配合。`, files: [], externalVisible: true,
+    }, sources.users);
+    if (index > 0) {
+      record = applyRequestAction(record, { type: 'meeting-create', title: '【演示】需求澄清与环境核对', participantNames: [...new Set([manager.name, sales.name, contact.name])] }, manager, sources.assets, eventAt(10));
+      const meetingId = record.operations!.meetings[0].id;
+      record = applyRequestAction(record, { type: 'meeting-end', id: meetingId }, manager, sources.assets, eventAt(40));
+      record = applyRequestAction(record, { type: 'meeting-materials', id: meetingId, transcript: `【演示会议纪要】\n客户：${customer.name}\n1. 核对服务范围：${selected.map(service => service.name).join('、')}。\n2. 客户负责确认备份状态及维护窗口。\n3. 项目经理跟进服务评估和交付排期。\n待办：正式实施前再次确认环境清单。` }, manager, sources.assets, eventAt(42));
+      record = applyRequestAction(record, { type: 'meeting-attachments-add', id: meetingId, files: [attachment('MEETING-NOTES', '需求澄清会议纪要（示例）.md', `# 需求澄清会议纪要\n\n${record.operations!.meetings[0].transcript}`)] }, manager, sources.assets, eventAt(43));
+      record = applyRequestAction(record, { type: 'worklog-add', date: at.slice(0,10), startTime: '09:00', endTime: '10:30', category: '需求分析', description: '【演示】核对需求材料、整理风险及服务范围。' }, manager, sources.assets, eventAt(50));
+      record = applyRequestAction(record, { type: 'worklog-add', date: at.slice(0,10), startTime: '14:00', endTime: '15:00', category: '客户沟通', description: '【演示】与客户确认维护窗口及服务依据。' }, sales, sources.assets, eventAt(51));
+      if (index === 1) record = applyRequestAction(record, { type: 'meeting-schedule', title: '【演示】实施窗口确认会', scheduledDate: expected, scheduledTime: '14:00', durationMinutes: 30 }, manager, sources.assets, eventAt(52));
     }
     if (index === 2 || index === 3) {
       const records = [...existing, ...result];
@@ -113,7 +160,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
       act({ type: 'confirm', externalNote: '请确认服务范围与期望日期；此记录仅用于流程演示。' });
       if (index === 3) record = applyCustomerDecision(record, { id: contact.id, name: contact.name, role: '客户' }, customer.id, true, '', new Date(Date.parse(record.updatedAt) + 3600000).toISOString());
     }
-    if (index === 4) record = appendActivity({ ...record, status: '已取消' }, sales, '提交', '取消服务请求', '客户调整季度维护计划，本次演示申请取消。', at);
+    if (index === 4) record = appendActivity({ ...record, status: '已取消', cancelledFromStatus: '待评估' }, sales, '提交', '取消服务请求', '客户调整季度维护计划，本次演示申请取消。', eventAt(55));
     if (record.status !== states[index]) throw new Error('样例状态与流程不一致。');
     result.push(record);
   }

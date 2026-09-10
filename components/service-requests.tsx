@@ -1,11 +1,14 @@
 'use client';
+
+import { isRequestApplicant, requestAudience } from '@/lib/request-collaboration';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { RequestFormBuilder } from '@/components/request-form-builder';
 import { requestFormOrder, requestFieldWidth } from '@/lib/request-form-layout';
 import { initializeRequestSamples } from '@/lib/demo-service-requests';
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  CircleAlert,
   ArrowLeft,
   ChevronRight,
   FileText,
@@ -20,8 +23,8 @@ import {
   RequestFieldsContext,
 } from '@/components/request-field-settings';
 import type { RequestField } from '@/components/request-field-settings';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
-import { RequestContactField } from '@/components/request-contact-field';
 import { RequestStatusProgress } from '@/components/request-status-progress';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { DateField } from '@/components/date-field';
@@ -81,6 +84,7 @@ import {
   canCreateRequest,
   requestCreationAccessIssue,
   requestCreationIssue,
+  businessImpactOptions,
   requestStatuses,
   requestStatusTone,
   RequestIdentityError,
@@ -94,9 +98,9 @@ import {
   fieldLabels,
   itemIssues,
   visibleMaterialFiles,
-  materialFiles,
-  itemSummary,
+  itemSummaryFields,
   itemBasicIssues,
+  requestFieldIsRequired,
   newItem,
   newRequest,
   normalizeRequestConfig,
@@ -177,6 +181,124 @@ function configForEditing(
   };
 }
 
+function RequestFormPage({ title, description, backLabel, busy, onClose, actions, children, sectioned = false }: {
+  title: string;
+  description?: string;
+  backLabel: string;
+  busy: boolean;
+  onClose: () => void;
+  actions: ReactNode;
+  children: ReactNode;
+  sectioned?: boolean;
+}) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+    heading.current?.scrollIntoView({ block: 'start' });
+  }, []);
+  return (
+    <section className="sr-form-page" aria-label={title}>
+      <header className="detail-heading sr-form-page-heading">
+        <div>
+          <button type="button" className="detail-back" disabled={busy} onClick={onClose}>
+            <ArrowLeft aria-hidden="true" />{backLabel}
+          </button>
+          <h2 ref={heading} tabIndex={-1}>{title}</h2>
+          {description && <p>{description}</p>}
+        </div>
+        <div className="detail-actions">{actions}</div>
+      </header>
+      <div className={sectioned ? 'sr-form-page-sections' : 'sr-panel sr-form-page-content'}>{children}</div>
+    </section>
+  );
+}
+
+function RequestCustomerLabel({ required = false, hint = '创建后不可修改客户。' }: { required?: boolean; hint?: string }) {
+  return <span className="sr-customer-label">
+    客户{required && <em>*</em>}
+    <TooltipProvider><Tooltip>
+      <TooltipTrigger render={<span tabIndex={0} role="img" className="sr-description-hint" aria-label="客户说明" onClick={event => event.preventDefault()}><CircleAlert size={16} aria-hidden="true" /></span>} />
+      <TooltipContent className="sr-description-tooltip" side="top">{hint}</TooltipContent>
+    </Tooltip></TooltipProvider>
+  </span>;
+}
+
+function RequestItemsPanel({ record, objects, actor, busy, readonly, showCompleteness, canAdd = true, onAdd, onEdit, onRemove, onMaterial }: {
+  record: ServiceRequest;
+  objects: ObjectRef[];
+  actor: OperationActor;
+  busy: boolean;
+  readonly: boolean;
+  showCompleteness: boolean;
+  canAdd?: boolean;
+  onAdd: () => void;
+  onEdit: (item: RequestItem) => void;
+  onRemove: (id: string) => void;
+  onMaterial: (target: { itemId: string; requirementId: string }) => void;
+}) {
+  const fieldNames = Object.fromEntries(useContext(RequestFieldsContext).map(field => [field.id, field.name]));
+  const internal = isInternal(actor.role);
+  const audience = internal ? 'internal' : 'customer';
+  return <section className={`sr-panel${internal ? ' sr-customer-visible-panel' : ''}`}>
+    <div className="sr-panel-heading">
+      <div>
+        <div className="sr-panel-title-with-visibility">
+          <h3>申请项 <span>{record.items.length}</span></h3>
+          {internal && <CustomerVisibleBadge />}
+        </div>
+        <p>{!showCompleteness ? '申请内容只读，可查看基础信息。' : readonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
+      </div>
+      {!readonly && <Button variant="outline" disabled={busy || !canAdd} onClick={onAdd}><Plus size={15} />添加申请项</Button>}
+    </div>
+    {!record.items.length ? <div className="sr-empty">
+      <FileText size={30} />
+      <h3>还没有申请项</h3>
+      <p>{canAdd ? '从服务目录添加所需服务。同一种服务可以分项申请。' : '请先选择客户，再从服务目录添加所需服务。'}</p>
+    </div> : <div className="sr-item-list">
+      {record.items.map((item, index) => {
+        const missing = showCompleteness ? itemIssues(item, audience, actor.id) : [];
+        const basicMissing = showCompleteness ? itemBasicIssues(item) : [];
+        const summary = itemSummaryFields(item, fieldNames, objects);
+        const inlineFields = summary.filter(field => !field.address);
+        const addressFields = summary.filter(field => field.address);
+        return <article key={item.id} className="sr-item-entry">
+          <div className="sr-item-row">
+            <span className="sr-item-number">{String(index + 1).padStart(2, '0')}</span>
+            <div className="sr-item-copy">
+              <h4>{item.serviceName}{showCompleteness && <span className="sr-badge" data-tone={missing.length ? 'amber' : 'green'}>{missing.length ? '待完善' : '已完整'}</span>}</h4>
+              {(summary.length > 0 || item.description.trim()) && <div className="sr-item-summary">
+                <div className="sr-item-summary-fields">
+                  {inlineFields.map(field => <span className="sr-summary-field" key={field.key}><span className="sr-summary-label">{field.label}</span><span className="sr-summary-value">{field.value}</span></span>)}
+                  {item.description.trim() && <TooltipProvider><Tooltip><TooltipTrigger render={<button type="button" className="sr-description-hint" aria-label="查看需求说明"><CircleAlert size={16} /></button>} /><TooltipContent className="sr-description-tooltip" side="top"><div><strong className="sr-tooltip-heading">需求说明</strong><div>{item.description}</div></div></TooltipContent></Tooltip></TooltipProvider>}
+                </div>
+                {addressFields.map(field => <div className="sr-summary-address" key={field.key}><span className="sr-summary-label">{field.label}</span><span className="sr-summary-value">{field.value}</span></div>)}
+              </div>}
+              {basicMissing.length > 0 && <p className="sr-missing">待补充：{basicMissing.join('、')}</p>}
+              {item.config.materials.map(requirement => {
+                const material = item.materials.find(material => material.requirementId === requirement.id);
+                const complete = visibleMaterialFiles(material, audience, actor.id).length > 0;
+                if (!showCompleteness && !complete) return null;
+                return <div key={requirement.id} className="sr-material-entry">
+                  <span className={!showCompleteness ? 'sr-help' : complete ? 'sr-complete' : requirement.required ? 'sr-missing' : 'sr-help'}>
+                    {showCompleteness && (complete ? '已完成：' : requirement.required ? '待补充：上传' : '选填：')}{requirement.name}
+                  </span>
+                  <button className="sr-material-link" disabled={busy} onClick={() => onMaterial({ itemId: item.id, requirementId: requirement.id })} aria-label={requirement.name + (readonly || complete ? '，查看材料' : '，补充材料')}>
+                    {readonly || complete ? '查看材料' : '补充材料'}<ChevronRight size={13} />
+                  </button>
+                </div>;
+              })}
+            </div>
+            <div className="sr-item-actions">
+              <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{readonly ? '查看基础信息' : '编辑基础信息'}</Button>
+              {!readonly && <button className="sr-muted-button" disabled={busy} onClick={() => onRemove(item.id)}>移除</button>}
+            </div>
+          </div>
+        </article>;
+      })}
+    </div>}
+  </section>;
+}
+
 export function RequestWorkspace(props: Props) {
   const access = {
     actor: props.currentActor,
@@ -199,19 +321,14 @@ export function RequestWorkspace(props: Props) {
   const [status, setStatus] = useState('全部状态');
   const [draft, setDraft] = useState<ServiceRequest | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
-  const [createTitle, setCreateTitle] = useState('');
-  const [selectedCustomer, setCreateCustomer] = useState('');
-  const createCustomer = customerPortal
-    ? (props.currentCustomerId ?? '')
-    : selectedCustomer;
-  const [createContact, setCreateContact] = useState('');
-  const createContacts = props.contacts.filter(
-    (contact) =>
-      contact.customerId === createCustomer && contact.status === '启用',
-  );
+  const [creation, setCreation] = useState<ServiceRequest | null>(null);
+  const [createMaterialTarget, setCreateMaterialTarget] = useState<{ itemId: string; requirementId: string } | null>(null);
+  const createCustomer = creation?.customerId ?? '';
   const [addOpen, setAddOpen] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState('');
   const [pendingItem, setPendingItem] = useState<RequestItem | null>(null);
+  const itemParent = createOpen ? creation : draft;
+  const pendingReadonly = !itemParent || !canEditRequestItems(itemParent, props.currentActor);
   const pendingService = props.services.find(
     (service) => service.id === pendingItem?.serviceId,
   );
@@ -233,6 +350,22 @@ export function RequestWorkspace(props: Props) {
   const handledToken = useRef(0);
   const saveLock = useRef(false);
 
+  function beginCreate() {
+    const customerId = customerPortal ? props.currentCustomerId ?? '' : '';
+    setCreation(withRequestContact(newRequest('', customerId, props.currentActor.name || props.currentRole, '', props.currentActor.id, props.currentActor.role), props.contacts, props.customers, props.users));
+    setAddOpen(false); setPendingItem(null); setCreateMaterialTarget(null);
+    setCatalogQuery(''); setError(''); setCreateOpen(true);
+  }
+  function updateCreation(patch: Partial<ServiceRequest>) {
+    setCreation(current => current ? { ...current, ...patch } : current);
+    setError('');
+  }
+  function changeCreationCustomer(customerId: string) {
+    if (!creation) return;
+    const defaults = newRequest('', customerId, props.currentActor.name || props.currentRole, '', props.currentActor.id, props.currentActor.role);
+    setCreation(withRequestContact({ ...creation, customerId, internalParticipants: defaults.internalParticipants, externalCollaborators: defaults.externalCollaborators, items: creation.items.map(item => ({ ...item, businessObjectIds: [], materials: [] })) }, props.contacts, props.customers, props.users));
+    setCreateMaterialTarget(null); setError('');
+  }
   function load() {
     return initializeRequestSamples(props)
       .catch((error) =>
@@ -245,7 +378,7 @@ export function RequestWorkspace(props: Props) {
       .then(() => readLocal<ServiceRequest>('requests'))
       .then(async (records) => {
         records = records.map((record) =>
-          withRequestContact(record, props.contacts),
+          withRequestContact(record, props.contacts, props.customers, props.users),
         );
         setReservationRecords(records);
         const repair = repairCustomerRequestApprover(records, props.users);
@@ -292,10 +425,7 @@ export function RequestWorkspace(props: Props) {
   useEffect(() => {
     if (canCreate && props.createToken > handledToken.current) {
       handledToken.current = props.createToken;
-      setCreateTitle('');
-      setCreateCustomer('');
-      setCreateContact(customerPortal ? props.currentActor.id : '');
-      setCreateOpen(true);
+      beginCreate();
     }
   }, [props.createToken]);
 
@@ -306,7 +436,7 @@ export function RequestWorkspace(props: Props) {
     setError('');
     const next = withRequestContact(
       { ...record, updatedAt: new Date().toISOString() },
-      props.contacts,
+      props.contacts, props.customers, props.users,
     );
     try {
       await saveLocal('requests', next, access);
@@ -333,21 +463,8 @@ export function RequestWorkspace(props: Props) {
     }
   }
   async function createDraft() {
-    if (!ready || busy || !canCreate) return;
-    const record = newRequest(
-      createTitle,
-      createCustomer,
-      props.currentActor.name || props.currentRole,
-      createContact,
-      props.currentActor.id,
-      props.currentActor.role,
-      props.users.find(
-        (user) =>
-          user.id ===
-          props.customers.find((customer) => customer.id === createCustomer)
-            ?.ownerUserId,
-      ),
-    );
+    if (!ready || busy || !canCreate || !creation) return;
+    const record = { ...creation, title: creation.title.trim() };
     const issue =
       requestCreationAccessIssue(record, access) ??
       requestCreationIssue(record, props);
@@ -355,8 +472,18 @@ export function RequestWorkspace(props: Props) {
       setError(issue);
       return;
     }
-    if (await persist(record, '草稿已创建，可以逐项完善申请内容')) {
+    for (const item of record.items) {
+      const missing = itemBasicIssues(item);
+      if (missing.length) { setError(`${item.serviceName}：请补充${missing.join('、')}`); return; }
+      if (!availableServices.some(service => service.id === item.serviceId)) { setError(`${item.serviceName}：目录已停用或不再允许申请，请移除后重新选择。`); return; }
+      if (businessObjectsEnabled(item.config) && item.businessObjectIds.some(id => !props.businessObjects.some(object => object.id === id && object.customerId === record.customerId && object.status === '启用' && matchesObjectProduct(object, item.config)))) {
+        setError(`${item.serviceName}：请重新选择当前客户有效且符合产品要求的业务对象。`); return;
+      }
+    }
+    if (await persist(record, '服务请求草稿已创建，填写内容已一并保存')) {
       setCreateOpen(false);
+      setCreation(null);
+      setCreateMaterialTarget(null);
       setMaterialTarget(null);
       setShowIssues(false);
     }
@@ -378,9 +505,9 @@ export function RequestWorkspace(props: Props) {
   }
   async function savePendingItem() {
     if (
-      !draft ||
+      !itemParent ||
       !pendingItem ||
-      !canEditRequestItems(draft, props.currentActor)
+      !canEditRequestItems(itemParent, props.currentActor)
     )
       return;
     const missing = itemBasicIssues(pendingItem);
@@ -407,7 +534,7 @@ export function RequestWorkspace(props: Props) {
           !props.businessObjects.some(
             (o) =>
               o.id === id &&
-              o.customerId === draft.customerId &&
+              o.customerId === itemParent.customerId &&
               matchesObjectProduct(o, pendingItem.config) &&
               o.status === '启用',
           ),
@@ -418,17 +545,21 @@ export function RequestWorkspace(props: Props) {
       );
       return;
     }
-    const exists = draft.items.some((i) => i.id === pendingItem.id);
+    const exists = itemParent.items.some((i) => i.id === pendingItem.id);
+    const next = {
+      ...itemParent,
+      items: exists
+        ? itemParent.items.map(item => item.id === pendingItem.id ? pendingItem : item)
+        : [...itemParent.items, pendingItem],
+    };
+    if (createOpen) {
+      updateCreation({ items: next.items });
+      setAddOpen(false); setPendingItem(null); setItemError('');
+      return;
+    }
     if (
       await persistItemChanges(
-        {
-          ...draft,
-          items: exists
-            ? draft.items.map((i) =>
-                i.id === pendingItem.id ? pendingItem : i,
-              )
-            : [...draft.items, pendingItem],
-        },
+        next,
         '申请项基础信息已保存，可在该申请项中补充材料',
       )
     ) {
@@ -496,9 +627,9 @@ export function RequestWorkspace(props: Props) {
       Pick<
         ServiceRequest,
         | 'title'
-        | 'contactId'
         | 'description'
         | 'expectedServiceDate'
+        | 'businessImpact'
         | 'externalCollaborators'
         | 'internalParticipants'
       >
@@ -506,7 +637,7 @@ export function RequestWorkspace(props: Props) {
   ) {
     setDraft((record) =>
       record
-        ? withRequestContact({ ...record, ...patch }, props.contacts)
+        ? withRequestContact({ ...record, ...patch }, props.contacts, props.customers, props.users)
         : record,
     );
     setNotice('有未保存的修改');
@@ -599,12 +730,12 @@ export function RequestWorkspace(props: Props) {
   return (
     <div
       className={
-        draft
+        draft || createOpen || addOpen
           ? 'sr-workspace sr-workspace--detail catalog-detail'
           : 'sr-workspace'
       }
     >
-      {!draft ? (
+      {!createOpen && (!draft ? (
         <>
           {feedback}
           <section className="sr-panel sr-request-list-panel">
@@ -634,14 +765,7 @@ export function RequestWorkspace(props: Props) {
                 <Button
                   className="ct-button ct-button--primary"
                   disabled={!ready || busy}
-                  onClick={() => {
-                    setCreateTitle('');
-                    setCreateCustomer('');
-                    setCreateContact(
-                      customerPortal ? props.currentActor.id : '',
-                    );
-                    setCreateOpen(true);
-                  }}
+                  onClick={beginCreate}
                 >
                   <Plus size={16} />
                   新建服务请求
@@ -810,7 +934,7 @@ export function RequestWorkspace(props: Props) {
                     <Save size={15} />
                     保存草稿
                   </Button>
-                  <Button
+                  {isRequestApplicant(draft, props.currentActor) && <Button
                     className="ct-button ct-button--primary"
                     disabled={busy}
                     onClick={() => {
@@ -819,12 +943,12 @@ export function RequestWorkspace(props: Props) {
                     }}
                   >
                     提交申请
-                  </Button>
+                  </Button>}
                 </>
               )}
             </div>
           </header>
-          <RequestStatusProgress status={draft.status} />
+          <RequestStatusProgress record={draft} />
           {feedback}
           {showIssues && !readonly && issues.length > 0 && (
             <section className="sr-error" role="alert">
@@ -854,14 +978,14 @@ export function RequestWorkspace(props: Props) {
               <aside className="sr-collaboration-column" aria-label="协作人">
                 <RequestExternalCollaborators
                   showCustomerVisibility={isInternal(props.currentRole)}
-                  primaryContactId={draft.contactId}
+                  applicantId={requestAudience(draft) === 'customer' ? draft.createdById : undefined}
                   contacts={props.contacts.filter(
                     (contact) => contact.customerId === draft.customerId,
                   )}
                   description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。"
                   value={draft.externalCollaborators ?? []}
                   readonly={!canAddExternalCollaborators(draft, access)}
-                  allowRemove={props.currentRole !== '客户'}
+                  allowRemove={true}
                   busy={busy}
                   onChange={(externalCollaborators) =>
                     updateCollaborators({ externalCollaborators })
@@ -869,6 +993,7 @@ export function RequestWorkspace(props: Props) {
                 />
                 {isInternal(props.currentRole) && (
                   <RequestInternalInfo
+                    applicantId={requestAudience(draft) === 'internal' ? draft.createdById : undefined}
                     ownerUserId={
                       props.customers.find(
                         (customer) => customer.id === draft.customerId,
@@ -921,9 +1046,10 @@ export function RequestWorkspace(props: Props) {
                   />
                 </label>
                 <label htmlFor="sr-customer-readonly">
-                  客户
+                  <RequestCustomerLabel hint={draft.customerId ? '创建后不可修改客户。' : '此历史草稿未关联客户，请重新创建请求。'} />
                   <Input
                     id="sr-customer-readonly"
+                    className="sr-readonly-customer"
                     readOnly
                     value={
                       props.customers.find((c) => c.id === draft.customerId)
@@ -931,24 +1057,7 @@ export function RequestWorkspace(props: Props) {
                       (draft.customerId || '历史草稿未选择客户')
                     }
                   />
-                  <small>
-                    {draft.customerId
-                      ? '创建后不可修改客户。'
-                      : '此历史草稿未关联客户，请重新创建请求。'}
-                  </small>
                 </label>
-                <RequestContactField
-                  id="sr-request-contact"
-                  contacts={props.contacts.filter(
-                    (c) =>
-                      c.customerId === draft.customerId &&
-                      (c.status === '启用' || c.id === draft.contactId),
-                  )}
-                  value={draft.contactId}
-                  onChange={(contactId) => updateDraft({ contactId })}
-                  disabled={busy || !draft.customerId}
-                  readonly={readonly}
-                />
                 <DateField
                   id="sr-expected-service-date"
                   label="期望服务日期"
@@ -959,6 +1068,13 @@ export function RequestWorkspace(props: Props) {
                     updateDraft({ expectedServiceDate })
                   }
                 />
+                <label htmlFor="sr-business-impact">
+                  业务影响 <em>*</em>
+                  <select id="sr-business-impact" required value={draft.businessImpact ?? ''} onChange={event => updateDraft({ businessImpact: event.target.value as ServiceRequest['businessImpact'] })}>
+                    <option value="">{readonly ? '未填写' : '请选择业务影响'}</option>
+                    {businessImpactOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </label>
                 <label className="sr-span">
                   申请说明（选填）
                   <textarea
@@ -972,169 +1088,13 @@ export function RequestWorkspace(props: Props) {
                 </label>
               </fieldset>
             </section>
-            <section
-              className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}
-            >
-              <div className="sr-panel-heading">
-                <div>
-                  <div className="sr-panel-title-with-visibility">
-                    <h3>
-                      申请项 <span>{draft.items.length}</span>
-                    </h3>
-                    {isInternal(props.currentRole) && <CustomerVisibleBadge />}
-                  </div>
-                  <p>
-                    {!showCompleteness
-                      ? '申请内容只读，可查看基础信息。'
-                      : itemsReadonly
-                        ? '申请内容已锁定，可查看基础信息和已提交材料。'
-                        : '点击申请项中的材料入口，在弹窗中填写或上传。'}
-                  </p>
-                </div>
-                {!itemsReadonly && (
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => {
-                      setCatalogQuery('');
-                      setPendingItem(null);
-                      setItemError('');
-                      setAddOpen(true);
-                    }}
-                  >
-                    <Plus size={15} />
-                    添加申请项
-                  </Button>
-                )}
-              </div>
-              {!draft.items.length ? (
-                <div className="sr-empty">
-                  <FileText size={30} />
-                  <h3>还没有申请项</h3>
-                  <p>从服务目录添加所需服务。同一种服务可以分项申请。</p>
-                </div>
-              ) : (
-                <div className="sr-item-list">
-                  {draft.items.map((item, index) => {
-                    const missing = showCompleteness
-                      ? itemIssues(item, audience, props.currentActor.id)
-                      : [];
-                    const summary = itemSummary(item);
-                    return (
-                      <article key={item.id} className="sr-item-entry">
-                        <div className="sr-item-row">
-                          <span className="sr-item-number">
-                            {String(index + 1).padStart(2, '0')}
-                          </span>
-                          <div className="sr-item-copy">
-                            <h4>
-                              {item.serviceName}
-                              {showCompleteness && (
-                                <span
-                                  className="sr-badge"
-                                  data-tone={missing.length ? 'amber' : 'green'}
-                                >
-                                  {missing.length ? '待完善' : '已完整'}
-                                </span>
-                              )}
-                            </h4>
-                            {summary && <p>{summary}</p>}
-                            {showCompleteness &&
-                              itemBasicIssues(item).length > 0 && (
-                                <p className="sr-missing">
-                                  待补充：{itemBasicIssues(item).join('、')}
-                                </p>
-                              )}
-                            {item.config.materials.map((requirement) => {
-                              const material = item.materials.find(
-                                (m) => m.requirementId === requirement.id,
-                              );
-                              const complete =
-                                visibleMaterialFiles(
-                                  material,
-                                  audience,
-                                  props.currentActor.id,
-                                ).length > 0;
-                              if (!showCompleteness && !complete) return null;
-                              return (
-                                <div
-                                  key={requirement.id}
-                                  className="sr-material-entry"
-                                >
-                                  <span
-                                    className={
-                                      !showCompleteness
-                                        ? 'sr-help'
-                                        : complete
-                                          ? 'sr-complete'
-                                          : requirement.required
-                                            ? 'sr-missing'
-                                            : 'sr-help'
-                                    }
-                                  >
-                                    {showCompleteness &&
-                                      (complete
-                                        ? '已完成：'
-                                        : requirement.required
-                                          ? '待补充：上传'
-                                          : '选填：')}
-                                    {requirement.name}
-                                  </span>
-                                  <button
-                                    className="sr-material-link"
-                                    disabled={busy}
-                                    onClick={() =>
-                                      setMaterialTarget({
-                                        itemId: item.id,
-                                        requirementId: requirement.id,
-                                      })
-                                    }
-                                    aria-label={
-                                      requirement.name +
-                                      (itemsReadonly || complete
-                                        ? '，查看材料'
-                                        : '，补充材料')
-                                    }
-                                  >
-                                    {itemsReadonly || complete
-                                      ? '查看材料'
-                                      : '补充材料'}
-                                    <ChevronRight size={13} />
-                                  </button>
-                                </div>
-                              );
-                            })}
-                          </div>
-                          <div className="sr-item-actions">
-                            <Button
-                              variant="outline"
-                              disabled={busy}
-                              onClick={() => {
-                                setPendingItem(structuredClone(item));
-                                setItemError('');
-                                setAddOpen(true);
-                              }}
-                            >
-                              {itemsReadonly ? '查看基础信息' : '编辑基础信息'}
-                            </Button>
-
-                            {!itemsReadonly && (
-                              <button
-                                className="sr-muted-button"
-                                disabled={busy}
-                                onClick={() => setRemoveId(item.id)}
-                              >
-                                移除
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
+            <RequestItemsPanel
+              objects={props.businessObjects}
+              record={draft} actor={props.currentActor} busy={busy} readonly={itemsReadonly} showCompleteness={showCompleteness}
+              onAdd={() => { setCatalogQuery(''); setPendingItem(null); setItemError(''); setAddOpen(true); }}
+              onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setAddOpen(true); }}
+              onRemove={setRemoveId} onMaterial={setMaterialTarget}
+            />
             <section
               className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}
               aria-labelledby="sr-system-heading"
@@ -1172,7 +1132,7 @@ export function RequestWorkspace(props: Props) {
             </section>
           </RequestOperationsTabs>
         </>
-      )}
+      ))}
 
       {materialItem &&
         materialRequirement &&
@@ -1203,43 +1163,63 @@ export function RequestWorkspace(props: Props) {
             }
           />
         )}
-      <Dialog
-        open={canCreate && createOpen}
-        onOpenChange={(open) => {
-          if (!busy) setCreateOpen(open);
-        }}
-      >
-        <DialogContent className="sr-dialog">
-          <DialogHeader>
-            <DialogTitle>新建服务请求</DialogTitle>
-          </DialogHeader>
-          <div className="sr-form-stack">
+      {canCreate && createOpen && creation && (
+        <RequestFormPage
+          title="新建服务请求"
+          sectioned
+          backLabel={draft ? "返回申请详情" : "返回服务请求"}
+          busy={busy}
+          onClose={() => { setCreateOpen(false); setCreateMaterialTarget(null); setError(''); }}
+          actions={<>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => { setCreateOpen(false); setCreateMaterialTarget(null); setError(''); }}
+            >
+              取消
+            </Button>
+            <Button
+              disabled={!ready || busy || !canCreate}
+              onClick={() => void createDraft()}
+            >
+              {busy ? '正在保存…' : '创建草稿'}
+            </Button>
+          </>}
+        >
+          <RequestStatusProgress status="草稿" />
+          {error && <p className="sr-error" role="alert">{error}</p>}
+          <div className="sr-detail-layout">
+          <div className="sr-detail-main">
+          <section className={`sr-panel${!customerPortal ? ' sr-customer-visible-panel' : ''}`} aria-label="基本信息">
+          <div className="sr-panel-heading">
+            <div className="sr-panel-title-with-visibility"><h3>基本信息</h3>{!customerPortal && <CustomerVisibleBadge />}</div>
+          </div>
+          <fieldset className="sr-form-grid" disabled={busy}>
             <label htmlFor="sr-create-title">
               申请主题 <em>*</em>
               <Input
                 id="sr-create-title"
                 required
                 disabled={busy}
-                value={createTitle}
+                value={creation.title}
                 onChange={(e) => {
-                  setCreateTitle(e.target.value);
-                  setError('');
+                  updateCreation({ title: e.target.value });
                 }}
-                placeholder="填写本次申请主题"
+                placeholder="例如：生产环境新装与巡检"
               />
             </label>
-            {!customerPortal && (
+            {customerPortal ? <label htmlFor="sr-create-customer-readonly">
+              <RequestCustomerLabel />
+              <Input id="sr-create-customer-readonly" className="sr-readonly-customer" readOnly value={props.customers.find(customer => customer.id === createCustomer)?.name ?? createCustomer} />
+            </label> : (
               <label>
-                客户 <em>*</em>
+                <RequestCustomerLabel required hint={`创建后不可修改客户。${creation.items.length ? '更换客户会清空已选业务对象、材料和协作人。' : ''}`} />
                 <select
                   required
                   disabled={busy}
                   value={createCustomer}
-                  aria-describedby="sr-create-customer-hint"
                   onChange={(e) => {
-                    setCreateCustomer(e.target.value);
-                    setCreateContact('');
-                    setError('');
+                    changeCreationCustomer(e.target.value);
                   }}
                 >
                   <option value="">请选择客户</option>
@@ -1251,86 +1231,58 @@ export function RequestWorkspace(props: Props) {
                       </option>
                     ))}
                 </select>
-                <span
-                  id="sr-create-customer-hint"
-                  className="sr-help block font-normal"
-                >
-                  创建后不可修改客户
-                </span>
               </label>
             )}
-            <RequestContactField
-              id="sr-create-contact"
-              contacts={createContacts}
-              value={createContact}
-              disabled={busy || !createCustomer || createContacts.length === 0}
-              onChange={(contactId) => {
-                setCreateContact(contactId);
-                setError('');
-              }}
-              placeholder={
-                !createCustomer
-                  ? '请先选择客户'
-                  : createContacts.length === 0
-                    ? '该客户暂无可用联系人'
-                    : '请选择联系人'
-              }
-              hint={
-                createCustomer && createContacts.length === 0
-                  ? '请先在客户资料中维护已启用的联系人。'
-                  : undefined
-              }
-            />
+            <DateField id="sr-create-expected-date" label="期望服务日期" value={creation.expectedServiceDate ?? ''} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate })} />
+            <label htmlFor="sr-create-business-impact">
+              业务影响 <em>*</em>
+              <select id="sr-create-business-impact" required value={creation.businessImpact ?? ''} onChange={event => updateCreation({ businessImpact: event.target.value as ServiceRequest['businessImpact'] })}>
+                <option value="">请选择业务影响</option>
+                {businessImpactOptions.map(option => <option key={option} value={option}>{option}</option>)}
+              </select>
+            </label>
+            <label className="sr-span">申请说明（选填）
+              <textarea rows={3} value={creation.description} onChange={event => updateCreation({ description: event.target.value })} placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。" />
+            </label>
+          </fieldset>
+          </section>
+          <RequestItemsPanel
+              objects={props.businessObjects}
+            record={creation} actor={props.currentActor} busy={busy} readonly={false} showCompleteness={true} canAdd={ready && !!createCustomer}
+            onAdd={() => { setPendingItem(null); setCatalogQuery(''); setItemError(''); setError(''); setAddOpen(true); }}
+            onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setError(''); setAddOpen(true); }}
+            onRemove={id => updateCreation({ items: creation.items.filter(item => item.id !== id) })}
+            onMaterial={setCreateMaterialTarget}
+          />
           </div>
-          {error && (
-            <p className="sr-error" role="alert">
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => setCreateOpen(false)}
-            >
-              取消
-            </Button>
-            <Button
-              disabled={!ready || busy || !canCreate}
-              onClick={() => void createDraft()}
-            >
-              {busy ? '正在保存…' : '创建草稿'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <aside className="sr-collaboration-column" aria-label="协作人">
+            <RequestExternalCollaborators showCustomerVisibility={!customerPortal} applicantId={customerPortal ? creation.createdById : undefined} contacts={props.contacts.filter(contact => contact.customerId === createCustomer)} description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。" value={creation.externalCollaborators ?? []} readonly={!createCustomer} allowRemove={true} busy={busy} onChange={externalCollaborators => updateCreation({ externalCollaborators })} />
+            {!customerPortal && <RequestInternalInfo applicantId={creation.createdById} ownerUserId={props.customers.find(customer => customer.id === createCustomer)?.ownerUserId} users={props.users} value={creation.internalParticipants ?? []} readonly={!createCustomer} busy={busy} onChange={internalParticipants => updateCreation({ internalParticipants })} />}
+          </aside>
+          </div>
+        </RequestFormPage>
+      )}
 
-      <Dialog
-        open={addOpen}
-        onOpenChange={(open) => {
-          if (!busy) {
-            setAddOpen(open);
-            if (!open) {
-              setPendingItem(null);
-              setItemError('');
-            }
-          }
-        }}
-      >
-        <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog">
-          <DialogHeader>
-            <DialogTitle>
-              {itemsReadonly && pendingItem
-                ? '申请项基础信息'
-                : pendingItem &&
-                    draft?.items.some((i) => i.id === pendingItem.id)
-                  ? '编辑申请项'
-                  : '添加申请项'}
-            </DialogTitle>
-            <DialogDescription>
-              先填写基础信息并保存，材料在申请详情页中补充。
-            </DialogDescription>
-          </DialogHeader>
+      {createOpen && creation && createMaterialTarget && (() => {
+        const item = creation.items.find(item => item.id === createMaterialTarget.itemId);
+        const requirement = item?.config.materials.find(requirement => requirement.id === createMaterialTarget.requirementId);
+        if (!item || !requirement) return null;
+        return <RequestMaterialDialog key={`${item.id}:${requirement.id}`} item={item} requirement={requirement} actor={props.currentActor} readonly={false} busy={busy} error="" onClose={() => setCreateMaterialTarget(null)} onSave={async material => {
+          updateCreation({ items: creation.items.map(existing => existing.id === item.id ? { ...existing, materials: [...existing.materials.filter(saved => saved.requirementId !== material.requirementId), material] } : existing) });
+          setCreateMaterialTarget(null);
+          return true;
+        }} />;
+      })()}
+
+      {itemParent && (
+        <Dialog open={addOpen} onOpenChange={open => {
+          if (!open && !busy) { setAddOpen(false); setPendingItem(null); setItemError(''); setError(''); }
+        }}>
+          <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog" showCloseButton={!busy}>
+            <DialogHeader>
+              <DialogTitle>{pendingReadonly && pendingItem ? '申请项基础信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑申请项' : '添加申请项'}</DialogTitle>
+              <DialogDescription>{pendingItem ? (createOpen ? '填写并保存基础信息，材料可返回请求表单补充。' : '填写并保存基础信息，材料可在申请详情页中补充。') : '选择本次申请的服务目录。'}</DialogDescription>
+            </DialogHeader>
           <div className="sr-item-dialog-body">
             {pendingItem ? (
               <>
@@ -1347,7 +1299,7 @@ export function RequestWorkspace(props: Props) {
                       </p>
                     )}
                   </div>
-                  {!draft?.items.some((i) => i.id === pendingItem.id) && (
+                  {!itemParent.items.some((i) => i.id === pendingItem.id) && (
                     <Button
                       variant="ghost"
                       disabled={busy}
@@ -1363,17 +1315,17 @@ export function RequestWorkspace(props: Props) {
                 <ItemBasicFields
                   value={pendingItem}
                   reservationRecords={reservationRecords}
-                  requestId={draft?.id}
+                  requestId={itemParent.id}
                   priceUnit={
                     props.services.find(
                       (service) => service.id === pendingItem.serviceId,
                     )?.priceUnit
                   }
                   objects={props.businessObjects.filter(
-                    (o) => o.customerId === draft?.customerId,
+                    (o) => o.customerId === itemParent.customerId,
                   )}
-                  customerId={draft?.customerId ?? ''}
-                  readonly={itemsReadonly}
+                  customerId={itemParent.customerId ?? ''}
+                  readonly={pendingReadonly}
                   busy={busy}
                   update={(patch) =>
                     setPendingItem((item) =>
@@ -1438,7 +1390,7 @@ export function RequestWorkspace(props: Props) {
               </p>
             )}
           </div>
-          <DialogFooter>
+            <DialogFooter>
             <Button
               variant="outline"
               disabled={busy}
@@ -1448,17 +1400,18 @@ export function RequestWorkspace(props: Props) {
                 setItemError('');
               }}
             >
-              {itemsReadonly ? '关闭' : '取消'}
+              {pendingReadonly ? '关闭' : '取消'}
             </Button>
-            {pendingItem && !itemsReadonly && (
+            {pendingItem && !pendingReadonly && (
               <Button disabled={busy} onClick={() => void savePendingItem()}>
                 <Save size={15} />
                 {busy ? '正在保存…' : '保存申请项'}
               </Button>
             )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       <Dialog
         open={!!removeId}
@@ -1621,7 +1574,7 @@ export function RequestWorkspace(props: Props) {
             <Button
               disabled={busy}
               onClick={async () => {
-                if (!draft) return;
+                if (!draft || !isRequestApplicant(draft, props.currentActor)) return;
                 if (issues.length) {
                   setSubmitOpen(false);
                   setShowIssues(true);
@@ -1719,7 +1672,7 @@ function ItemBasicFields({
                 availableOptions={value.methods}
                 value={value.method}
                 onChange={(method) =>
-                  update({ method, methodFieldType: methodField.type === 'lookup' ? 'single' : methodField.type })
+                  update({ method, methodFieldType: (methodField.type === 'lookup' || methodField.type === 'address') ? 'single' : methodField.type })
                 }
               />
             ) : (
@@ -1769,7 +1722,7 @@ function ItemBasicFields({
               <div className="request-field-input" key={key} style={fieldStyle(key)}>
                 <span>
                   {label}{' '}
-                  {value.config.fieldRequired?.[key] === false ? (
+                  {!requestFieldIsRequired(value.config, key, value.method) ? (
                     <small>选填</small>
                   ) : (
                     <em>*</em>

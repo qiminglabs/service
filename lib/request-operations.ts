@@ -173,7 +173,7 @@ export function migrateRoleLabel(value: string): string {
     销售经理: 'SmartX 销售经理',
     系统管理员: 'SmartX 系统管理员',
     销售: 'SmartX 销售经理',
-    售前: 'SmartX 销售经理',
+    售前: 'SmartX 售前工程师',
     PMO: 'SmartX 销售经理',
     审批人: 'SmartX 销售经理',
     项目经理: 'SmartX 项目经理',
@@ -196,6 +196,7 @@ export function isInternal(role: string) {
     'SmartX 销售经理',
     'SmartX 项目经理',
     'SmartX 服务工程师',
+    'SmartX 售前工程师',
   ].includes(role);
 }
 export function localDate(now = new Date()) {

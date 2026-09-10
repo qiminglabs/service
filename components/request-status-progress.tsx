@@ -2,9 +2,11 @@
 
 import { Check, Square } from 'lucide-react';
 import { requestProgressSteps } from '@/lib/service-requests';
-import type { RequestStatus } from '@/lib/service-requests';
+import type { RequestStatus, ServiceRequest } from '@/lib/service-requests';
 
-export function RequestStatusProgress({ status }: { status: RequestStatus }) {
+export function RequestStatusProgress(props: { status: RequestStatus } | { record: ServiceRequest }) {
+  const request = 'record' in props ? props.record : props.status;
+  const status = typeof request === 'string' ? request : request.status;
   const cancelled = status === '已取消';
   return (
     <section
@@ -13,7 +15,7 @@ export function RequestStatusProgress({ status }: { status: RequestStatus }) {
       aria-label={'服务请求状态：' + status}
     >
       <ol className="sr-status-steps">
-        {requestProgressSteps(status).map((step, index) => (
+        {requestProgressSteps(request).map((step, index) => (
           <li
             key={step.label}
             data-state={step.state}
@@ -21,7 +23,7 @@ export function RequestStatusProgress({ status }: { status: RequestStatus }) {
           >
             <span className="sr-status-node">
               <span className="sr-status-circle" aria-hidden="true">
-                {cancelled ? (
+                {step.label === '已取消' ? (
                   <Square size={13} />
                 ) : step.state === 'complete' ||
                   (step.state === 'current' && step.label === '已转服务项目') ? (

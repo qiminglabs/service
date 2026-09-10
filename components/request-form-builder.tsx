@@ -10,6 +10,7 @@ import {
 } from '@/components/request-field-settings';
 import {
   isEntitlementService,
+  requestFieldIsRequired,
   checkFile,
   fileAccept,
   storedFile,
@@ -96,7 +97,7 @@ export function RequestFormBuilder({
       ? config.basicFields?.description?.required !== false
       : id === 'businessObjects'
         ? !!config.basicFields?.businessObjects?.required
-        : config.fieldRequired?.[id] !== false);
+        : requestFieldIsRequired(config, id, ''));
   const add = (id: string, before?: string) => {
     if (busy || !all.some((f) => f.id === id)) return;
     const next = { ...config };
@@ -252,7 +253,7 @@ export function RequestFormBuilder({
                     aria-label={`配置${f.name}`}
                   >
                     <span>
-                      {f.name} {required(id) && <em>*</em>}
+                      {f.name} {config.fieldRequiredWhen?.[id] === 'onsite' ? <small>现场时必填</small> : required(id) && <em>*</em>}
                     </span>
                     <GripVertical size={15} />
                   </button>
@@ -503,7 +504,16 @@ export function RequestFormBuilder({
                 ))}
               </div>
             </fieldset>
-            <label className="sr-check-line">
+            {field?.type === 'address' ? <fieldset className="rf-address-required" disabled={busy}>
+              <legend>填写要求</legend>
+              {([['required', '必填'], ['optional', '选填'], ['onsite', '服务方式为现场时必填']] as const).map(([rule, label]) => <label className="sr-check-line" key={rule}>
+                <input type="radio" name={`address-required-${selected}`} value={rule} checked={(config.fieldRequiredWhen?.[selected] === 'onsite' ? 'onsite' : required(selected) ? 'required' : 'optional') === rule} onChange={() => {
+                  const conditions = { ...config.fieldRequiredWhen };
+                  if (rule === 'onsite') conditions[selected] = 'onsite'; else delete conditions[selected];
+                  update({ ...config, fieldRequired: { ...config.fieldRequired, [selected]: rule === 'required' }, fieldRequiredWhen: conditions });
+                }} />{label}
+              </label>)}
+            </fieldset> : <label className="sr-check-line">
               <input
                 type="checkbox"
                 disabled={busy || fixed}
@@ -535,7 +545,7 @@ export function RequestFormBuilder({
                 }}
               />
               必填
-            </label>
+            </label>}
             {selected === 'method' ? (
               <p className="sr-help">
                 引用服务目录：{service.deliveryMethods.join('、')}

@@ -13,7 +13,7 @@ type InitialWorkspace = Parameters<typeof buildRequestSamples>[0] & {
   requestFields?: { id: string; name: string; options?: Array<string | { value: string; enabled: boolean }> }[];
 };
 
-// Call only after the explicit destructive confirmation. Validate/build first;
+// Call only for an explicitly requested reset. Validate/build first;
 // then replace this application's three stores in a single rollback-safe commit.
 export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T) {
   const workspace = structuredClone(initial);
@@ -26,6 +26,14 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
       config.fieldNames[field.id] = field.name;
       config.fieldOptions[field.id] = (field.options ?? []).flatMap(option =>
         typeof option === 'string' ? [option] : option.enabled ? [option.value] : []);
+    }
+    const removedFields = new Set(['productForm', 'tibCount', 'clusterCount', 'instanceCount', 'expectedProvider', 'address']);
+    config.fields = config.fields.filter(id => !removedFields.has(id));
+    config.fieldOrder = config.fieldOrder?.filter(id => !removedFields.has(id));
+    for (const id of removedFields) {
+      delete config.fieldOptions[id];
+      delete config.fieldNames[id];
+      delete config.fieldRequired?.[id];
     }
     return resolveRequestConfig(service, [config]);
   });

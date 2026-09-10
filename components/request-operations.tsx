@@ -199,7 +199,7 @@ export function RequestOperationsTabs({
   ] as const;
   const shownTabs = tabs.filter(([value]) => {
     if (!isInternal(role)) return ['overview', 'supplements'].includes(value);
-    if (record.status === '草稿') return ['overview', 'supplements', 'meetings'].includes(value);
+    if (record.status === '草稿') return ['overview', 'supplements'].includes(value);
     return true;
   });
   return (
@@ -241,7 +241,7 @@ export function RequestOperationsTabs({
               {children}
             </TabsContent>
             <TabsContent value="supplements">
-              <RequestSupplements key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
+              <RequestSupplements users={users} key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
             </TabsContent>
             <TabsContent value="meetings">
               <section className="sr-panel sr-ops-panel">
