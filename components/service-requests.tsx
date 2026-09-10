@@ -196,7 +196,7 @@ function RequestFormPage({ title, description, backLabel, busy, onClose, actions
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus({ preventScroll: true });
-    heading.current?.scrollIntoView({ block: 'start' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, []);
   return (
     <section className="sr-form-page" aria-label={title}>
@@ -755,6 +755,7 @@ export function RequestWorkspace(props: Props) {
 
   return (
     <div
+      data-creating-request={canCreate && createOpen && !!creation || undefined}
       className={
         draft || createOpen || addOpen
           ? 'sr-workspace sr-workspace--detail catalog-detail'
@@ -900,7 +901,7 @@ export function RequestWorkspace(props: Props) {
                 }}
               >
                 <ArrowLeft aria-hidden="true" />
-                返回服务请求
+                返回服务请求列表
               </button>
               <div className="detail-title-row">
                 <h2>{draft.title || '未命名服务请求'}</h2>
@@ -1214,7 +1215,7 @@ export function RequestWorkspace(props: Props) {
         <RequestFormPage
           title="新建服务请求"
           sectioned
-          backLabel={draft ? "返回申请详情" : "返回服务请求"}
+          backLabel={draft ? "返回申请详情" : "返回服务请求列表"}
           busy={busy}
           onClose={() => { setCreateOpen(false); setCreateMaterialTarget(null); setError(''); }}
           actions={<>
