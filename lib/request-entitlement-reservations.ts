@@ -29,7 +29,7 @@ export function entitlementLockIssue(record: ServiceRequest, records: ServiceReq
   if (!plan || plan.releasedAt) return null;
   const expected = effortEntitlementAllocations(assessment?.effort?.lines);
   const allocations = activeEntitlementAllocations(record);
-  if (JSON.stringify(expected) !== JSON.stringify(allocations)) return '权益冻结明细与核定结果不一致，请重新关联服务依据。';
+  if (JSON.stringify(expected) !== JSON.stringify(allocations)) return '权益冻结明细与核定结果不一致，请重新进行服务依据关联。';
   const sums = new Map<string, number>();
   for (const allocation of allocations) {
     const object = objects.find(object => object.id === allocation.objectId && object.customerId === record.customerId && object.status === '启用' && object.product === 'SMTX OS 系统');
@@ -38,7 +38,7 @@ export function entitlementLockIssue(record: ServiceRequest, records: ServiceReq
     const total = (sums.get(key) ?? 0) + allocation.quantity;
     sums.set(key, total);
     const available = entitlementAvailable(object, allocation.kind, records, record.id);
-    if (available === undefined || total > available) return `${object.name}的${entitlementLabel(allocation.kind)}可用数量不足或已被占用，请重新核定人天后关联服务依据。`;
+    if (available === undefined || total > available) return `${object.name}的${entitlementLabel(allocation.kind)}可用数量不足或已被占用，请重新完成人天核定后进行服务依据关联。`;
   }
   return null;
 }

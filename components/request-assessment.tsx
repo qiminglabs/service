@@ -267,7 +267,7 @@ export function RequestAssessment({
       <div className="sr-ops-heading">
         <div>
           <h3>评估</h3>
-          <p>由项目经理完成材料评估、核定人天、关联服务依据并发起客户确认。</p>
+          <p>由项目经理完成材料评估、人天核定、服务依据关联并发起客户确认。</p>
         </div>
         <div className="sr-assessment-manager">
           <span>项目经理</span>
@@ -349,7 +349,7 @@ export function RequestAssessment({
           <div className="sr-assessment-section-title">
             <div className="sr-assessment-step-heading">
               <StepTitle index={1} stage={stage} complete={!!a.confirmation}>
-                核定人天
+                人天核定
               </StepTitle>
               {(a.effort || plan) && (
                 <RecordMeta
@@ -364,7 +364,7 @@ export function RequestAssessment({
                 disabled={disabled || !!waiting}
                 onClick={() => open('effort')}
               >
-                核定人天
+                人天核定
               </Button>
             )}
           </div>
@@ -372,7 +372,7 @@ export function RequestAssessment({
             <p className="sr-help">
               {passed
                 ? '材料评估已通过，请按服务目录核定预估人天。'
-                : '材料评估通过后可核定人天。'}
+                : '材料评估通过后可进行人天核定。'}
             </p>
           ) : (
             <>
@@ -410,7 +410,7 @@ export function RequestAssessment({
           <div className="sr-assessment-section-title">
             <div className="sr-assessment-step-heading">
               <StepTitle index={2} stage={stage} complete={!!a.confirmation}>
-                关联服务依据
+                服务依据关联
               </StepTitle>
               {plan && <RecordMeta author={plan.author} at={plan.at} />}
             </div>
@@ -426,7 +426,7 @@ export function RequestAssessment({
           </div>
           {waiting && (
             <p className="sr-help">
-              额度特批审批中，核定人天与服务依据暂不可修改。
+              额度特批审批中，人天核定与服务依据暂不可修改。
             </p>
           )}
           {plan ? (
@@ -485,7 +485,7 @@ export function RequestAssessment({
           ) : (
             <p className="sr-help">
               {effort === undefined
-                ? '核定人天后，关联客户资产或额外服务额度。'
+                ? '完成人天核定后，关联客户资产或额外服务额度。'
                 : '请选择客户资产并填写锁定人天；不足部分由销售发起额度特批。'}
             </p>
           )}
@@ -545,7 +545,7 @@ export function RequestAssessment({
               : record.status === '已转服务项目' ? '客户已确认，服务项目已创建。'
               : customerConfirmed ? '客户已确认，等待项目经理创建服务项目。'
               : a.confirmation ? '服务依据已提交，等待客户确认。' : !plan
-              ? '关联服务依据后，可发起客户确认。'
+              ? '完成服务依据关联后，可发起客户确认。'
               : gap > 1e-8 && !approved
                 ? '等待额度特批通过后，可发起客户确认。'
                 : '服务依据已足额覆盖，请核对请求概览与预计消耗资产后发起客户确认。'}
@@ -718,8 +718,8 @@ function AssessmentForm({
   const allocationIssue = allocationMethodIssue(record, allocationPreview, customerAssets);
   const titles: Record<string, string> = {
     round: '材料评估',
-    effort: '核定人天',
-    plan: '关联服务依据',
+    effort: '人天核定',
+    plan: '服务依据关联',
     gap: '销售发起额度特批',
     decide: '上级审批额度特批',
   };
@@ -960,7 +960,7 @@ function AssessmentForm({
             {mode === 'round'
               ? '保存评估结论'
               : mode === 'effort'
-                ? '保存核定人天'
+                ? '保存人天核定'
                 : mode === 'plan'
                   ? '保存服务依据'
                   : '提交上级审批'}

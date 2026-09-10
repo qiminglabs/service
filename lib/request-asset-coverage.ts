@@ -40,7 +40,7 @@ export function formatDayRequirements(requirements: DayRequirement[]) {
 }
 export function allocationMethodIssue(record: ServiceRequest, allocations: AssetAllocation[], assets: RequestAsset[]): string | null {
   const requirements = requestDayRequirements(record);
-  if (!requirements.length) return '无法区分远程、现场计价人天，请先按服务方式重新核定人天。';
+  if (!requirements.length) return '无法区分远程、现场计价人天，请先按服务方式重新进行人天核定。';
   if (requirements.some(row => !isDayQuantity(row.days))) return '计价人天须最多一位小数，请重新核定。';
   const resolved: AssetAllocation[] = [];
   for (const allocation of allocations) {

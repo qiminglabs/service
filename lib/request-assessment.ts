@@ -206,7 +206,7 @@ export function planSalesOwnerIssue(record: ServiceRequest, customers: CustomerR
   const owner = customerOwner(record, customers, users);
   if (!owner) return '当前客户未配置有效的客户所有人，请先完善客户资料。';
   return plan.salesId !== owner.id || plan.salesName !== owner.name
-    ? '负责销售必须为当前客户所有人，请重新打开关联服务依据后保存。' : null;
+    ? '负责销售必须为当前客户所有人，请重新打开服务依据关联后保存。' : null;
 }
 export const planAssetDays = (plan?: AssessmentPlan) =>
   sumDays(plan?.allocations.map(a => a.days) ?? []);
@@ -252,7 +252,7 @@ export function assessmentLockIssue(
   const methodIssue = allocationMethodIssue(record, plan.allocations, assets);
   if (methodIssue) return methodIssue;
   if (plan.requirements && JSON.stringify(plan.requirements) !== JSON.stringify(requestDayRequirements(record)))
-    return '远程、现场计价人天已变化，请重新关联服务依据。';
+    return '远程、现场计价人天已变化，请重新进行服务依据关联。';
   for (const allocation of plan.allocations) {
     const asset = assets.find(
       (a) =>
@@ -312,7 +312,7 @@ export function applyAssessmentAction(
     )
   )
     throw new Error(
-      '额度特批审批中，暂不能修改核定人天或服务依据，请等待审批完成。',
+      '额度特批审批中，暂不能修改人天核定或服务依据，请等待审批完成。',
     );
   if (action.type === 'review') {
     manager();
@@ -389,18 +389,18 @@ export function applyAssessmentAction(
         if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
       });
     }
-    title = '核定人天';
+    title = '人天核定';
     detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.kind === 'entitlement' ? `差额权益 ${line.deficitEntitlements}` : line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
   } else if (action.type === 'plan') {
     manager();
     const round = assessment.rounds.find((r) => r.outcome === '评估通过');
     if (!round) throw new Error('请先完成材料评估。');
     const effort = assessedEffort(record);
-    if (effort === undefined) throw new Error('请先核定人天，再关联服务依据。');
+    if (effort === undefined) throw new Error('请先完成人天核定，再进行服务依据关联。');
     if (!isDayQuantity(effort) || effort > 100000) throw new Error('计价总人天须最多一位小数，请重新核定。');
     const sales = customerOwner(record, customers, users);
     if (!sales) throw new Error('当前客户未配置有效的客户所有人，请先完善客户资料。');
-    if (action.salesId && action.salesId !== sales.id) throw new Error('负责销售必须为当前客户所有人，请重新打开关联服务依据后保存。');
+    if (action.salesId && action.salesId !== sales.id) throw new Error('负责销售必须为当前客户所有人，请重新打开服务依据关联后保存。');
     const seen = new Set<string>();
     const allocations = action.allocations.map((a) => {
       positive(a.days);
@@ -435,7 +435,7 @@ export function applyAssessmentAction(
     assessment.approvals.forEach((a) => {
       if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
     });
-    title = plan ? '调整服务依据' : '关联服务依据';
+    title = plan ? '调整服务依据' : '服务依据关联';
     detail = `计价总人天 ${effort} · 锁定 ${planAssetDays(assessment.plans.at(-1))} 人天`;
   } else if (action.type === 'gap-submit') {
     const sales = users.find((u) => u.id === actor.id && isSalesUser(u));
@@ -512,7 +512,7 @@ export function applyAssessmentAction(
   } else if (action.type === 'confirm') {
     manager();
     if (!record.externalCollaborators?.length) throw new Error('发起客户确认前，请至少添加一位客户协作人。');
-    if (!plan || assessedEffort(record) === undefined || !assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('请先完成材料评估、核定人天和关联服务依据。');
+    if (!plan || assessedEffort(record) === undefined || !assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('请先完成材料评估、人天核定和服务依据关联。');
     const gap = planGap(plan);
     const approval = assessment.approvals.find(
       (a) => a.planId === plan.id && a.state === '已通过' && a.days >= gap,

@@ -23,7 +23,7 @@ const postings = new Map<string, number[]>();
 chunks.forEach((chunk, id) => { for (const term of searchTerms(`${chunk.file} ${chunk.text}`)) { const list = postings.get(term) || []; list.push(id); postings.set(term, list); } });
 const synonyms = [
   { match: /提交|必填|校验|材料|草稿/, terms: '提交申请 申请项 补充材料 保存草稿 requestSubmitIssues' },
-  { match: /审批|评估|人天|依据|额度/, terms: '材料评估 核定人天 关联服务依据 客户确认 assessmentLockIssue' },
+  { match: /审批|评估|人天|依据|额度/, terms: '材料评估 人天核定 服务依据关联 客户确认 assessmentLockIssue' },
   { match: /服务项目|工单|受理|拆分|分配/, terms: '创建服务项目 待受理 申请项 projectCreationSaveIssue canCreateServiceProjects' },
   { match: /确认|拒绝|退回/, terms: '客户确认 拒绝 待确认 待受理 customerDecisionIssue' },
   { match: /菜单|角色|权限|身份|入口/, terms: 'resolvePortalContext currentActor currentRole views' },

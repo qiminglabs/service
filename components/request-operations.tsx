@@ -510,7 +510,7 @@ export function RequestOperationsTabs({
                         </span>
                         <div>
                           <h4>
-                            {a.title}
+                            {a.title === '核定人天' ? '人天核定' : a.title === '关联服务依据' ? '服务依据关联' : a.title}
                             <small>{a.category}</small>
                           </h4>
                           <p>{a.detail}</p>

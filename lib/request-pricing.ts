@@ -140,7 +140,7 @@ export function effortPricingSaveIssue(next: ServiceRequest, previous: ServiceRe
       return '计价人天与目录明细不一致，请重新核定。';
     const plan = next.operations?.assessment?.plans.at(-1);
     if (plan && !plan.releasedAt && plan.effort !== calculated.days)
-      return '计价人天已变更，请重新关联服务依据。';
+      return '计价人天已变更，请重新进行服务依据关联。';
     return null;
   } catch (error) { return error instanceof Error ? error.message : '计价人天校验失败。'; }
 }

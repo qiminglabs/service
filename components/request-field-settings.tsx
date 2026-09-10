@@ -71,6 +71,11 @@ const systemFields: Record<
     referenceTarget: 'businessObjects',
   },
   method: { name: '服务方式', type: 'single' },
+  productForm: { name: '产品形态', type: 'single' },
+  address: { name: '地址', type: 'address' },
+  tibCount: { name: 'TiB 数', type: 'integer' },
+  instanceCount: { name: '实例数', type: 'integer' },
+  clusterCount: { name: '集群数', type: 'integer' },
   expectedProvider: {
     name: '期望服务商',
     type: 'lookup',
@@ -157,7 +162,6 @@ export function RequestFieldSettings({
 }) {
   const [activeTab, setActiveTab] = useState('request-items');
   const [target, setTarget] = useState<string | null>(null);
-  const [deletedField, setDeletedField] = useState<RequestField | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<RequestFieldType>('single');
   const [options, setOptions] = useState<FieldOption[]>([]);
@@ -167,6 +171,7 @@ export function RequestFieldSettings({
   const isChoice =
     (type === 'single' || type === 'multiple') && target !== 'businessObjects';
   function open(id: string) {
+    if (!['edition', 'version'].includes(id)) return;
     const field = fields.find((field) => field.id === id);
     setTarget(id);
     setName(field?.name ?? '');
@@ -201,6 +206,7 @@ export function RequestFieldSettings({
     setError('');
   }
   function save() {
+    if (!target || !['edition', 'version'].includes(target)) return;
     if (!name.trim()) {
       setError('请输入字段名称。');
       return;
@@ -217,16 +223,8 @@ export function RequestFieldSettings({
       setError('请至少新建一个选项。');
       return;
     }
-    const field = {
-      id: target === 'new' ? crypto.randomUUID() : target!,
-      name: locked ? systemFields[target!].name : name.trim(),
-      type: locked ? systemFields[target!].type : type,
-      options: next,
-    };
     onChange(
-      target === 'new'
-        ? [...fields, field]
-        : fields.map((item) => (item.id === target ? field : item)),
+      fields.map((item) => item.id === target ? { ...item, options: next } : item),
     );
     setTarget(null);
   }
@@ -252,16 +250,7 @@ export function RequestFieldSettings({
               权益换算
             </TabsTrigger>
           </TabsList>
-          {activeTab === 'request-items' && (
-            <Button
-              className="ct-button ct-button--primary"
-              disabled={!ready}
-              onClick={() => open('new')}
-            >
-              <Plus />
-              新建字段
-            </Button>
-          )}
+
         </div>
         <TabsContent value="request-items">
           <div className="table-scroll">
@@ -279,9 +268,7 @@ export function RequestFieldSettings({
                   <tr key={field.id}>
                     <td>
                       <strong>{field.name}</strong>
-                      {isSystemField(field.id) && (
-                        <span className="request-system-field">系统字段</span>
-                      )}
+                      <span className="request-system-field">系统预置</span>
                     </td>
                     <td>{fieldTypes[field.type]}</td>
                     <td>
@@ -307,8 +294,7 @@ export function RequestFieldSettings({
                       )}
                     </td>
                     <td>
-                      {isSystemField(field.id) &&
-                      !['edition', 'version'].includes(field.id) ? (
+                      {!['edition', 'version'].includes(field.id) ? (
                         <span className="sr-help">系统预置</span>
                       ) : (
                         <Button
@@ -316,25 +302,10 @@ export function RequestFieldSettings({
                           disabled={!ready}
                           onClick={() => open(field.id)}
                         >
-                          编辑
+                          编辑选项
                         </Button>
                       )}
-                      {!initialRequestFields.some(
-                        (item) => item.id === field.id,
-                      ) && (
-                        <Button
-                          variant="ghost"
-                          disabled={!ready}
-                          onClick={() => {
-                            setDeletedField(field);
-                            onChange(
-                              fields.filter((item) => item.id !== field.id),
-                            );
-                          }}
-                        >
-                          删除
-                        </Button>
-                      )}
+
                     </td>
                   </tr>
                 ))}
@@ -346,21 +317,6 @@ export function RequestFieldSettings({
           <EntitlementConversions actor={actor} />
         </TabsContent>
       </Tabs>
-      {activeTab === 'request-items' && deletedField && (
-        <output className="sr-help">
-          已删除「{deletedField.name}」
-          <Button
-            variant="ghost"
-            disabled={!ready}
-            onClick={() => {
-              onChange([...fields, deletedField]);
-              setDeletedField(null);
-            }}
-          >
-            撤销
-          </Button>
-        </output>
-      )}
       <Dialog
         open={target !== null}
         onOpenChange={(open) => {
@@ -370,7 +326,7 @@ export function RequestFieldSettings({
         <DialogContent className="request-field-dialog">
           <DialogHeader>
             <DialogTitle>
-              {target === 'new' ? '新建申请项字段' : '编辑申请项字段'}
+              编辑选项
             </DialogTitle>
             <DialogDescription>
               {locked
