@@ -1,6 +1,7 @@
 'use client';
 import { RequestSupplements } from '@/components/request-supplements';
 import { visibleSupplements } from '@/lib/request-supplements';
+import type { ValidationFailure } from '@/lib/submission-validation';
 import { RequestCustomerConfirmation } from '@/components/request-customer-confirmation';
 
 import { useRef, useState, type ReactNode } from 'react';
@@ -68,6 +69,7 @@ type Props = {
   customerId?: string;
   busy: boolean;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
+  validationFailures?: ValidationFailure[];
   children: ReactNode;
   sidebar: ReactNode;
 };
@@ -142,6 +144,7 @@ export function RequestOperationsTabs({
   customerId,
   busy,
   save,
+  validationFailures,
   children,
   sidebar,
 }: Props) {
@@ -237,7 +240,7 @@ export function RequestOperationsTabs({
         <div className="sr-detail-layout">
           <div className="sr-detail-main">
             <TabsContent value="overview">
-              {!isInternal(role) && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} />}
+              {!isInternal(role) && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
               {children}
             </TabsContent>
             <TabsContent value="supplements">
@@ -463,6 +466,7 @@ export function RequestOperationsTabs({
             </TabsContent>
             <TabsContent value="evaluations">
               <RequestAssessment
+                validationFailures={validationFailures}
                 customers={customers}
                 services={services}
                 record={record}

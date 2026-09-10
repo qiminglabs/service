@@ -1,5 +1,8 @@
+import { runValidationQueue, validationEventsForTransition, SubmissionValidationError } from './submission-validation.ts';
+import { submissionRulesId } from './submission-rule-schema.ts';
+export { requestIssues } from './request-validation-builtins.ts';
 import { addressLabel, isAddressValue, addressComplete } from './request-address.ts';
-import { withRequestCollaborators, requestAudience, isRequestApplicant, applicantRemovalIssue, customerCollaboratorsIssue, submissionCollaboratorsIssue } from './request-collaboration.ts';
+import { withRequestCollaborators, requestAudience, isRequestApplicant, applicantRemovalIssue } from './request-collaboration.ts';
 import { entitlementAvailable } from './request-entitlement-reservations.ts';
 import { workspaceDayQuantityIssue } from './day-quantity.ts';
 import { effortPricingSaveIssue, entitlementPricingContext } from './request-pricing.ts';
@@ -880,58 +883,6 @@ export function itemIssues(item: RequestItem, audience: RequestAudience = 'inter
   }
   return issues;
 }
-export function requestIssues(
-  request: ServiceRequest,
-  refs: {
-    customers: CustomerRef[];
-    contacts: ContactRef[];
-    businessObjects: ObjectRef[];
-    services: CatalogService[];
-    audience?: RequestAudience;
-    currentActor?: OperationActor;
-    users?: InternalUser[];
-  },
-): string[] {
-  const issues: string[] = [];
-  if (!request.title.trim()) issues.push('填写申请主题');
-  const impactIssue = businessImpactIssue(request.businessImpact);
-  if (impactIssue) issues.push(impactIssue);
-  if (
-    !refs.customers.some(
-      (c) => c.id === request.customerId && c.status === '启用',
-    )
-  )
-    issues.push('选择有效客户');
-  const collaborationIssue = submissionCollaboratorsIssue(request, refs.contacts, refs.users ?? []);
-  if (collaborationIssue) issues.push(collaborationIssue);
-  if (!request.items.length) issues.push('至少添加一个申请项');
-  request.items.forEach((item, index) => {
-    const prefix = `申请项 ${index + 1}：`;
-    issues.push(...itemIssues(item, refs.audience, refs.currentActor?.id).map((issue) => prefix + issue));
-    const service = refs.services.find((s) => s.id === item.serviceId);
-    if (!service || service.status !== '已启用')
-      issues.push(prefix + '服务目录已停用或不存在');
-    else if (refs.audience && !serviceAvailableForRequest(service, refs.audience))
-      issues.push(prefix + '服务目录未开放给当前申请站点');
-    if (
-      businessObjectsEnabled(item.config) &&
-      item.businessObjectIds.some(
-        (id) =>
-          !refs.businessObjects.some(
-            (o) =>
-              o.id === id &&
-              o.customerId === request.customerId &&
-              matchesObjectProduct(o, item.config) &&
-              o.status === '启用',
-          ),
-      )
-    )
-      issues.push(
-        prefix + '业务对象不属于当前客户、已停用、不符合可搜索产品或不存在',
-      );
-  });
-  return issues;
-}
 export const fileAccept =
   '.doc,.docx,.pdf,.xls,.xlsx,.csv,.txt,.md,.png,.jpg,.jpeg';
 export function checkFile(file: File): string | null {
@@ -1079,12 +1030,16 @@ export async function saveLocal(
                   const contacts = workspacePayload?.contacts ?? [];
                   const users = workspacePayload?.users ?? [];
                   const customers = workspacePayload?.customers ?? [];
-                  const submitting = serviceRequest.status === '待评估' && (!previous || previous.status === '草稿');
-                  const policyIssue = requestCollaborationSaveIssue(serviceRequest, previous, { contacts, users, customers }, access)
-                    ?? (submitting && !isRequestApplicant(serviceRequest, access?.actor) ? '仅创建人可以提交服务请求。' : null)
-                    ?? (submitting ? requestIssues(serviceRequest, { ...workspacePayload, contacts, users, customers, businessObjects: workspacePayload?.businessObjects ?? [], services: workspacePayload?.services ?? [], audience: requestAudience(serviceRequest), currentActor: access?.actor })[0] ?? null : null)
-                    ?? (startingConfirmation ? customerCollaboratorsIssue(serviceRequest, contacts) : null);
+                  const policyIssue = requestCollaborationSaveIssue(serviceRequest, previous, { contacts, users, customers }, access);
                   if (policyIssue) { reject(new RequestIdentityError(policyIssue)); transaction.abort(); return; }
+                  const validationEvents = validationEventsForTransition(serviceRequest, previous);
+                  try {
+                    const failures = runValidationQueue(serviceRequest, { contacts, users, customers, businessObjects: workspacePayload?.businessObjects ?? [], services: workspacePayload?.services ?? [], currentActor: access?.actor }, validationEvents, referenceRead.result.find((entry: { id: string }) => entry.id === submissionRulesId)?.payload);
+                    if (failures.length) throw new SubmissionValidationError(failures, validationEvents);
+                  } catch (error) {
+                    reject(error instanceof SubmissionValidationError ? error : new SubmissionValidationError([{ ruleId: 'queue', requirement: '校验队列', message: '校验队列执行失败，请刷新后重试。' }], validationEvents));
+                    transaction.abort(); return;
+                  }
                   if (!checkAssessment) { records.put(withRequestCollaborators(serviceRequest, contacts, customers, users)); return; }
                   const ownerIssue = changedPlan ? planSalesOwnerIssue(serviceRequest, workspacePayload?.customers ?? [], workspacePayload?.users ?? []) : null;
                   const lockIssue = ownerIssue ?? effortPricingSaveIssue(serviceRequest, previous, workspacePayload?.services ?? [], entitlementPricingContext(workspace.result, all.result.map(normalizeStoredRequest)))

@@ -2406,19 +2406,71 @@ body {
 .sidebar-item[data-active] svg {
   color: #0080ff;
 }
+.sidebar-parent[data-active] {
+  color: #243b5a;
+  background: transparent;
+  font-weight: 600;
+}
+.sidebar-parent[data-active]:hover {
+  background: #f3f6fa;
+}
+.sidebar-parent[data-active] > svg {
+  color: #526780;
+}
 .sidebar-parent .sidebar-chevron {
   width: 13px;
   height: 13px;
   margin-left: auto;
   color: #6b7d99;
+  transition: transform 160ms ease;
 }
 .sidebar-children {
-  margin-left: 27px;
-  padding-left: 8px;
-  border-left: 1px solid rgba(211, 218, 235, 0.6);
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 6px 28px;
+  padding: 0 0 0 12px;
+  border: 0;
 }
 .sidebar-children .sidebar-item {
-  padding-left: 16px;
+  position: relative;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  color: #526078;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.sidebar-children .sidebar-item:hover {
+  color: #243b5a;
+  background: #f3f6fa;
+}
+.sidebar-children .sidebar-item[data-active] {
+  color: #006bd6;
+  background: #edf5ff;
+  font-weight: 500;
+}
+.sidebar-children .sidebar-item[data-active]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 2px;
+  background: #0080ff;
+}
+.sidebar-item:focus-visible {
+  outline: 2px solid #0080ff;
+  outline-offset: -2px;
+}
+.backend-rules-note {
+  margin: 0;
+  padding: 16px 20px;
+  color: #78869a;
+  font-size: 13px;
+  border-bottom: 1px solid #e8edf3;
 }
 
 .topbar {
@@ -6245,3 +6297,30 @@ div:has(> .catalog-history-select-popup) { z-index: 230; }
 .catalog-history-body .detail-card a, .catalog-history-body .detail-card button { color: #0088ff; font-size: 13px; }
 .catalog-history-footer { flex: none; padding: 14px 24px; margin: 0; border-top: 1px solid #e1e7f0; background: white; }
 @media (max-width: 600px) { .catalog-history-readonly { display: none; } .catalog-history-toolbar { gap: 8px; padding: 12px 16px; } .catalog-history-body { padding: 16px; } .catalog-history-body .detail-card dl { grid-template-columns: 1fr; } }
+
+/* Submission rules share the backend list layout and the request warning position. */
+.submission-rules-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; }
+.submission-rules-toolbar p { margin: 0; color: #697386; font-size: 14px; }
+.submission-rules-toolbar > button { flex-shrink: 0; }
+.submission-rule-notice { margin: 0; padding: 8px 20px 16px; color: #526078; font-size: 14px; }
+.submission-rules-table { min-width: 1300px; }
+.submission-rules-table td:nth-child(3), .submission-rules-table td:nth-child(4) { min-width: 300px; max-width: 520px; white-space: normal; overflow-wrap: anywhere; }
+.submission-rule-events { display: flex; flex-wrap: wrap; gap: 6px; min-width: 180px; max-width: 240px; }
+.submission-rule-events > span { background: #f2f5f9; color: #526078; border-radius: 4px; padding: 2px 7px; font-size: 13px; white-space: nowrap; }
+.submission-rule-requirement { white-space: pre-wrap; }
+.submission-rule-requirement details { margin-top: 8px; color: #697386; font-size: 13px; }
+.submission-rule-requirement summary { cursor: pointer; color: #006bd6; }
+.submission-rule-requirement details p { margin: 8px 0 0; }
+.submission-rule-state { color: #526078; white-space: nowrap; font-size: 13px; }
+.submission-rule-state[data-status='active'] { color: #16764a; }
+.submission-rule-state[data-status='pending'], .submission-rule-problem { color: #a06417; }
+.submission-rule-status-note { display: block; margin-top: 4px; font-size: 12px; color: #697386; }
+.submission-rule-dialog [data-slot='native-select-wrapper'] { width: 100%; }
+.submission-rule-event-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border: 0; margin: 0; padding: 0; }
+.submission-rule-event-picker legend { margin-bottom: 12px; font-size: 14px; font-weight: 500; }
+.submission-rule-event-picker legend span { color: #697386; font-weight: 400; margin-left: 8px; }
+.submission-rule-event-picker > label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 400; }
+.sr-validation-alert:focus { outline: 2px solid #e5b25e; outline-offset: 2px; }
+@media (max-width: 640px) { .submission-rules-toolbar { align-items: flex-start; } .submission-rule-event-picker { grid-template-columns: 1fr; } }
+
+.submission-rule-prompt { white-space: pre-wrap; }

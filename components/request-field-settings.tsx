@@ -1,5 +1,6 @@
 'use client';
 
+import type { OperationActor } from '@/lib/request-operations';
 import { createContext, useId, useState } from 'react';
 import { Plus } from 'lucide-react';
 import {
@@ -13,6 +14,8 @@ import {
   allCityNames,
 } from '@/lib/china-province-city';
 import { EntitlementConversions } from '@/components/entitlement-conversions';
+import { RequestRuleSettings } from '@/components/request-rule-settings';
+import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -52,6 +55,8 @@ export type RequestField = {
   type: RequestFieldType;
   options: FieldOption[];
   referenceTarget?: 'partners' | 'businessObjects';
+  updatedAt?: string;
+  updatedBy?: string;
 };
 const systemFields: Record<
   string,
@@ -154,13 +159,18 @@ export function RequestFieldSettings({
   onChange,
   ready,
   actor,
+  actorIdentity,
+  section = 'forms',
 }: {
+  section?: BackendSettingsSection;
   actor: string;
+  actorIdentity: OperationActor;
   fields: RequestField[];
   onChange: (fields: RequestField[]) => void;
   ready: boolean;
 }) {
-  const [activeTab, setActiveTab] = useState('request-items');
+  const currentSection = backendSettingsSections.find(item => item.key === section)!;
+  const [activeTab, setActiveTab] = useState<string>(currentSection.tabs[0].key);
   const [target, setTarget] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<RequestFieldType>('single');
@@ -223,36 +233,42 @@ export function RequestFieldSettings({
       setError('请至少新建一个选项。');
       return;
     }
-    onChange(
-      fields.map((item) => item.id === target ? { ...item, options: next } : item),
+    const current = fields.find((field) => field.id === target);
+    const changed = current && (
+      current.options.length !== next.length ||
+      current.options.some((option, index) =>
+        option.value !== next[index]?.value || option.enabled !== next[index]?.enabled,
+      )
     );
+    if (changed) {
+      const updatedAt = new Date().toISOString();
+      onChange(
+        fields.map((item) => item.id === target
+          ? { ...item, options: next, updatedAt, updatedBy: actor || '未选择用户' }
+          : item),
+      );
+    }
     setTarget(null);
   }
   return (
     <section
       className="reference-panel backend-settings-panel"
-      aria-label="后台配置"
+      aria-label={currentSection.label}
     >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
           <TabsList
             variant="line"
             className="reference-tabs"
-            aria-label="字段分类"
+            aria-label={currentSection.label}
           >
-            <TabsTrigger value="request-items" className="reference-tab">
-              申请项字段<span>{fields.length}</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="entitlement-conversions"
-              className="reference-tab"
-            >
-              权益换算
-            </TabsTrigger>
+            {currentSection.tabs.map(tab => <TabsTrigger key={tab.key} value={tab.key} className="reference-tab">
+              {tab.label}{tab.key === 'request-items' && <span>{fields.length}</span>}
+            </TabsTrigger>)}
           </TabsList>
 
         </div>
-        <TabsContent value="request-items">
+        {section === 'forms' && <TabsContent value="request-items">
           <div className="table-scroll">
             <table className="reference-table app-list-table">
               <thead>
@@ -260,6 +276,8 @@ export function RequestFieldSettings({
                   <th>字段名称</th>
                   <th>字段类型</th>
                   <th>选项</th>
+                  <th>修改时间</th>
+                  <th>修改人</th>
                   <th>操作</th>
                 </tr>
               </thead>
@@ -294,6 +312,12 @@ export function RequestFieldSettings({
                       )}
                     </td>
                     <td>
+                      {field.updatedAt
+                        ? new Date(field.updatedAt).toLocaleString('zh-CN', { hour12: false })
+                        : '—'}
+                    </td>
+                    <td>{field.updatedBy ?? '—'}</td>
+                    <td>
                       {!['edition', 'version'].includes(field.id) ? (
                         <span className="sr-help">系统预置</span>
                       ) : (
@@ -312,10 +336,14 @@ export function RequestFieldSettings({
               </tbody>
             </table>
           </div>
-        </TabsContent>
-        <TabsContent value="entitlement-conversions">
+        </TabsContent>}
+        {section === 'request-rules' && <>
+          <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
+          <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
+        </>}
+        {section === 'pricing' && <TabsContent value="entitlement-conversions">
           <EntitlementConversions actor={actor} />
-        </TabsContent>
+        </TabsContent>}
       </Tabs>
       <Dialog
         open={target !== null}

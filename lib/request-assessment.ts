@@ -511,7 +511,6 @@ export function applyAssessmentAction(
     detail = action.note;
   } else if (action.type === 'confirm') {
     manager();
-    if (!record.externalCollaborators?.length) throw new Error('发起客户确认前，请至少添加一位客户协作人。');
     if (!plan || assessedEffort(record) === undefined || !assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('请先完成材料评估、人天核定和服务依据关联。');
     const gap = planGap(plan);
     const approval = assessment.approvals.find(

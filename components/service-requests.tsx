@@ -1,5 +1,8 @@
 'use client';
 
+import { checkSubmissionQueue, SubmissionValidationError, submissionEvent, validationHeading } from '@/lib/submission-validation';
+import type { ValidationFailure } from '@/lib/submission-validation';
+import type { RuleEvent } from '@/lib/submission-rule-schema';
 import { isRequestApplicant, requestAudience } from '@/lib/request-collaboration';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { RequestFormBuilder } from '@/components/request-form-builder';
@@ -109,7 +112,6 @@ import {
   newRequest,
   normalizeRequestConfig,
   readLocal,
-  requestIssues,
   saveLocal,
 } from '@/lib/service-requests';
 import type {
@@ -319,7 +321,9 @@ export function RequestWorkspace(props: Props) {
   const canCreate = canCreateRequest(access);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [ready, setReady] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [savingBusy, setBusy] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const busy = savingBusy || validating;
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
@@ -352,6 +356,29 @@ export function RequestWorkspace(props: Props) {
     ServiceRequest[]
   >([]);
   const [showIssues, setShowIssues] = useState(false);
+  const [validationResult, setValidationResult] = useState<{ requestId: string; failures: ValidationFailure[]; events: RuleEvent[] } | null>(null);
+  const validationAlert = useRef<HTMLElement>(null);
+  const validationLock = useRef(false);
+  useEffect(() => {
+    if (showIssues && validationResult?.failures.length) {
+      validationAlert.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      validationAlert.current?.focus({ preventScroll: true });
+    }
+  }, [showIssues, validationResult]);
+  async function checkBeforeSubmission(record: ServiceRequest) {
+    if (validationLock.current || saveLock.current) return false;
+    validationLock.current = true; setValidating(true); setError('');
+    const events = [submissionEvent(record)];
+    try {
+      const failures = await checkSubmissionQueue(record, props.currentActor, events);
+      setValidationResult({ requestId: record.id, failures, events });
+      setShowIssues(failures.length > 0);
+      return failures.length === 0;
+    } catch {
+      setValidationResult({ requestId: record.id, events, failures: [{ ruleId: 'queue', requirement: '校验队列', message: '无法完成校验，请检查本机存储并重试。' }] });
+      setShowIssues(true); return false;
+    } finally { validationLock.current = false; setValidating(false); }
+  }
   const handledToken = useRef(0);
   const saveLock = useRef(false);
 
@@ -456,11 +483,15 @@ export function RequestWorkspace(props: Props) {
       );
       setDraft(canAccessRequest(next, access) ? next : null);
       setNotice(message);
+      setValidationResult(null);
+      setShowIssues(false);
       return true;
     } catch (error) {
-      setError(
-        error instanceof RequestIdentityError ? error.message : localError,
-      );
+      if (error instanceof SubmissionValidationError) {
+        setSubmitOpen(false);
+        setValidationResult({ requestId: record.id, failures: error.failures, events: error.events });
+        setShowIssues(true);
+      } else setError(error instanceof RequestIdentityError ? error.message : localError);
       return false;
     } finally {
       saveLock.current = false;
@@ -642,10 +673,6 @@ export function RequestWorkspace(props: Props) {
       (customer) => customer.id === draft?.customerId,
     )?.ownerUserId,
   );
-  const issues =
-    draft && showCompleteness
-      ? requestIssues(draft, { ...props, audience })
-      : [];
   const materialItem = draft?.items.find(
     (item) => item.id === materialTarget?.itemId,
   );
@@ -979,12 +1006,11 @@ export function RequestWorkspace(props: Props) {
                   {isRequestApplicant(draft, props.currentActor) && <Button
                     className="ct-button ct-button--primary"
                     disabled={busy}
-                    onClick={() => {
-                      setShowIssues(true);
-                      if (!issues.length) setSubmitOpen(true);
+                    onClick={async () => {
+                      if (await checkBeforeSubmission(draft)) setSubmitOpen(true);
                     }}
                   >
-                    提交申请
+                    {validating ? '正在校验…' : '提交申请'}
                   </Button>}
                 </>
               )}
@@ -992,12 +1018,12 @@ export function RequestWorkspace(props: Props) {
           </header>
           <RequestStatusProgress record={draft} />
           {feedback}
-          {showIssues && !readonly && issues.length > 0 && (
-            <section className="sr-error" role="alert">
-              <strong>尚未提交，请补充以下内容</strong>
+          {showIssues && validationResult?.requestId === draft.id && validationResult.failures.length > 0 && (
+            <section className="sr-error sr-validation-alert" role="alert" ref={validationAlert} tabIndex={-1}>
+              <strong>{validationHeading(validationResult.events)}</strong>
               <ul>
-                {issues.map((issue, index) => (
-                  <li key={`${index}-${issue}`}>{issue}</li>
+                {validationResult.failures.map((failure, index) => (
+                  <li key={`${index}-${failure.ruleId}`} title={failure.requirement}>{failure.message}</li>
                 ))}
               </ul>
               <p>
@@ -1006,6 +1032,7 @@ export function RequestWorkspace(props: Props) {
             </section>
           )}
           <RequestOperationsTabs
+            validationFailures={validationResult?.requestId === draft.id ? validationResult.failures : undefined}
             customers={props.customers}
             services={props.services}
             key={draft.id}
@@ -1642,11 +1669,6 @@ export function RequestWorkspace(props: Props) {
               disabled={busy}
               onClick={async () => {
                 if (!draft || !isRequestApplicant(draft, props.currentActor)) return;
-                if (issues.length) {
-                  setSubmitOpen(false);
-                  setShowIssues(true);
-                  return;
-                }
                 const projectManager = operationIdentities(props.users).find(
                   (user) => user.role === 'SmartX 项目经理',
                 );

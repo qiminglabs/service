@@ -1,5 +1,6 @@
 'use client';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
+import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
 import { parseDayQuantity, formatDays } from '@/lib/day-quantity';
 import { calculateBillableDays } from '@/lib/request-pricing';
 import { isEntitlementService } from '@/lib/service-requests';
@@ -46,6 +47,7 @@ import {
   Plus,
   Search,
   Server,
+  Settings2,
   Users,
   X,
 } from 'lucide-react';
@@ -455,7 +457,7 @@ const navigation: Array<{
   {
     key: 'field-settings',
     label: '后台配置',
-    icon: Database,
+    icon: Settings2,
   },
 ];
 
@@ -487,14 +489,20 @@ function StatusCapsule({ status }: { status: ServiceStatus }) {
 function SideNavigation({
   portal,
   activeView,
+  settingsSection,
+  onSelectSettings,
   onSelect,
   onNavigate,
 }: {
   portal: PortalContext;
   activeView: ViewKey;
+  settingsSection: BackendSettingsSection;
+  onSelectSettings: (section: BackendSettingsSection) => void;
   onSelect: (view: ViewKey) => void;
   onNavigate?: () => void;
 }) {
+  const [settingsExpanded, setSettingsExpanded] = useState(activeView === 'field-settings');
+  useEffect(() => { if (activeView === 'field-settings') setSettingsExpanded(true); }, [activeView]);
   return (
     <aside className="app-sidebar" aria-label="主导航">
       <div className="workspace-switcher">
@@ -512,17 +520,34 @@ function SideNavigation({
             <div className="sidebar-group" key={item.label}>
               <button
                 type="button"
-                className="sidebar-item"
+                className={`sidebar-item${item.key === 'field-settings' ? ' sidebar-parent' : ''}`}
                 data-active={activeView === item.key || undefined}
-                aria-current={activeView === item.key ? 'page' : undefined}
+                aria-current={activeView === item.key && item.key !== 'field-settings' ? 'page' : undefined}
+                aria-expanded={item.key === 'field-settings' ? settingsExpanded : undefined}
                 onClick={() => {
+                  if (item.key === 'field-settings') {
+                    setSettingsExpanded(!settingsExpanded);
+                    if (!settingsExpanded) onSelect(item.key);
+                    return;
+                  }
                   onSelect(item.key);
                   onNavigate?.();
                 }}
               >
                 <item.icon aria-hidden="true" />
                 <span>{item.label}</span>
+                {item.key === 'field-settings' && <ChevronDown className="sidebar-chevron" aria-hidden="true" style={{ transform: settingsExpanded ? undefined : 'rotate(-90deg)' }} />}
               </button>
+              {item.key === 'field-settings' && settingsExpanded && <div className="sidebar-children" aria-label="后台配置子导航">
+                {backendSettingsSections.map(section => <button
+                  type="button"
+                  key={section.key}
+                  className="sidebar-item"
+                  data-active={activeView === 'field-settings' && settingsSection === section.key || undefined}
+                  aria-current={activeView === 'field-settings' && settingsSection === section.key ? 'page' : undefined}
+                  onClick={() => { onSelectSettings(section.key); onNavigate?.(); }}
+                >{section.label}</button>)}
+              </div>}
             </div>
           ))}
       </nav>
@@ -701,6 +726,7 @@ export default function Home() {
 function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const resetting = useRef(false);
   const [selectedView, setActiveView] = useState<ViewKey>('requests');
+  const [settingsSection, setSettingsSection] = useState<BackendSettingsSection>('forms');
   const [requestCreateToken, setRequestCreateToken] = useState(0);
   const [serviceRecords, setServiceRecords] = useState<Service[]>(services);
   const [query, setQuery] = useState('');
@@ -954,6 +980,12 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     setActiveView(view);
     setDetailServiceId(null);
     setQuery('');
+  }
+
+  function selectSettingsSection(section: BackendSettingsSection) {
+    if (!portal.views.includes('field-settings')) return;
+    setSettingsSection(section);
+    selectView('field-settings');
   }
 
   function openReferenceCreation() {
@@ -1361,6 +1393,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
       <SideNavigation
         portal={portal}
         activeView={activeView}
+        settingsSection={settingsSection}
+        onSelectSettings={selectSettingsSection}
         onSelect={selectView}
       />
 
@@ -1385,6 +1419,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
             <SideNavigation
               portal={portal}
               activeView={activeView}
+              settingsSection={settingsSection}
+              onSelectSettings={selectSettingsSection}
               onSelect={selectView}
               onNavigate={() => setMobileNavOpen(false)}
             />
@@ -1417,7 +1453,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                   : activeView === 'catalog'
                     ? '服务目录'
                     : activeView === 'field-settings'
-                      ? '后台配置'
+                      ? backendSettingsSections.find(section => section.key === settingsSection)!.label
                       : '引用数据'}
               </h1>
               {activeView === 'reference-data' ? (
@@ -1549,7 +1585,10 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
             </BusinessObjectProductsContext.Provider>
           ) : activeView === 'field-settings' ? (
             <RequestFieldSettings
+              key={settingsSection}
+              section={settingsSection}
               actor={currentActor.name}
+              actorIdentity={currentActor}
               fields={requestFields}
               onChange={setRequestFields}
               ready={referencesReady}

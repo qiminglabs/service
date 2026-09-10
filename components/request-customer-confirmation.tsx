@@ -1,5 +1,6 @@
 'use client';
-import { useRef, useState } from 'react';
+import type { ValidationFailure } from '@/lib/submission-validation';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -9,14 +10,16 @@ import { formatDays } from '@/lib/day-quantity';
 import type { ServiceRequest } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
 
-export function RequestCustomerConfirmation({ record, actor, customerId, busy, save }: {
+export function RequestCustomerConfirmation({ record, actor, customerId, busy, save, validationFailures }: {
   record: ServiceRequest;
   actor: OperationActor;
   customerId?: string;
   busy: boolean;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
+  validationFailures?: ValidationFailure[];
 }) {
   const [mode, setMode] = useState<'accept' | 'reject' | null>(null);
+  useEffect(() => { if (validationFailures?.length) setMode(null); }, [validationFailures]);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [working, setWorking] = useState(false);

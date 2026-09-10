@@ -1,6 +1,6 @@
 'use client';
 
-import { customerCollaboratorsIssue } from '@/lib/request-collaboration';
+import type { ValidationFailure } from '@/lib/submission-validation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,6 +48,7 @@ type Props = {
   assets: RequestAsset[];
   busy: boolean;
   save: (r: ServiceRequest, message?: string) => Promise<boolean>;
+  validationFailures?: ValidationFailure[];
 };
 type Mode = 'round' | 'effort' | 'plan' | 'gap' | 'decide' | null;
 const fmt = formatDays;
@@ -130,6 +131,7 @@ export function RequestAssessment({
   assets,
   busy,
   save,
+  validationFailures,
 }: Props) {
   const a = assessmentOf(record),
     plan = currentPlan(record),
@@ -161,6 +163,7 @@ export function RequestAssessment({
   const canConfirm = manager && editable && confirmationReady;
   const [externalNote, setExternalNote] = useState('');
   const [dialog, setDialog] = useState<Mode | 'confirm'>(null);
+  useEffect(() => { if (validationFailures?.length) setDialog(null); }, [validationFailures]);
   const [liveServices, setLiveServices] = useState<CatalogService[]>([]);
   const [livePricingContext, setLivePricingContext] = useState<EntitlementPricingContext>({ businessObjects: [], conversions: {} });
   const [catalogReady, setCatalogReady] = useState(false);
@@ -218,10 +221,6 @@ export function RequestAssessment({
     try {
       const fresh = await readLocal<ServiceRequest>('requests');
       const pricingData = ['effort', 'plan', 'confirm'].includes(action.type) ? await readCurrentPricingData() : { services, context: livePricingContext };
-      if (action.type === 'confirm') {
-        const issue = customerCollaboratorsIssue(record, 'contacts' in pricingData ? pricingData.contacts : []);
-        if (issue) throw new Error(issue);
-      }
       const pricingServices = pricingData.services;
       if (action.type === 'effort') { setLiveServices(pricingServices); setLivePricingContext(pricingData.context); }
       const references = action.type === 'plan' ? await readLocal<{ id: string; payload?: { customers?: CustomerRef[]; users?: InternalUser[] } }>('references') : [];
@@ -245,7 +244,7 @@ export function RequestAssessment({
       if (ok) {
         setRecords(fresh);
         setDialog(null);
-      } else setError('保存未完成，请检查页面错误提示后重试。');
+      } else setError('保存未完成，请检查页面提示后重试。');
       return ok;
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败，请重试。');
