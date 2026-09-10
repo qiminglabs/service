@@ -264,10 +264,41 @@ export type RequestItem = {
     | 'date';
   description: string;
   businessObjectIds: string[];
+  businessObjectSnapshot?: {
+    savedAt: string;
+    objects: { object: ObjectRef; entitlement: ReturnType<typeof objectEntitlementAvailability> }[];
+  };
   values: Record<string, string>;
   config: RequestConfig;
   materials: ItemMaterial[];
 };
+
+// Capture only on an explicit application-item save. Pricing and reservations
+// continue to use current workspace objects, never these display snapshots.
+export function snapshotItemBusinessObjects(item: RequestItem, objects: ObjectRef[], priceUnit: string | undefined, records: ServiceRequest[], requestId: string, customerId: string, savedAt = new Date().toISOString()): RequestItem {
+  const selected = item.businessObjectIds.map(id => {
+    const object = objects.find(object => object.id === id && object.customerId === customerId && object.status === '启用' && matchesObjectProduct(object, item.config));
+    if (!object) throw new Error('请取消关联已停用、不属于当前客户或不符合可搜索产品的业务对象。');
+    return { object: structuredClone(object), entitlement: objectEntitlementAvailability(object, priceUnit, records, requestId) };
+  });
+  return { ...item, businessObjectSnapshot: { savedAt, objects: selected } };
+}
+
+export function savedItemBusinessObjects(item: RequestItem) {
+  return item.businessObjectIds.map(id => {
+    const saved = item.businessObjectSnapshot?.objects.find(entry => entry.object.id === id);
+    return saved ? { ...saved, recorded: true } : {
+      object: { id, name: id, customerId: '', status: '', nodeCount: 0 } as ObjectRef,
+      entitlement: null,
+      recorded: false,
+    };
+  });
+}
+
+function itemObjectName(item: RequestItem, id: string, objects: Pick<ObjectRef, 'id' | 'name'>[]) {
+  return item.businessObjectSnapshot?.objects.find(entry => entry.object.id === id)?.object.name
+    ?? objects.find(object => object.id === id)?.name ?? id;
+}
 export type InternalUser = {
   id: string;
   name: string;
@@ -448,14 +479,14 @@ export function itemDisplayFields(item: RequestItem, names: Record<string, strin
   };
   const keys = [...new Set(['method', ...item.config.fields])].filter(key => key !== 'description' && key !== 'businessObjects');
   const fields = keys.map(key => ({ key, label: names[key] || item.config.fieldNames?.[key] || fieldLabels[key] || (key === 'method' ? '服务方式' : key), value: display(key === 'method' ? item.method : item.values[key]) }));
-  if (businessObjectsEnabled(item.config)) fields.push({ key: 'businessObjects', label: names.businessObjects || '业务对象', value: item.businessObjectIds.map(id => objects.find(object => object.id === id)?.name || id).join('、') || '未关联' });
+  if (businessObjectsEnabled(item.config)) fields.push({ key: 'businessObjects', label: names.businessObjects || '业务对象', value: item.businessObjectIds.map(id => itemObjectName(item, id, objects)).join('、') || '未关联' });
   return fields;
 }
 export function itemSummaryFields(item: RequestItem, names: Record<string, string> = {}, objects: Pick<ObjectRef, 'id' | 'name'>[] = []): { key: string; label: string; value: string; address: boolean }[] {
   const defaults: Record<string, string> = { ...fieldLabels, method: '服务方式', edition: '产品版本', businessObjects: '业务对象', productForm: '产品形态', address: '地址', tibCount: 'TiB 数', instanceCount: '实例数', clusterCount: '集群数', expectedProvider: '期望服务商' };
   const keys = [...new Set(['method', 'edition', 'nodes', 'version', ...item.config.fields, ...Object.keys(item.values), 'businessObjects'])].filter(key => key !== 'description');
   return keys.flatMap(key => {
-    let value = (key === 'method' ? item.method : key === 'businessObjects' ? item.businessObjectIds.map(id => objects.find(object => object.id === id)?.name ?? id).join('、') : item.values[key] ?? '').trim();
+    let value = (key === 'method' ? item.method : key === 'businessObjects' ? item.businessObjectIds.map(id => itemObjectName(item, id, objects)).join('、') : item.values[key] ?? '').trim();
     const address = key === 'address' || isAddressValue(value);
     if (isAddressValue(value)) value = addressLabel(value);
     else if (value.startsWith('[')) {

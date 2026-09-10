@@ -91,6 +91,8 @@ import {
   businessObjectsEnabled,
   matchesObjectProduct,
   objectEntitlementAvailability,
+  snapshotItemBusinessObjects,
+  savedItemBusinessObjects,
   defaultConfig,
   readRequestConfigs,
   resolveRequestConfig,
@@ -289,7 +291,7 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
               })}
             </div>
             <div className="sr-item-actions">
-              <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{readonly ? '查看基础信息' : '编辑基础信息'}</Button>
+              <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{readonly ? '查看详细信息' : '编辑详细信息'}</Button>
               {!readonly && <button className="sr-muted-button" disabled={busy} onClick={() => onRemove(item.id)}>移除</button>}
             </div>
           </div>
@@ -363,7 +365,7 @@ export function RequestWorkspace(props: Props) {
   function changeCreationCustomer(customerId: string) {
     if (!creation) return;
     const defaults = newRequest('', customerId, props.currentActor.name || props.currentRole, '', props.currentActor.id, props.currentActor.role);
-    setCreation(withRequestContact({ ...creation, customerId, internalParticipants: defaults.internalParticipants, externalCollaborators: defaults.externalCollaborators, items: creation.items.map(item => ({ ...item, businessObjectIds: [], materials: [] })) }, props.contacts, props.customers, props.users));
+    setCreation(withRequestContact({ ...creation, customerId, internalParticipants: defaults.internalParticipants, externalCollaborators: defaults.externalCollaborators, items: creation.items.map(item => ({ ...item, businessObjectIds: [], businessObjectSnapshot: undefined, materials: [] })) }, props.contacts, props.customers, props.users));
     setCreateMaterialTarget(null); setError('');
   }
   function load() {
@@ -505,6 +507,7 @@ export function RequestWorkspace(props: Props) {
   }
   async function savePendingItem() {
     if (
+      busy ||
       !itemParent ||
       !pendingItem ||
       !canEditRequestItems(itemParent, props.currentActor)
@@ -545,28 +548,46 @@ export function RequestWorkspace(props: Props) {
       );
       return;
     }
-    const exists = itemParent.items.some((i) => i.id === pendingItem.id);
-    const next = {
-      ...itemParent,
-      items: exists
-        ? itemParent.items.map(item => item.id === pendingItem.id ? pendingItem : item)
-        : [...itemParent.items, pendingItem],
-    };
-    if (createOpen) {
-      updateCreation({ items: next.items });
-      setAddOpen(false); setPendingItem(null); setItemError('');
-      return;
-    }
-    if (
-      await persistItemChanges(
-        next,
-        '申请项基础信息已保存，可在该申请项中补充材料',
-      )
-    ) {
-      setAddOpen(false);
-      setMaterialTarget(null);
-      setPendingItem(null);
-      setItemError('');
+    setBusy(true);
+    try {
+      const results = await Promise.allSettled([
+        readLocal<{ id: string; payload?: { businessObjects?: ObjectRef[]; services?: CatalogService[] } }>('references'),
+        readLocal<ServiceRequest>('requests'),
+      ]);
+      const [references, requests] = results;
+      if (references.status === 'rejected' || requests.status === 'rejected') throw new Error('无法读取当前业务对象和权益数量，请重试。');
+      const workspace = references.value.find(entry => entry.id === 'workspace')?.payload;
+      if (!workspace) throw new Error('无法读取当前业务对象，请重试。');
+      const service = workspace.services?.find(entry => entry.id === pendingItem.serviceId);
+      if (!service || !serviceAvailableForRequest(service, audience)) throw new Error('该服务目录已停用、不存在或未开放给当前申请站点，请重新选择。');
+      const savedItem = snapshotItemBusinessObjects(pendingItem, workspace.businessObjects ?? [], service.priceUnit, requests.value, itemParent.id, itemParent.customerId);
+      const exists = itemParent.items.some((i) => i.id === savedItem.id);
+      const next = {
+        ...itemParent,
+        items: exists
+          ? itemParent.items.map(item => item.id === savedItem.id ? savedItem : item)
+          : [...itemParent.items, savedItem],
+      };
+      if (createOpen) {
+        updateCreation({ items: next.items });
+        setAddOpen(false); setPendingItem(null); setItemError('');
+        return;
+      }
+      if (
+        await persistItemChanges(
+          next,
+          '申请项基础信息已保存，可在该申请项中补充材料',
+        )
+      ) {
+        setAddOpen(false);
+        setMaterialTarget(null);
+        setPendingItem(null);
+        setItemError('');
+      }
+    } catch (error) {
+      setItemError(error instanceof Error ? error.message : '申请项保存失败，请重试。');
+    } finally {
+      setBusy(false);
     }
   }
   async function persistItemChanges(record: ServiceRequest, message: string) {
@@ -964,7 +985,7 @@ export function RequestWorkspace(props: Props) {
                 ))}
               </ul>
               <p>
-                基础字段请点击“编辑基础信息”；材料请点击对应申请项的“补充材料”。
+                基础字段请点击“编辑详细信息”；材料请点击对应申请项的“补充材料”。
               </p>
             </section>
           )}
@@ -1306,8 +1327,8 @@ export function RequestWorkspace(props: Props) {
         }}>
           <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog" showCloseButton={!busy}>
             <DialogHeader>
-              <DialogTitle>{pendingReadonly && pendingItem ? '申请项基础信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑申请项' : '添加申请项'}</DialogTitle>
-              <DialogDescription>{pendingItem ? (createOpen ? '填写并保存基础信息，材料可返回请求表单补充。' : '填写并保存基础信息，材料可在申请详情页中补充。') : '选择本次申请的服务目录。'}</DialogDescription>
+              <DialogTitle>{pendingReadonly && pendingItem ? '申请项详细信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑申请项' : '添加申请项'}</DialogTitle>
+              <DialogDescription>{pendingReadonly && pendingItem ? '申请项信息仅供查看。' : pendingItem ? (createOpen ? '填写并保存基础信息，材料可返回请求表单补充。' : '填写并保存基础信息，材料可在申请详情页中补充。') : '选择本次申请的服务目录。'}</DialogDescription>
             </DialogHeader>
           <div className="sr-item-dialog-body">
             {pendingItem ? (
@@ -1802,20 +1823,15 @@ function ItemBasicFields({
           )}
           <fieldset disabled={readonly || busy} className="sr-object-options">
             <ul aria-label="可关联的业务对象">
-              {objects
+              {(readonly ? savedItemBusinessObjects(value) : objects
                 .filter(
                   (o) =>
                     (o.status === '启用' &&
                       matchesObjectProduct(o, value.config)) ||
                     value.businessObjectIds.includes(o.id),
                 )
-                .map((o) => {
-                  const entitlement = objectEntitlementAvailability(
-                    o,
-                    priceUnit,
-                    reservationRecords,
-                    requestId,
-                  );
+                .map(object => ({ object, entitlement: objectEntitlementAvailability(object, priceUnit, reservationRecords, requestId), recorded: true })))
+                .map(({ object: o, entitlement, recorded }) => {
                   return (
                     <li key={o.id}>
                       <label>
@@ -1842,7 +1858,7 @@ function ItemBasicFields({
                         <span className="sr-object-copy">
                           <span className="sr-object-name">
                             {o.name}
-                            <small>（{o.nodeCount} 节点）</small>
+                            <small>（{recorded ? `${o.nodeCount} 节点` : '申请时数量未记录'}）</small>
                           </span>
                           {entitlement && (
                             <span
@@ -1871,7 +1887,7 @@ function ItemBasicFields({
                           <span className="sr-object-sn">
                             序列号：{o.sn?.trim() || '未填写'}
                           </span>
-                          {o.status !== '启用' && (
+                          {!readonly && o.status !== '启用' && (
                             <span className="sr-missing">
                               已停用，请取消关联
                             </span>
