@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { builtinSubmissionRules } from '@/lib/submission-validation';
 import { ruleScopes, ruleEvents } from '@/lib/submission-rule-schema';
 import type { RuleEvent, RuleScope, SubmissionRule } from '@/lib/submission-rule-schema';
@@ -99,20 +99,31 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
     </table></div>
     {!ready && !error && <p className="submission-rule-notice">正在读取规则…</p>}
     <Dialog open={open} onOpenChange={value => { if (!busy) setOpen(value); }}>
-      <DialogContent className="request-field-dialog submission-rule-dialog">
-        <DialogHeader><DialogTitle>{target ? '编辑提交校验规则' : '新建提交校验规则'}</DialogTitle><DialogDescription>填写检验要求，保存后由 AI 转译；成功后自动生效，无法转译的要求会保留并提示原因。</DialogDescription></DialogHeader>
-        <form className="sr-form-grid" onSubmit={event => { event.preventDefault(); void save(); }}>
-          <label className="sr-span" htmlFor="rule-scope">适用申请<NativeSelect id="rule-scope" value={scope} disabled={busy} onChange={event => setScope(event.target.value as RuleScope)}>{Object.entries(ruleScopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect></label>
-          <fieldset className="sr-span submission-rule-event-picker" disabled={busy}><legend>检查时机 <span>可多选</span></legend>
+      <DialogContent className="submission-rule-dialog" aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>{target ? '编辑提交校验规则' : '新建提交校验规则'}</DialogTitle></DialogHeader>
+        <form className="submission-rule-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+          <div className="submission-rule-form-body">
+          <div className="submission-rule-field">
+            <label htmlFor="rule-scope">适用申请</label>
+            <NativeSelect id="rule-scope" value={scope} disabled={busy} onChange={event => setScope(event.target.value as RuleScope)}>{Object.entries(ruleScopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect>
+          </div>
+          <fieldset className="submission-rule-event-picker" disabled={busy}><legend>检查时机 <span>可多选</span></legend>
             {Object.entries(ruleEvents).map(([value, label]) => <label key={value}><Checkbox disabled={busy} checked={events.includes(value as RuleEvent)} onCheckedChange={checked => setEvents(previous => checked ? [...previous, value as RuleEvent] : previous.filter(event => event !== value))} />{label}</label>)}
           </fieldset>
-          <label className="sr-span" htmlFor="rule-requirement"><span>检验要求 <em aria-hidden="true">*</em></span><Textarea id="rule-requirement" rows={5} maxLength={2000} required disabled={busy} value={requirement} onChange={event => setRequirement(event.target.value)} placeholder="例如：必须填写申请说明；期望服务日期至少提前 3 天；内部协作人至少包含一位服务工程师。" /></label>
-          <p className="sr-help sr-span">支持字段必填、人数和数量比较、协作人角色、必填材料齐套等检查。请明确条件和数量；附件正文判断、外部系统数据暂不支持。</p>
-          <label className="sr-span" htmlFor="rule-prompt"><span>提示文本 <em aria-hidden="true">*</em></span><Textarea id="rule-prompt" rows={3} maxLength={4000} required disabled={busy} value={promptText} onChange={event => setPromptText(event.target.value)} placeholder="例如：请填写申请说明后再提交。" /></label>
-          <p className="sr-help sr-span">校验未通过时，向申请人显示此提示文本。</p>
-          {formError && <p className="sr-error sr-span" role="alert">{formError}{target?.active?.enabled && ' 原规则仍然生效。'}</p>}
-          {busy && <p className="sr-help sr-span" role="status">文字要求保存后正在转译，请稍候…</p>}
-          <DialogFooter className="sr-span"><Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>取消</Button><Button type="submit" disabled={busy || !canManage}>{busy ? '正在保存并转译…' : '保存并转译'}</Button></DialogFooter>
+          <div className="submission-rule-field">
+            <label htmlFor="rule-requirement">自然语言描述检验要求 <em aria-hidden="true">*</em></label>
+            <p id="rule-requirement-help" className="submission-rule-field-help">保存后将 AI 转译，支持字段必填、人数和数量比较、协作人角色、必填材料齐套等检查。</p>
+            <Textarea id="rule-requirement" aria-describedby="rule-requirement-help" rows={3} maxLength={2000} required disabled={busy} value={requirement} onChange={event => setRequirement(event.target.value)} placeholder="例如：必须填写申请说明；期望服务日期至少提前 3 天；内部协作人至少包含一位服务工程师。" />
+          </div>
+          <div className="submission-rule-field">
+            <label htmlFor="rule-prompt">提示文本 <em aria-hidden="true">*</em></label>
+            <p id="rule-prompt-help" className="submission-rule-field-help">校验未通过时，向申请人显示此提示文本。</p>
+            <Textarea id="rule-prompt" aria-describedby="rule-prompt-help" rows={2} maxLength={4000} required disabled={busy} value={promptText} onChange={event => setPromptText(event.target.value)} placeholder="例如：请填写申请说明后再提交。" />
+          </div>
+          {formError && <p className="sr-error" role="alert">{formError}{target?.active?.enabled && ' 原规则仍然生效。'}</p>}
+          {busy && <p className="sr-help" role="status">文字要求保存后正在转译，请稍候…</p>}
+          </div>
+          <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>取消</Button><Button type="submit" disabled={busy || !canManage}>{busy ? '正在保存并转译…' : '保存并转译'}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
