@@ -182,6 +182,7 @@ export function attributeRequestMaterials(record: ServiceRequest, previous: Serv
 export type RequestConfig = {
   fieldOrder?: string[];
   fieldWidths?: Record<string, 'full' | 'half'>;
+  fieldRowStarts?: string[];
   basicFields?: {
     description?: { enabled: boolean; required: boolean };
     businessObjects?: {
@@ -477,7 +478,7 @@ export function itemDisplayFields(item: RequestItem, names: Record<string, strin
     }
     return value || '未填写';
   };
-  const keys = [...new Set(['method', ...item.config.fields])].filter(key => key !== 'description' && key !== 'businessObjects');
+  const keys = [...new Set(['method', ...item.config.fields])].filter(key => key !== 'description' && key !== 'businessObjects' && requestFieldIsVisible(item.config, key, item.method));
   const fields = keys.map(key => ({ key, label: names[key] || item.config.fieldNames?.[key] || fieldLabels[key] || (key === 'method' ? '服务方式' : key), value: display(key === 'method' ? item.method : item.values[key]) }));
   if (businessObjectsEnabled(item.config)) fields.push({ key: 'businessObjects', label: names.businessObjects || '业务对象', value: item.businessObjectIds.map(id => itemObjectName(item, id, objects)).join('、') || '未关联' });
   return fields;
@@ -486,6 +487,7 @@ export function itemSummaryFields(item: RequestItem, names: Record<string, strin
   const defaults: Record<string, string> = { ...fieldLabels, method: '服务方式', edition: '产品版本', businessObjects: '业务对象', productForm: '产品形态', address: '地址', tibCount: 'TiB 数', instanceCount: '实例数', clusterCount: '集群数', expectedProvider: '期望服务商' };
   const keys = [...new Set(['method', 'edition', 'nodes', 'version', ...item.config.fields, ...Object.keys(item.values), 'businessObjects'])].filter(key => key !== 'description');
   return keys.flatMap(key => {
+    if (!requestFieldIsVisible(item.config, key, item.method)) return [];
     let value = (key === 'method' ? item.method : key === 'businessObjects' ? item.businessObjectIds.map(id => itemObjectName(item, id, objects)).join('、') : item.values[key] ?? '').trim();
     const address = key === 'address' || isAddressValue(value);
     if (isAddressValue(value)) value = addressLabel(value);
@@ -751,12 +753,24 @@ export function newItem(
     materials: [],
   };
 }
+export function copyRequestItem(source: RequestItem): RequestItem {
+  const copy = structuredClone(source);
+  copy.id = crypto.randomUUID();
+  copy.materials = [];
+  delete copy.businessObjectSnapshot;
+  return copy;
+}
+
 export function requestFieldIsRequired(config: RequestConfig, fieldId: string, method: string): boolean {
   if (config.fieldRequiredWhen?.[fieldId] === 'onsite') {
     if (method.trim() === '现场') return true;
     try { const values: unknown = JSON.parse(method); return Array.isArray(values) && values.includes('现场'); } catch { return false; }
   }
   return config.fieldRequired?.[fieldId] !== false;
+}
+
+export function requestFieldIsVisible(config: RequestConfig, fieldId: string, method: string): boolean {
+  return config.fieldRequiredWhen?.[fieldId] !== 'onsite' || requestFieldIsRequired(config, fieldId, method);
 }
 
 export function itemBasicIssues(item: RequestItem): string[] {
@@ -804,7 +818,7 @@ export function itemBasicIssues(item: RequestItem): string[] {
       !Number.isNaN(Date.parse(item.method));
   if (!methodValid) issues.push('服务方式');
   for (const key of item.config.fields) {
-    if (key === 'businessObjects') continue;
+    if (key === 'businessObjects' || !requestFieldIsVisible(item.config, key, item.method)) continue;
     const value = (item.values[key] ?? '').trim();
     const empty = !value || value === '[]';
     if (empty && !requestFieldIsRequired(item.config, key, item.method)) continue;

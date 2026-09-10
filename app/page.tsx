@@ -1409,7 +1409,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               {referenceStorageError}
             </p>
           )}
-          <section className="page-header">
+          {!(activeView === 'catalog' && detailService) && <section className="page-header">
             <div>
               <h1>
                 {activeView === 'requests'
@@ -1427,7 +1427,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                 </p>
               ) : null}
             </div>
-          </section>
+          </section>}
 
           {activeView === 'requests' ? (
             referencesReady && portal.views.includes('requests') ? (
@@ -1839,9 +1839,6 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                 {formError}
               </p>
             ) : null}
-            <div className="dialog-notice">
-              服务编码按类别自动生成，创建后状态为草稿。
-            </div>
           </div>
           <DialogFooter className="dialog-footer">
             <DialogClose
@@ -2074,7 +2071,7 @@ function CatalogDetail({
         <div>
           <button type="button" className="detail-back" onClick={onBack}>
             <ArrowLeft aria-hidden="true" />
-            返回服务目录
+            返回服务目录列表
           </button>
           <div className="detail-title-row">
             <h2>{service.name}</h2>

@@ -3,7 +3,7 @@
 import { isRequestApplicant, requestAudience } from '@/lib/request-collaboration';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { RequestFormBuilder } from '@/components/request-form-builder';
-import { requestFormOrder, requestFieldWidth } from '@/lib/request-form-layout';
+import { requestFormOrder, requestFieldGridColumn } from '@/lib/request-form-layout';
 import { initializeRequestSamples } from '@/lib/demo-service-requests';
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -103,7 +103,9 @@ import {
   itemSummaryFields,
   itemBasicIssues,
   requestFieldIsRequired,
+  requestFieldIsVisible,
   newItem,
+  copyRequestItem,
   newRequest,
   normalizeRequestConfig,
   readLocal,
@@ -225,7 +227,7 @@ function RequestCustomerLabel({ required = false, hint = '创建后不可修改�
   </span>;
 }
 
-function RequestItemsPanel({ record, objects, actor, busy, readonly, showCompleteness, canAdd = true, onAdd, onEdit, onRemove, onMaterial }: {
+function RequestItemsPanel({ record, objects, actor, busy, readonly, showCompleteness, canAdd = true, onAdd, onEdit, onRemove, onCopy, onMaterial }: {
   record: ServiceRequest;
   objects: ObjectRef[];
   actor: OperationActor;
@@ -236,6 +238,7 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
   onAdd: () => void;
   onEdit: (item: RequestItem) => void;
   onRemove: (id: string) => void;
+  onCopy: (id: string) => void;
   onMaterial: (target: { itemId: string; requirementId: string }) => void;
 }) {
   const fieldNames = Object.fromEntries(useContext(RequestFieldsContext).map(field => [field.id, field.name]));
@@ -292,7 +295,7 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
             </div>
             <div className="sr-item-actions">
               <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{readonly ? '查看详细信息' : '编辑详细信息'}</Button>
-              {!readonly && <button className="sr-muted-button" disabled={busy} onClick={() => onRemove(item.id)}>移除</button>}
+              {!readonly && <div className="sr-item-secondary-actions"><button type="button" className="sr-copy-item" disabled={busy || !canAdd} onClick={() => onCopy(item.id)}>复制</button><button type="button" className="sr-muted-button" disabled={busy} onClick={() => onRemove(item.id)}>移除</button></div>}
             </div>
           </div>
         </article>;
@@ -463,6 +466,18 @@ export function RequestWorkspace(props: Props) {
       saveLock.current = false;
       setBusy(false);
     }
+  }
+  async function duplicateItem(record: ServiceRequest, id: string, creating: boolean) {
+    if (!ready || busy || saveLock.current || !canEditRequestItems(record, props.currentActor)) return;
+    const source = record.items.find(item => item.id === id);
+    if (!source) return;
+    if (!availableServices.some(service => service.id === source.serviceId)) {
+      setError('该目录已停用或未开放给当前站点，不能复制申请项。'); return;
+    }
+    const items = [...record.items];
+    items.splice(items.findIndex(item => item.id === id) + 1, 0, copyRequestItem(source));
+    if (creating) updateCreation({ items });
+    else await persist({ ...record, items }, '已复制申请项，请按需修改内容并补充材料');
   }
   async function createDraft() {
     if (!ready || busy || !canCreate || !creation) return;
@@ -756,6 +771,7 @@ export function RequestWorkspace(props: Props) {
   return (
     <div
       data-creating-request={canCreate && createOpen && !!creation || undefined}
+      data-request-detail={!!draft || undefined}
       className={
         draft || createOpen || addOpen
           ? 'sr-workspace sr-workspace--detail catalog-detail'
@@ -859,7 +875,6 @@ export function RequestWorkspace(props: Props) {
                           }}
                         >
                           查看
-                          <ChevronRight size={14} />
                         </Button>
                       </td>
                     </tr>
@@ -1142,6 +1157,7 @@ export function RequestWorkspace(props: Props) {
               onAdd={() => { setCatalogQuery(''); setPendingItem(null); setItemError(''); setAddOpen(true); }}
               onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setAddOpen(true); }}
               onRemove={setRemoveId} onMaterial={setMaterialTarget}
+              onCopy={id => { void duplicateItem(draft, id, false); }}
             />
             <section
               className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}
@@ -1300,6 +1316,7 @@ export function RequestWorkspace(props: Props) {
             onAdd={() => { setPendingItem(null); setCatalogQuery(''); setItemError(''); setError(''); setAddOpen(true); }}
             onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setError(''); setAddOpen(true); }}
             onRemove={id => updateCreation({ items: creation.items.filter(item => item.id !== id) })}
+            onCopy={id => { void duplicateItem(creation, id, true); }}
             onMaterial={setCreateMaterialTarget}
           />
           </div>
@@ -1336,11 +1353,13 @@ export function RequestWorkspace(props: Props) {
               <>
                 <div className="sr-selected-service">
                   <div>
+                    <div className="sr-selected-service-heading">
                     <strong>{pendingItem.serviceName}</strong>
                     <p>
-                      {pendingItem.serviceId} · 目录版本{' '}
+                      {pendingItem.serviceId} · 版本{' '}
                       {pendingService ? `v${pendingService.version ?? 1}` : '—'}
                     </p>
+                    </div>
                     {pendingServiceContent && (
                       <p className="sr-selected-service-content">
                         服务内容：{pendingServiceContent}
@@ -1696,7 +1715,7 @@ function ItemBasicFields({
   const designed = !!(value.config.fieldOrder || value.config.fieldWidths);
   const fieldStyle = (id: string) => designed ? {
     order: formOrder.indexOf(id),
-    gridColumn: requestFieldWidth(value.config, id) === 'full' ? '1 / -1' : 'span 1',
+    gridColumn: requestFieldGridColumn(value.config, id),
     minWidth: 0,
   } : undefined;
   const methodOptions =
@@ -1760,6 +1779,7 @@ function ItemBasicFields({
           )}
           {value.config.fields.map((key) => {
             if (key === 'businessObjects') return null;
+            const visible = requestFieldIsVisible(value.config, key, value.method);
             const field = fields.find((item) => item.id === key);
             const label =
               field?.name ??
@@ -1767,7 +1787,7 @@ function ItemBasicFields({
               fieldLabels[key] ??
               key;
             return (
-              <div className="request-field-input" key={key} style={fieldStyle(key)}>
+              <div className="request-field-input" key={key} style={{ ...fieldStyle(key), visibility: visible ? undefined : 'hidden' }} aria-hidden={!visible || undefined}>
                 <span>
                   {label}{' '}
                   {!requestFieldIsRequired(value.config, key, value.method) ? (
@@ -1951,12 +1971,10 @@ export function RequestCatalogSettings({
   return (
     <section className="detail-card detail-card--wide sr-config-card">
       <div className="sr-panel-heading">
-        <div>
-          <h3>{configLabel}配置</h3>
-          <p>配置申请项所需参数与文档，不改变服务计价字段。</p>
-        </div>
+        <h3>{configLabel}表单</h3>
         <Button
           variant="outline"
+          aria-label={`配置${configLabel}表单`}
           disabled={!ready}
           onClick={() => {
             setEditing(configForEditing(config, requestFields));
@@ -1965,7 +1983,7 @@ export function RequestCatalogSettings({
           }}
         >
           <Settings2 size={15} />
-          配置{configLabel}
+          配置表单
         </Button>
       </div>
       <p>

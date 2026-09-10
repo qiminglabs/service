@@ -25,3 +25,8 @@ export function requestFieldWidth(config: RequestConfig, id: string) {
     (['description', 'businessObjects'].includes(id) ? 'full' : 'half')
   );
 }
+
+export function requestFieldGridColumn(config: RequestConfig, id: string) {
+  if (requestFieldWidth(config, id) === 'full') return '1 / -1';
+  return config.fieldRowStarts?.includes(id) ? '1 / span 1' : 'span 1';
+}

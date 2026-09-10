@@ -2,6 +2,7 @@ import { buildRequestSamples, requestSamplesMarker } from './demo-service-reques
 import { openDatabase, defaultConfig, resolveRequestConfig, customerRequestConfigId } from './service-requests.ts';
 import type { CustomerRef, InternalUser } from './service-requests';
 import { ensureConversionHistory } from './entitlement-conversions.ts';
+import { requestFormOrder } from './request-form-layout.ts';
 
 export function initializeCustomerOwners<T extends CustomerRef>(customers: T[], users: InternalUser[]): T[] {
   const sales = users.find(user => user.status === '启用' && /销售/.test(user.department));
@@ -27,7 +28,7 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
       config.fieldOptions[field.id] = (field.options ?? []).flatMap(option =>
         typeof option === 'string' ? [option] : option.enabled ? [option.value] : []);
     }
-    const removedFields = new Set(['productForm', 'tibCount', 'clusterCount', 'instanceCount', 'expectedProvider', 'address']);
+    const removedFields = new Set(['productForm', 'tibCount', 'clusterCount', 'instanceCount', 'expectedProvider']);
     config.fields = config.fields.filter(id => !removedFields.has(id));
     config.fieldOrder = config.fieldOrder?.filter(id => !removedFields.has(id));
     for (const id of removedFields) {
@@ -35,7 +36,16 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
       delete config.fieldNames[id];
       delete config.fieldRequired?.[id];
     }
-    return resolveRequestConfig(service, [config]);
+    const resolved = resolveRequestConfig(service, [config]);
+    resolved.fields = [...resolved.fields.filter(id => id !== 'address'), 'address'];
+    resolved.fieldNames.address = '地址';
+    resolved.fieldRequired = { ...resolved.fieldRequired, address: false };
+    resolved.fieldRequiredWhen = { ...resolved.fieldRequiredWhen, address: 'onsite' };
+    resolved.basicFields = { ...resolved.basicFields, description: { enabled: true, required: false } };
+    resolved.fieldOrder = [...requestFormOrder(resolved).filter(id => !['description', 'address'].includes(id)), 'description', 'address'];
+    resolved.fieldWidths = { ...resolved.fieldWidths, description: 'half', address: 'half' };
+    resolved.fieldRowStarts = ['description'];
+    return resolved;
   });
   const references = [
     { id: 'workspace', payload: { ...workspace, customerOwnersInitialized: true } },

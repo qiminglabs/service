@@ -19,7 +19,7 @@ import {
   type CatalogService,
   type RequestConfig,
 } from '@/lib/service-requests';
-import { requestFormOrder, requestFieldWidth } from '@/lib/request-form-layout';
+import { requestFormOrder, requestFieldWidth, requestFieldGridColumn } from '@/lib/request-form-layout';
 
 function templateFileName(url: string) {
   const name = url.split(/[?#]/)[0].split('/').pop() || '模板文件';
@@ -220,10 +220,7 @@ export function RequestFormBuilder({
                   data-selected={selected === id}
                   data-over={hover === id}
                   style={{
-                    gridColumn:
-                      requestFieldWidth(config, id) === 'full'
-                        ? '1 / -1'
-                        : 'span 1',
+                    gridColumn: requestFieldGridColumn(config, id),
                   }}
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -253,7 +250,7 @@ export function RequestFormBuilder({
                     aria-label={`配置${f.name}`}
                   >
                     <span>
-                      {f.name} {config.fieldRequiredWhen?.[id] === 'onsite' ? <small>现场时必填</small> : required(id) && <em>*</em>}
+                      {f.name} {config.fieldRequiredWhen?.[id] === 'onsite' ? <small>现场时显示且必填</small> : required(id) && <em>*</em>}
                     </span>
                     <GripVertical size={15} />
                   </button>
@@ -506,7 +503,7 @@ export function RequestFormBuilder({
             </fieldset>
             {field?.type === 'address' ? <fieldset className="rf-address-required" disabled={busy}>
               <legend>填写要求</legend>
-              {([['required', '必填'], ['optional', '选填'], ['onsite', '服务方式为现场时必填']] as const).map(([rule, label]) => <label className="sr-check-line" key={rule}>
+              {([['required', '必填'], ['optional', '选填'], ['onsite', '服务方式为现场时显示且必填']] as const).map(([rule, label]) => <label className="sr-check-line" key={rule}>
                 <input type="radio" name={`address-required-${selected}`} value={rule} checked={(config.fieldRequiredWhen?.[selected] === 'onsite' ? 'onsite' : required(selected) ? 'required' : 'optional') === rule} onChange={() => {
                   const conditions = { ...config.fieldRequiredWhen };
                   if (rule === 'onsite') conditions[selected] = 'onsite'; else delete conditions[selected];

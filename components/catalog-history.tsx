@@ -7,10 +7,18 @@ import {
   DialogTitle,
   DialogHeader,
   DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { readLocal, defaultConfig, downloadFile } from '@/lib/service-requests';
 import type { RequestConfig } from '@/lib/service-requests';
 import type { CatalogVersion, VersionedService } from '@/lib/catalog-versions';
+
+function historyTime(value: string) {
+  if (!value) return '时间未记录';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }).replaceAll('/', '-');
+}
 
 const labels: Record<string, string> = {
   id: '服务编码',
@@ -61,7 +69,7 @@ function ConfigSnapshot({
       {config.fields.map((id) => (
         <p key={id}>
           {config.fieldNames?.[id] ?? id}：
-          {config.fieldRequired?.[id] === false ? '选填' : '必填'}
+          {config.fieldRequiredWhen?.[id] === 'onsite' ? '现场时显示且必填' : config.fieldRequired?.[id] === false ? '选填' : '必填'}
           {config.fieldOptions?.[id]
             ? `；可用选项：${config.fieldOptions[id].join('、')}`
             : ''}
@@ -158,34 +166,33 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
         历史版本
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          style={{
-            maxWidth: 1000,
-            width: '90vw',
-            maxHeight: '85vh',
-            overflowY: 'auto',
-          }}
-        >
+        <DialogContent className="catalog-history-dialog">
           <DialogHeader>
             <DialogTitle>服务目录历史版本</DialogTitle>
             <DialogDescription>
               只读查看目录及两套申请配置。在线链接保留历史地址，外部文档内容由文档平台管理。
             </DialogDescription>
           </DialogHeader>
-          {error && <p role="alert">{error}</p>}
-          <select
-            aria-label="选择历史版本"
-            value={index}
-            onChange={(e) => setIndex(Number(e.target.value))}
-          >
-            {entries.map((entry, i) => (
-              <option key={i} value={i}>
-                v{entry.service.version} · {entry.reason} · {entry.savedAt}
-              </option>
-            ))}
-          </select>
+          <div className="catalog-history-toolbar">
+            <span id="catalog-history-version-label">查看版本</span>
+            <Select value={String(index)} onValueChange={value => { if (value !== null) setIndex(Number(value)); }} disabled={!entries.length}>
+              <SelectTrigger aria-labelledby="catalog-history-version-label" className="catalog-history-select">
+                <SelectValue>{selected ? `v${selected.service.version ?? 1} · ${selected.reason}` : '读取版本中…'}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="catalog-history-select-popup" align="start" alignItemWithTrigger={false}>
+                {entries.map((entry, i) => <SelectItem key={i} value={String(i)}>
+                  <span className="catalog-history-option"><strong>v{entry.service.version ?? 1} · {entry.reason}</strong><small>{historyTime(entry.savedAt)}</small></span>
+                </SelectItem>).reverse()}
+              </SelectContent>
+            </Select>
+            <span className="catalog-history-readonly">只读快照</span>
+          </div>
+          <div className="catalog-history-body">
+          {error && <p role="alert" className="sr-error">{error}</p>}
+          {!selected && !error && <output>正在读取历史版本…</output>}
           {selected && (
             <>
+              <p className="catalog-history-meta">保存时间：{historyTime(selected.savedAt)}（北京时间）</p>
               <section className="detail-card">
                 <h3>目录信息</h3>
                 <dl>
@@ -193,7 +200,7 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
                     <div key={key}>
                       <dt>{labels[key] ?? key}</dt>
                       <dd>
-                        {Array.isArray(value)
+                        {key === 'updatedAt' && typeof value === 'string' ? historyTime(value) : key === 'version' ? `v${String(value)}` : Array.isArray(value)
                           ? value.join('、')
                           : typeof value === 'string' ||
                               typeof value === 'number'
@@ -204,13 +211,15 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
                   ))}
                 </dl>
               </section>
-              <ConfigSnapshot title="内部申请配置" config={selected.internal} />
+              <ConfigSnapshot title="内部申请表单" config={selected.internal} />
               <ConfigSnapshot
-                title="客户中心申请配置"
+                title="客户中心申请表单"
                 config={selected.customer}
               />
             </>
           )}
+          </div>
+          <DialogFooter className="catalog-history-footer"><Button variant="outline" className="ct-button ct-button--ordinary" onClick={() => setOpen(false)}>关闭</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>
