@@ -272,6 +272,7 @@ export type InternalUser = {
   id: string;
   name: string;
   email: string;
+  phone?: string;
   department: string;
   status: string;
 };

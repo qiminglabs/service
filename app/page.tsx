@@ -1100,12 +1100,16 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         users.some((record) => record.email === normalizedEmail)
       )
         return setReferenceFormError('请填写姓名、部门和唯一的有效邮箱。');
+      const phone = (referenceForm.phone ?? '').trim();
+      if (phone && !/^[+\d][\d\s()-]{5,24}$/.test(phone))
+        return setReferenceFormError('请填写有效的电话。');
       setUsers((records) => [
         ...records,
         {
           id: `USR-${nextNumber(records.length)}`,
           name: referenceForm.name.trim(),
           email: normalizedEmail,
+          phone,
           department: referenceForm.department.trim(),
           status: '启用',
         },
@@ -2693,6 +2697,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
             <thead>
               <tr>
                 <th>姓名</th>
+                <th>电话</th>
                 <th>邮箱</th>
                 <th>部门</th>
                 <th>角色</th>
@@ -2707,6 +2712,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>
                     <strong>{record.name}</strong>
                   </td>
+                  <td>{record.phone || '—'}</td>
                   <td>{record.email}</td>
                   <td>{record.department}</td>
                   <td>{fixedIdentityRoles[record.id] ?? '—'}</td>
@@ -3091,6 +3097,10 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   onChange={(event) => update('name', event.target.value)}
                   placeholder="请输入内部用户姓名"
                 />
+              </label>
+              <label htmlFor="user-phone">
+                <span>电话</span>
+                <Input id="user-phone" type="tel" value={props.form.phone ?? ''} onChange={(event) => update('phone', event.target.value)} placeholder="请输入联系电话" />
               </label>
               <label htmlFor="user-email">
                 <span>

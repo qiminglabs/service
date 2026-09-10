@@ -6,6 +6,7 @@ type DirectoryUser = Omit<InternalUser, 'status'> & { status: '启用' | '停用
 export const localInternalUsers: DirectoryUser[] = [
   {
     id: 'USR-001',
+    phone: '138 0000 0001',
     name: '王琪',
     email: 'wang.qi@example.com',
     department: '销售部',
@@ -13,6 +14,7 @@ export const localInternalUsers: DirectoryUser[] = [
   },
   {
     id: 'USR-006',
+    phone: '138 0000 0006',
     name: '陆明',
     email: 'admin@example.com',
     department: '系统管理',
@@ -20,6 +22,7 @@ export const localInternalUsers: DirectoryUser[] = [
   },
   {
     id: 'USR-002',
+    phone: '138 0000 0002',
     name: '陈屿',
     email: 'chen.yu@example.com',
     department: '售前团队',
@@ -27,6 +30,7 @@ export const localInternalUsers: DirectoryUser[] = [
   },
   {
     id: 'USR-007',
+    phone: '138 0000 0007',
     name: '许安',
     email: 'xu.an@example.com',
     department: '服务管理部',
@@ -34,6 +38,7 @@ export const localInternalUsers: DirectoryUser[] = [
   },
   {
     id: 'USR-003',
+    phone: '138 0000 0003',
     name: '赵言',
     email: 'zhao.yan@example.com',
     department: '项目管理部',
@@ -41,6 +46,7 @@ export const localInternalUsers: DirectoryUser[] = [
   },
   {
     id: 'USR-004',
+    phone: '138 0000 0004',
     name: '林澈',
     email: 'lin.che@example.com',
     department: '技术服务部',
@@ -48,6 +54,7 @@ export const localInternalUsers: DirectoryUser[] = [
   },
   {
     id: 'USR-005',
+    phone: '138 0000 0005',
     name: '周遥',
     email: 'zhou.yao@example.com',
     department: '客户成功部',
@@ -79,13 +86,15 @@ export function ensureLocalInternalUsers(
 ): DirectoryUser[] {
   // Rename the original placeholder only; preserve custom names and status.
   return [
-    ...users.map((user) =>
-      user.id === 'USR-005' || user.id === 'USR-007'
+    ...users.map((entry) => {
+      const seed = localInternalUsers.find(user => user.id === entry.id && user.email === entry.email);
+      const user = entry.phone == null && seed?.phone ? { ...entry, phone: seed.phone } : entry;
+      return user.id === 'USR-005' || user.id === 'USR-007'
         ? { ...user, status: '停用' as const }
         : user.id === 'USR-006' && user.name === '系统管理员'
           ? { ...user, name: '陆明' }
-          : user,
-    ),
+          : user;
+    }),
     ...localInternalUsers.filter(
       (seed) => !users.some((user) => user.id === seed.id),
     ),

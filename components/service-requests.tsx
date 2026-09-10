@@ -601,6 +601,11 @@ export function RequestWorkspace(props: Props) {
   const itemsReadonly =
     !draft || !canEditRequestItems(draft, props.currentActor);
   const returnNotice = draft ? requestReturnNotice(draft) : null;
+  const customerSalesManager = props.users.find(
+    (user) => user.id === props.customers.find(
+      (customer) => customer.id === draft?.customerId,
+    )?.ownerUserId,
+  );
   const issues =
     draft && showCompleteness
       ? requestIssues(draft, { ...props, audience })
@@ -976,6 +981,27 @@ export function RequestWorkspace(props: Props) {
             save={persist}
             sidebar={
               <aside className="sr-collaboration-column" aria-label="协作人">
+                {customerPortal && (
+                  <section className="sr-panel sr-collaboration-card" aria-label="SmartX 联系人">
+                    <div className="sr-panel-heading"><h3>SmartX 联系人</h3></div>
+                    <div className="sr-internal-body sr-smartx-contact">
+                      {customerSalesManager ? (
+                        <ul className="sr-participants"><li>
+                        <span className="sr-collaborator-copy">
+                            <span className="sr-participant-name">{customerSalesManager.name}</span>
+
+                          <small title={`${customerSalesManager.phone?.trim() || '未填写电话'} · ${customerSalesManager.email?.trim() || '未填写邮箱'}`}>
+                            {customerSalesManager.phone?.trim() ? <a href={`tel:${customerSalesManager.phone.replace(/\s/g, '')}`}>{customerSalesManager.phone.trim()}</a> : '未填写电话'}
+                            {' · '}
+                            {customerSalesManager.email?.trim() || '未填写邮箱'}
+                          </small>
+                        </span>
+                        <span className="sr-help">客户经理</span>
+                        </li></ul>
+                      ) : <span>暂未配置客户所属销售经理</span>}
+                    </div>
+                  </section>
+                )}
                 <RequestExternalCollaborators
                   showCustomerVisibility={isInternal(props.currentRole)}
                   applicantId={requestAudience(draft) === 'customer' ? draft.createdById : undefined}

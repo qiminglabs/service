@@ -3868,6 +3868,12 @@ body:has(.sr-ops-dialog) div:has(> .sr-service-date-popover) { z-index: 240; }
 .sr-collaboration-card .sr-internal-body {
   padding: 18px;
 }
+.sr-smartx-contact {
+  display: grid;
+  font-size: 14px;
+}
+.sr-smartx-contact a { color: inherit; }
+.sr-smartx-contact a:hover { text-decoration: underline; }
 .sr-form-grid {
   padding: 24px;
   display: grid;
