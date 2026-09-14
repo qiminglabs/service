@@ -29,7 +29,7 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
       config.fieldOptions[field.id] = (field.options ?? []).flatMap(option =>
         typeof option === 'string' ? [option] : option.enabled ? [option.value] : []);
     }
-    const removedFields = new Set(['productForm', 'tibCount', 'clusterCount', 'instanceCount', 'expectedProvider']);
+    const removedFields = new Set(['version', 'productForm', 'tibCount', 'clusterCount', 'instanceCount', 'expectedProvider']);
     config.fields = config.fields.filter(id => !removedFields.has(id));
     config.fieldOrder = config.fieldOrder?.filter(id => !removedFields.has(id));
     for (const id of removedFields) {

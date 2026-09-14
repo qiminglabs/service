@@ -7,6 +7,7 @@ import { RequestCustomerConfirmation } from '@/components/request-customer-confi
 import { useRef, useState, type ReactNode } from 'react';
 import { Video, Clock3, Plus, Play, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
   Tooltip,
@@ -149,7 +150,7 @@ export function RequestOperationsTabs({
   sidebar,
 }: Props) {
   const [tab, setTab] = useState('overview');
-  const [dialog, setDialog] = useState<'meeting' | 'worklog' | null>(null);
+  const [dialog, setDialog] = useState<'meeting' | 'meeting-notify' | 'worklog' | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('全部');
   const [meeting, setMeeting] = useState<RequestMeeting | null>(null);
@@ -178,7 +179,7 @@ export function RequestOperationsTabs({
     try {
       const saved = await save(
         applyRequestAction(record, action, actor, assets),
-        '已保存',
+        action.type === 'meeting-notify' ? '通知已记录' : '已保存',
       );
       if (!saved)
         setError('保存未完成，请检查本地存储后重试；当前填写内容已保留。');
@@ -313,20 +314,34 @@ export function RequestOperationsTabs({
                             · 本地模拟
                           </small>
                         </div>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setMeeting(m);
-                            launch('meeting');
-                          }}
-                        >
-                          {m.status === '已预约'
-                            ? '查看预约'
-                            : m.status === '进行中'
-                              ? '进入模拟会议'
-                              : '查看会议资料'}
-                          <Play size={14} />
-                        </Button>
+                        <div className="sr-meeting-actions">
+                          {m.status !== '已结束' && (
+                            <Button
+                              variant="outline"
+                              disabled={!editable || !isInternal(role) || record.status === '草稿'}
+                              onClick={() => {
+                                setMeeting(m);
+                                launch('meeting-notify');
+                              }}
+                            >
+                              发送通知
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setMeeting(m);
+                              launch('meeting');
+                            }}
+                          >
+                            {m.status === '已预约'
+                              ? '查看预约'
+                              : m.status === '进行中'
+                                ? '进入模拟会议'
+                                : '查看会议资料'}
+                            <Play size={14} />
+                          </Button>
+                        </div>
                       </article>
                     ))}
                   </div>
@@ -569,6 +584,19 @@ export function RequestOperationsTabs({
               close={() => setDialog(null)}
             />
           )}
+          {dialog === 'meeting-notify' && meeting && (
+            <MeetingNotificationForm
+              key={`${record.id}:${actor.id}:${actor.role}:${meeting.id}`}
+              meeting={ops.meetings.find((m) => m.id === meeting.id) ?? meeting}
+              record={record}
+              actor={actor}
+              disabled={!editable || !isInternal(role) || record.status === '草稿'
+                || !ops.meetings.some((m) => m.id === meeting.id && m.status !== '已结束')}
+              error={error}
+              run={run}
+              close={() => setDialog(null)}
+            />
+          )}
           {dialog === 'worklog' && (
             <WorklogForm
               key={`${actor.id}:${actor.role}:${worklog?.id ?? 'new'}:${voidWorklog}`}
@@ -731,6 +759,77 @@ function WorklogForm({
         </Button>
       </DialogFooter>
     </>
+  );
+}
+
+function MeetingNotificationForm({
+  meeting,
+  record,
+  disabled,
+  error,
+  run,
+  close,
+}: FormActions & { meeting: RequestMeeting; record: ServiceRequest }) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
+  const inFlight = useRef(false);
+  const groups = [
+    { key: 'internal', label: '内部协作人', people: (record.internalParticipants ?? []).map((p) => ({ id: p.userId, name: p.name })) },
+    { key: 'external', label: '外部协作人', people: (record.externalCollaborators ?? []).map((p) => ({ id: p.contactId, name: p.name })) },
+  ];
+  return (
+    <form onSubmit={async (event) => {
+      event.preventDefault();
+      if (disabled || inFlight.current || !selected.length) return;
+      inFlight.current = true;
+      setSending(true);
+      try {
+        if (await run({
+          type: 'meeting-notify',
+          id: meeting.id,
+          userIds: selected.filter((key) => key.startsWith('internal:')).map((key) => key.slice(9)),
+          contactIds: selected.filter((key) => key.startsWith('external:')).map((key) => key.slice(9)),
+        })) close();
+      } finally {
+        inFlight.current = false;
+        setSending(false);
+      }
+    }}>
+      <DialogHeader>
+        <DialogTitle>发送通知</DialogTitle>
+        <DialogDescription>{meeting.title} · 选择当前请求的协作人</DialogDescription>
+      </DialogHeader>
+      <div className="sr-ops-form">
+        {groups.map((group) => (
+          <fieldset className="sr-meeting-recipient-group" key={group.key} disabled={disabled || sending}>
+            <legend>{group.label}</legend>
+            {group.people.length ? group.people.map((person) => {
+              const key = `${group.key}:${person.id}`;
+              return (
+                <label key={key} className="sr-meeting-recipient">
+                  <Checkbox
+                    checked={selected.includes(key)}
+                    disabled={disabled || sending}
+                    onCheckedChange={(checked) => setSelected((ids) => checked
+                      ? [...new Set([...ids, key])]
+                      : ids.filter((id) => id !== key))}
+                  />
+                  <span>{person.name}</span>
+                </label>
+              );
+            }) : <p className="sr-help">暂无{group.label}</p>}
+          </fieldset>
+        ))}
+        <p className="sr-help">已选择 {selected.length} 人，将发送站内和邮件通知。</p>
+        <ErrorText error={error} />
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" disabled={sending} onClick={close}>取消</Button>
+        <Button type="submit" disabled={disabled || sending || !selected.length}>
+          {sending ? '发送中…' : '发送'}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }
 

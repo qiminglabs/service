@@ -90,7 +90,7 @@ export function meetingTranscript(meeting: RequestMeeting) {
     return { text: meeting.transcript!, example: false };
   return {
     example: true,
-    text: '00:00  主持人（示例）\n本次会议围绕服务申请的目标、服务范围和待补充材料进行沟通，先确认本次希望解决的问题与预期交付结果。\n\n02:15  客户代表（示例）\n希望先明确服务包含的工作及不包含的事项。涉及现网操作时，需要提前说明影响范围，并协调业务窗口。\n\n05:40  技术代表（示例）\n评估前需要核对环境清单、产品版本以及网络拓扑。材料中的未知项请明确标注，不适用项请说明原因。\n\n09:20  主持人（示例）\n内部团队将根据补充材料评估工作量，核对服务依据，并整理服务范围和费用概览供后续确认。\n\n12:05  客户代表（示例）\n请列出仍需提供的材料及对接人。计划和实施窗口待服务范围明确后再进一步讨论。\n\n15:30  主持人（示例）\n本次待办包括补齐环境资料、澄清服务边界和核对可用服务依据。本次沟通不替代正式服务确认或审批。',
+    text: '00:00  主持人（示例）\n本次会议围绕服务申请的目标、服务范围和待补充材料进行沟通，先确认本次希望解决的问题与预期交付结果。\n\n02:15  客户代表（示例）\n希望先明确服务包含的工作及不包含的事项。涉及现网操作时，需要提前说明影响范围，并协调业务窗口。\n\n05:40  技术代表（示例）\n评估前需要核对环境清单、授权版本以及网络拓扑。材料中的未知项请明确标注，不适用项请说明原因。\n\n09:20  主持人（示例）\n内部团队将根据补充材料评估工作量，核对服务依据，并整理服务范围和费用概览供后续确认。\n\n12:05  客户代表（示例）\n请列出仍需提供的材料及对接人。计划和实施窗口待服务范围明确后再进一步讨论。\n\n15:30  主持人（示例）\n本次待办包括补齐环境资料、澄清服务边界和核对可用服务依据。本次沟通不替代正式服务确认或审批。',
   };
 }
 export type RequestWorklog = {
@@ -197,6 +197,7 @@ export function isInternal(role: string) {
     'SmartX 项目经理',
     'SmartX 服务工程师',
     'SmartX 售前工程师',
+    'SmartX 硬件产品经理',
   ].includes(role);
 }
 export function localDate(now = new Date()) {
@@ -292,6 +293,7 @@ export type RequestAction =
       durationMinutes: number;
     }
   | { type: 'meeting-start'; id: string }
+  | { type: 'meeting-notify'; id: string; userIds: string[]; contactIds: string[] }
   | { type: 'meeting-end'; id: string }
   | { type: 'meeting-attachments-add'; id: string; files: StoredFile[] }
   | { type: 'meeting-attachment-delete'; id: string; fileId: string }
@@ -411,6 +413,34 @@ export function applyRequestAction(
       title = '预约模拟会议';
       detail = `${action.title.trim()} · ${date} ${time} · ${action.durationMinutes} 分钟`;
       break;
+    }
+    case 'meeting-notify': {
+      const meeting = ops.meetings.find((m) => m.id === action.id);
+      if (!meeting || !['已预约', '进行中'].includes(meeting.status))
+        throw new Error('仅未结束的会议可以发送通知。');
+      const userIds = [...new Set(action.userIds)];
+      const contactIds = [...new Set(action.contactIds)];
+      if (!userIds.length && !contactIds.length)
+        throw new Error('请至少选择一位协作人。');
+      const internalNames = userIds.map((id) => {
+        const person = record.internalParticipants?.find((p) => p.userId === id);
+        if (!person) throw new Error('内部协作人已变更，请重新选择通知对象。');
+        return person.name;
+      });
+      const externalNames = contactIds.map((id) => {
+        const person = record.externalCollaborators?.find((p) => p.contactId === id);
+        if (!person) throw new Error('外部协作人已变更，请重新选择通知对象。');
+        return person.name;
+      });
+      return appendActivity(record, actor, '会议', '发送会议通知', [
+        meeting.title,
+        meeting.scheduledDate
+          ? `${meeting.scheduledDate} ${meeting.scheduledTime} · ${meeting.durationMinutes} 分钟`
+          : '',
+        internalNames.length ? `内部协作人：${internalNames.join('、')}` : '',
+        externalNames.length ? `外部协作人：${externalNames.join('、')}` : '',
+        '本地模拟，未实际发送',
+      ].filter(Boolean).join(' · '), now);
     }
     case 'meeting-start': {
       const meeting = ops.meetings.find((m) => m.id === action.id);

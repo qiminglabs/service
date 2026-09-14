@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   assessmentOf,
+  canManageAssessmentBasis,
   customerOwner,
   gapApproverOptions,
   assessedEffort,
@@ -34,6 +35,8 @@ import { activeEntitlementAllocations, effortEntitlementAllocations, entitlement
 import { assetDayMethod, requestDayRequirements, coverageByMethod, allocationMethodIssue, planDayGaps, formatDayRequirements } from '@/lib/request-asset-coverage';
 import type { AssessmentAction, GapApproval } from '@/lib/request-assessment';
 import { operationIdentities } from '@/lib/internal-users';
+import { requestAudience } from '@/lib/request-collaboration';
+import { hardwareItems, hardwareReviewers, currentHardwareReview, hardwarePassIssue } from '@/lib/request-hardware-assessment';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import { readLocal } from '@/lib/service-requests';
 import { itemMinimumDays, itemPriceCoefficient, calculateBillableDays, calculateEffortPricing, effortTotalsByMethod, entitlementPricingContext, itemEntitlementKind, calculateEntitlementLines, type EntitlementPricingContext } from '@/lib/request-pricing';
@@ -50,7 +53,7 @@ type Props = {
   save: (r: ServiceRequest, message?: string) => Promise<boolean>;
   validationFailures?: ValidationFailure[];
 };
-type Mode = 'round' | 'effort' | 'plan' | 'gap' | 'decide' | null;
+type Mode = 'round' | 'hardware-review' | 'effort' | 'plan' | 'gap' | 'decide' | null;
 const fmt = formatDays;
 const isMinimumDaysIssue = (message: string) => message.includes('预估人天不能小于当前最小人天数量');
 async function readCurrentPricingData() {
@@ -139,6 +142,9 @@ export function RequestAssessment({
   const effortTotals = effortTotalsByMethod(record, a.effort?.lines ?? []);
   const entitlementAllocations = activeEntitlementAllocations(record);
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
+  const needsHardware = hardwareItems(record).length > 0;
+  const hardwareRound = passed ? a.hardware?.rounds.at(-1) : currentHardwareReview(record);
+  const hardwareReviewer = actor.role === 'SmartX 硬件产品经理' && hardwareReviewers(users).some(user => user.id === actor.id);
   const customerConfirmed = ['待受理', '已转服务项目'].includes(record.status);
   const latestDecision = record.operations?.customerDecisions?.at(-1);
   const confirmedDecision = customerConfirmed && latestDecision?.accepted && latestDecision.planId === a.confirmation?.planId
@@ -160,7 +166,8 @@ export function RequestAssessment({
   const manager =
     isProjectManager(actor) && (!a.managerId || a.managerId === actor.id);
   const confirmationReady = passed && effort !== undefined && !!plan && (gap < 1e-8 || !!approved);
-  const canConfirm = manager && editable && confirmationReady;
+  const basisOwner = canManageAssessmentBasis(record, actor, customers, users);
+  const canConfirm = basisOwner && editable && confirmationReady;
   const [externalNote, setExternalNote] = useState('');
   const [dialog, setDialog] = useState<Mode | 'confirm'>(null);
   useEffect(() => { if (validationFailures?.length) setDialog(null); }, [validationFailures]);
@@ -223,18 +230,19 @@ export function RequestAssessment({
       const pricingData = ['effort', 'plan', 'confirm'].includes(action.type) ? await readCurrentPricingData() : { services, context: livePricingContext };
       const pricingServices = pricingData.services;
       if (action.type === 'effort') { setLiveServices(pricingServices); setLivePricingContext(pricingData.context); }
-      const references = action.type === 'plan' ? await readLocal<{ id: string; payload?: { customers?: CustomerRef[]; users?: InternalUser[] } }>('references') : [];
+      const checkBasisOwner = action.type === 'plan' || action.type === 'confirm';
+      const references = checkBasisOwner ? await readLocal<{ id: string; payload?: { customers?: CustomerRef[]; users?: InternalUser[] } }>('references') : [];
       const workspace = references.find(reference => reference.id === 'workspace')?.payload;
       const next = applyAssessmentAction(
         record,
         action,
         actor,
         assets,
-        action.type === 'plan' ? (workspace?.users ?? []) : users,
+        checkBasisOwner ? (workspace?.users ?? []) : users,
         fresh,
         undefined,
         pricingServices,
-        action.type === 'plan' ? (workspace?.customers ?? []) : customers,
+        checkBasisOwner ? (workspace?.customers ?? []) : customers,
         pricingData.context,
       );
       const ok = await save(
@@ -266,7 +274,9 @@ export function RequestAssessment({
       <div className="sr-ops-heading">
         <div>
           <h3>评估</h3>
-          <p>由项目经理完成材料评估、人天核定、服务依据关联并发起客户确认。</p>
+          <p>{requestAudience(record) === 'internal'
+            ? '由项目经理完成材料评估、人天核定；由内部申请人关联服务依据并发起客户确认。'
+            : '由项目经理完成材料评估、人天核定；由客户所有人关联服务依据并发起客户确认。'}</p>
         </div>
         <div className="sr-assessment-manager">
           <span>项目经理</span>
@@ -291,58 +301,52 @@ export function RequestAssessment({
               <StepTitle index={0} stage={stage} complete={!!a.confirmation}>
                 材料评估
               </StepTitle>
-              {a.rounds.at(-1) && (
-                <RecordMeta
-                  author={a.rounds.at(-1)!.author}
-                  at={a.rounds.at(-1)!.at}
-                />
+              {!needsHardware && a.rounds.at(-1) && (
+                <RecordMeta author={a.rounds.at(-1)!.author} at={a.rounds.at(-1)!.at} />
               )}
             </div>
-            {manager && editable && !passed && (
-              <Button
-                variant="default"
-                disabled={disabled}
-                onClick={() => open('round')}
-              >
-                材料评估
-              </Button>
+            {!needsHardware && manager && editable && !passed && (
+              <Button disabled={disabled} onClick={() => open('round')}>材料评估</Button>
             )}
             {passed && <Badge>已通过 · 评估结论已锁定</Badge>}
           </div>
-          {!a.rounds.length ? (
-            <p className="sr-help">等待项目经理查看申请材料并记录评估结论。</p>
-          ) : (
-            <div className="sr-assessment-rounds">
-              {a.rounds.slice(-1).map((r) => (
-                <article key={r.id}>
-                  <div className="sr-assessment-round-title">
-                    <strong>材料评估记录</strong>
-                    <Badge>{r.outcome}</Badge>
-                    {r.id !== a.rounds.at(-1)?.id && (
-                      <RecordMeta author={r.author} at={r.at} />
-                    )}
-                  </div>
-                  <p>{r.opinion}</p>
-                  {(r.scope || r.risks) && (
-                    <dl>
-                      {r.scope && (
-                        <>
-                          <dt>服务范围</dt>
-                          <dd>{r.scope}</dd>
-                        </>
-                      )}
-                      {r.risks && (
-                        <>
-                          <dt>风险与前置条件</dt>
-                          <dd>{r.risks}</dd>
-                        </>
-                      )}
-                    </dl>
-                  )}
-                </article>
-              ))}
+          {needsHardware && <section className="sr-assessment-role" aria-label="硬件产品经理评估">
+            <div className="sr-assessment-section-title">
+              <div><strong>硬件产品经理评估</strong> <Badge>{hardwareRound?.outcome ?? (passed && !a.hardware ? '无需补评' : a.hardware?.rounds.length ? '待重新评估' : '待评估')}</Badge></div>
+              {hardwareReviewer && editable && !passed && <Button disabled={disabled} onClick={() => open('hardware-review')}>填写评估</Button>}
             </div>
-          )}
+            {hardwareRound ? <div className="sr-assessment-rounds"><article>
+              <RecordMeta author={hardwareRound.author} at={hardwareRound.at} />
+              <p>{hardwareRound.opinion}</p>
+            </article></div> : <p className="sr-help">{passed && !a.hardware ? '历史已通过请求，保留原评估结果。' : a.hardware?.rounds.length ? '材料已变化，请重新评估。' : '等待硬件产品经理记录评估结论。'}</p>}
+          </section>}
+          <section className={needsHardware ? 'sr-assessment-role' : undefined} aria-label="项目经理评估">
+            {needsHardware && <div className="sr-assessment-section-title">
+              <div><strong>项目经理评估</strong> <Badge>{a.rounds.at(-1)?.outcome ?? '待评估'}</Badge></div>
+              {manager && editable && !passed && <Button disabled={disabled} onClick={() => open('round')}>填写评估</Button>}
+            </div>}
+            {!a.rounds.length ? (
+              <p className="sr-help">等待项目经理查看申请材料并记录评估结论。</p>
+            ) : (
+              <div className="sr-assessment-rounds">
+                {a.rounds.slice(-1).map((r) => (
+                  <article key={r.id}>
+                    {needsHardware ? <RecordMeta author={r.author} at={r.at} /> : <div className="sr-assessment-round-title">
+                      <strong>材料评估记录</strong>
+                      <Badge>{r.outcome}</Badge>
+                    </div>}
+                    <p>{r.opinion}</p>
+                    {(r.scope || r.risks) && (
+                      <dl>
+                        {r.scope && <><dt>服务范围</dt><dd>{r.scope}</dd></>}
+                        {r.risks && <><dt>风险与前置条件</dt><dd>{r.risks}</dd></>}
+                      </dl>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </section>
         <section className="sr-assessment-plan">
           <div className="sr-assessment-section-title">
@@ -413,7 +417,7 @@ export function RequestAssessment({
               </StepTitle>
               {plan && <RecordMeta author={plan.author} at={plan.at} />}
             </div>
-            {passed && effort !== undefined && manager && editable && (
+            {passed && effort !== undefined && basisOwner && editable && (
               <Button
                 variant="default"
                 disabled={!loaded || disabled || !!waiting}
@@ -532,7 +536,7 @@ export function RequestAssessment({
               </StepTitle>
               {confirmedDecision ? <RecordMeta author={confirmedDecision.actor} at={confirmedDecision.at} /> : a.confirmation && <RecordMeta author={a.confirmation.by} at={a.confirmation.at} />}
             </div>
-            {!a.confirmation && manager && editable && confirmationReady && (
+            {!a.confirmation && basisOwner && editable && confirmationReady && (
               <Button disabled={!canConfirm || disabled} onClick={() => open('confirm')}>
                 发起客户确认<ArrowRight size={15} />
               </Button>
@@ -678,6 +682,7 @@ function AssessmentForm({
     assessed = assessedEffort(record);
   const [opinion, setOpinion] = useState('');
   const [outcome, setOutcome] = useState<'需补充' | '评估通过'>('需补充');
+  const hardwareIssue = hardwarePassIssue(record, users);
   const [estimates, setEstimates] = useState<Record<string, string>>(() => Object.fromEntries(
     record.items.map(item => [item.id, String(a.effort?.lines?.find(line => line.itemId === item.id)?.estimatedDays ?? '')]),
   ));
@@ -716,6 +721,7 @@ function AssessmentForm({
   const coverage = coverageByMethod(requirements, allocationPreview);
   const allocationIssue = allocationMethodIssue(record, allocationPreview, customerAssets);
   const titles: Record<string, string> = {
+    'hardware-review': '硬件产品经理评估',
     round: '材料评估',
     effort: '人天核定',
     plan: '服务依据关联',
@@ -723,6 +729,7 @@ function AssessmentForm({
     decide: '上级审批额度特批',
   };
   async function submit() {
+    if (mode === 'hardware-review') return run({ type: 'hardware-review', outcome, opinion });
     if (mode === 'round') return run({ type: 'review', opinion, outcome });
     if (mode === 'effort')
       return run({ type: 'effort', items: pricingInputs, note: effortNote });
@@ -744,18 +751,17 @@ function AssessmentForm({
         {mode === 'round' && (
           <DialogDescription>材料评估通过后，申请项及材料将锁定，不再支持修改。</DialogDescription>
         )}
-        {mode !== 'round' && (
+        {mode === 'hardware-review' && <DialogDescription className="sr-only">填写评估结论和评估意见。</DialogDescription>}
+        {mode !== 'round' && mode !== 'plan' && mode !== 'hardware-review' && (
           <DialogDescription>
             {mode === 'effort'
               ? '人天类按预估人天 × 计价系数计价；权益类按差额权益 × 换算系数计价。计价结果逐项四舍五入到一位小数后汇总。'
-              : mode === 'plan'
-                ? '远程计价人天仅锁定远程资产，现场计价人天仅锁定现场资产；各类资产缺少数量分别核算。'
-                : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`}
+              : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`}
           </DialogDescription>
         )}
       </DialogHeader>
       <div className="sr-ops-form">
-        {mode === 'round' && (
+        {(mode === 'round' || mode === 'hardware-review') && (
           <>
             <Field title="评估结论 *">
               <NativeSelect
@@ -764,7 +770,7 @@ function AssessmentForm({
                 onChange={(e) => setOutcome(e.target.value as typeof outcome)}
               >
                 <option>需补充</option>
-                <option>评估通过</option>
+                <option disabled={mode === 'round' && !!hardwareIssue}>评估通过</option>
               </NativeSelect>
             </Field>
             <Field title="评估意见 *">
@@ -776,6 +782,7 @@ function AssessmentForm({
                 placeholder="记录材料完整性、待补充信息及评估判断"
               />
             </Field>
+            {mode === 'round' && hardwareIssue && <p className="sr-help">需硬件产品经理先完成评估，才能通过整体材料评估。</p>}
           </>
         )}
         {mode === 'effort' && (
@@ -843,10 +850,6 @@ function AssessmentForm({
         )}
         {mode === 'plan' && (
           <>
-            <Field title="负责销售">
-              <Input value={sales?.name ?? '未配置有效的客户所有人'} readOnly aria-readonly="true" />
-              <small className="sr-help">使用客户所有人，由客户资料统一维护。</small>
-            </Field>
             {!!effortEntitlementAllocations(a.effort?.lines).length && <section>
               <h4>待冻结权益</h4>
               <div className="sr-assessment-allocations">{effortEntitlementAllocations(a.effort?.lines).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
@@ -955,8 +958,8 @@ function AssessmentForm({
             </Button>
           </>
         ) : (
-          <Button disabled={disabled || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!pricingReady || !sales || !!allocationIssue))} onClick={() => void submit()}>
-            {mode === 'round'
+          <Button disabled={disabled || (mode === 'hardware-review' && !opinion.trim()) || (mode === 'round' && outcome === '评估通过' && !!hardwareIssue) || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!pricingReady || !sales || !!allocationIssue))} onClick={() => void submit()}>
+            {mode === 'hardware-review' ? '保存评估结论' : mode === 'round'
               ? '保存评估结论'
               : mode === 'effort'
                 ? '保存人天核定'

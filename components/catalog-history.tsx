@@ -1,4 +1,7 @@
 'use client';
+
+import { requestFieldLabel } from '@/lib/request-field-labels';
+import { fieldRequirementLabels } from '@/lib/request-field-requirements';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -68,8 +71,8 @@ function ConfigSnapshot({
       </p>
       {config.fields.map((id) => (
         <p key={id}>
-          {config.fieldNames?.[id] ?? id}：
-          {config.fieldRequiredWhen?.[id] === 'onsite' ? '现场时显示且必填' : config.fieldRequired?.[id] === false ? '选填' : '必填'}
+          {requestFieldLabel(id, config.fieldNames?.[id] ?? id)}：
+          {config.fieldRequiredWhen?.[id] ? fieldRequirementLabels[config.fieldRequiredWhen[id]] : config.fieldRequired?.[id] === false ? '选填' : '必填'}
           {config.fieldOptions?.[id]
             ? `；可用选项：${config.fieldOptions[id].join('、')}`
             : ''}

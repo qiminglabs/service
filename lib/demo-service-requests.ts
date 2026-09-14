@@ -61,7 +61,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     const at = new Date(now.getTime() - (6 - index) * 86400000).toISOString();
     const expected = new Date(now.getTime() + (7 + index * 2) * 86400000).toISOString().slice(0, 10);
     let record = newRequest(`【示例】${titles[index]}`, customer.id, sales.name, contact.id, sales.id, sales.role);
-    record = { ...record, id, createdAt: at, updatedAt: at, expectedServiceDate: expected, businessImpact: '测试环境',
+    record = { ...record, id, createdAt: at, updatedAt: at, expectedServiceDate: expected,
       description: '演示数据：用于展示服务申请、材料评估及客户确认流程，不代表真实交付承诺。',
       internalParticipants: [...new Map([sales, manager,
         identities.find(person => person.id === customer.ownerUserId)].filter(Boolean)
@@ -151,14 +151,14 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
       act({ type: 'review', outcome: '评估通过', scope: record.items.map(item => item.serviceName).join('、'), opinion: '示例环境清单与需求材料已核对，可以进入服务评估。', risks: '正式执行前再次确认维护窗口和备份情况。' });
       act({ type: 'effort', items: record.items.map(item => ({ itemId: item.id,
         estimatedDays: Math.max(2, sources.services.find(service => service.id === item.serviceId)?.defaultQuantity ?? 1) })), note: '演示估算，以实际服务评估为准。' });
-      act({ type: 'plan', allocations: [], salesId: owner.id });
+      act({ type: 'plan', allocations: [], salesId: owner.id }, sales);
       if (planGap(currentPlan(record)) > 0) {
         const approver = gapApproverOptions(sources.users, owner.id, manager.id)[0];
         if (!approver) throw new Error('初始化样例需要有效的额度审批人。');
         act({ type: 'gap-submit', reason: '演示用额度特批，不扣减客户已有人天资产。', approverId: approver.id }, owner);
         act({ type: 'gap-decide', id: assessmentOf(record).approvals.at(-1)!.id, approve: true, note: '同意本次演示额度。' }, approver);
       }
-      act({ type: 'confirm', externalNote: '请确认服务范围与期望日期；此记录仅用于流程演示。' });
+      act({ type: 'confirm', externalNote: '请确认服务范围与期望日期；此记录仅用于流程演示。' }, sales);
       if (index === 3) record = applyCustomerDecision(record, { id: contact.id, name: contact.name, role: '客户' }, customer.id, true, '', new Date(Date.parse(record.updatedAt) + 3600000).toISOString());
     }
     if (index === 4) record = appendActivity({ ...record, status: '已取消', cancelledFromStatus: '待评估' }, sales, '提交', '取消服务请求', '客户调整季度维护计划，本次演示申请取消。', eventAt(55));

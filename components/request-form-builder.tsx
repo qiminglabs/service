@@ -19,7 +19,9 @@ import {
   type CatalogService,
   type RequestConfig,
 } from '@/lib/service-requests';
-import { requestFormOrder, requestFieldWidth, requestFieldGridColumn } from '@/lib/request-form-layout';
+import { requestFormOrder, requestFieldPlacements, setRequestFieldPlacement } from '@/lib/request-form-layout';
+import { RequestFormLayout } from '@/components/request-form-layout';
+import { editionFieldRequirement, fieldRequirementLabels, isEditionRequirement, withEditionFieldDependency, type FieldRequirement } from '@/lib/request-field-requirements';
 
 function templateFileName(url: string) {
   const name = url.split(/[?#]/)[0].split('/').pop() || '模板文件';
@@ -61,15 +63,15 @@ export function RequestFormBuilder({
   const all: RequestField[] = [
     {
       id: 'method',
-      name: '服务方式',
+      name: fields.find(field => field.id === 'method')?.name ?? '服务方式',
       type: 'single',
       options: service.deliveryMethods.map((value) => ({
         value,
         enabled: true,
       })),
     },
-    { id: 'description', name: '需求说明', type: 'textarea', options: [] },
-    { id: 'businessObjects', name: '业务对象', type: 'lookup', options: [] },
+    { id: 'description', name: fields.find(field => field.id === 'description')?.name ?? '需求说明', type: 'textarea', options: [] },
+    { id: 'businessObjects', name: fields.find(field => field.id === 'businessObjects')?.name ?? '业务对象', type: 'lookup', options: [] },
     ...fields.filter(
       (f) => !['method', 'description', 'businessObjects'].includes(f.id),
     ),
@@ -87,9 +89,15 @@ export function RequestFormBuilder({
       })),
   ];
   const order = requestFormOrder(config);
+  const placements = requestFieldPlacements(config);
   const field = all.find((f) => f.id === selected);
+  const specialRequirement = field?.type === 'address' ? 'onsite' : editionFieldRequirement(selected);
+  const updateWithDependencies = (next: RequestConfig) => update(withEditionFieldDependency(next,
+    fields.find(f => f.id === 'edition')?.options.filter(option => option.enabled).map(option => option.value) ?? [],
+  ));
   const fixed =
     selected === 'method' ||
+    (selected === 'edition' && config.fields.some(id => isEditionRequirement(config.fieldRequiredWhen?.[id]))) ||
     (selected === 'businessObjects' && isEntitlementService(service));
   const required = (id: string) =>
     id === 'method' ||
@@ -98,9 +106,11 @@ export function RequestFormBuilder({
       : id === 'businessObjects'
         ? !!config.basicFields?.businessObjects?.required
         : requestFieldIsRequired(config, id, ''));
-  const add = (id: string, before?: string) => {
+  const add = (id: string, before?: string, column?: 'left' | 'right') => {
     if (busy || !all.some((f) => f.id === id)) return;
-    const next = { ...config };
+    let next = { ...config, fieldColumns: { ...config.fieldColumns } };
+    for (const [key, position] of Object.entries(placements))
+      if (position !== 'full') next.fieldColumns[key] = position;
     if (id === 'description' || id === 'businessObjects')
       next.basicFields = {
         ...config.basicFields,
@@ -123,11 +133,16 @@ export function RequestFormBuilder({
         };
     }
     const arranged = order.filter((key) => key !== id);
-    const index = before ? arranged.indexOf(before) : -1;
+    const targetBefore = before === id ? order[order.indexOf(id) + 1] : before;
+    const index = targetBefore ? arranged.indexOf(targetBefore) : -1;
     arranged.splice(index < 0 ? arranged.length : index, 0, id);
     next.fieldOrder = arranged;
     next.fields = arranged.filter((key) => next.fields.includes(key));
-    update(next);
+    const requirement = editionFieldRequirement(id);
+    if (requirement && !config.fields.includes(id))
+      next.fieldRequiredWhen = { ...config.fieldRequiredWhen, [id]: requirement };
+    if (column) next = { ...setRequestFieldPlacement(next, id, column), fieldColumns: { ...next.fieldColumns, [id]: column } };
+    updateWithDependencies(next);
     select(id);
   };
   const remove = () => {
@@ -196,7 +211,7 @@ export function RequestFormBuilder({
       <main className="rf-center">
         <div className="rf-preview-heading">
           <strong>申请表单预览</strong>
-          <span>每行最多两个字段 · 拖动调整顺序</span>
+          <span>左右列独立排列 · 可拖入指定列或在属性中调整</span>
         </div>
         <div className="rf-paper">
           <h3>{service.name}</h3>
@@ -210,7 +225,7 @@ export function RequestFormBuilder({
               setHover(null);
             }}
           >
-            {order.map((id) => {
+            <RequestFormLayout config={config} onPlaceField={busy ? undefined : (id, column, before) => add(id, before, column)} renderField={(id) => {
               const f = all.find((f) => f.id === id);
               if (!f) return null;
               return (
@@ -219,9 +234,6 @@ export function RequestFormBuilder({
                   className="rf-preview-field"
                   data-selected={selected === id}
                   data-over={hover === id}
-                  style={{
-                    gridColumn: requestFieldGridColumn(config, id),
-                  }}
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -234,7 +246,7 @@ export function RequestFormBuilder({
                     const dragged = e.dataTransfer.getData(
                       'application/x-request-field',
                     );
-                    if (dragged !== id) add(dragged, id);
+                    if (dragged !== id) add(dragged, id, placements[id] === 'full' ? undefined : placements[id] as 'left' | 'right');
                     setHover(null);
                   }}
                 >
@@ -250,7 +262,7 @@ export function RequestFormBuilder({
                     aria-label={`配置${f.name}`}
                   >
                     <span>
-                      {f.name} {config.fieldRequiredWhen?.[id] === 'onsite' ? <small>现场时显示且必填</small> : required(id) && <em>*</em>}
+                      {f.name} {config.fieldRequiredWhen?.[id] ? <small>{fieldRequirementLabels[config.fieldRequiredWhen[id]]}</small> : required(id) && <em>*</em>}
                     </span>
                     <GripVertical size={15} />
                   </button>
@@ -261,7 +273,7 @@ export function RequestFormBuilder({
                     <fieldset disabled aria-hidden="true">
                       {id === 'businessObjects' ? (
                         <div className="rf-object-placeholder">
-                          选择业务对象 · 可多选
+                          选择{f.name} · 可多选
                           <br />
                           <small>
                             {isEntitlementService(service)
@@ -289,7 +301,7 @@ export function RequestFormBuilder({
                   </div>
                 </div>
               );
-            })}
+            }} />
             <div className="rf-drop-hint">拖动字段到此处添加</div>
           </div>
           <section className="rf-materials">
@@ -383,6 +395,11 @@ export function RequestFormBuilder({
               />
               必须上传
             </label>
+            <label className="sr-check-line">
+              <input type="checkbox" disabled={busy} checked={material.deduplicate ?? false} onChange={event => patchMaterial({ deduplicate: event.target.checked })} />
+              去重
+            </label>
+            <p className="sr-help">多个服务项使用相同文件模板或在线文档链接时，在申请材料中合并展示。</p>
             <label className="rf-property-input" htmlFor={`material-url-${material.id}`}>
               在线文档模板链接
               <Input
@@ -478,36 +495,29 @@ export function RequestFormBuilder({
               <small>{fieldTypes[field.type]}</small>
             </div>
             <fieldset disabled={busy}>
-              <legend>布局宽度</legend>
+              <legend>布局位置</legend>
               <div className="rf-width-options">
-                {(['half', 'full'] as const).map((width) => (
-                  <label key={width}>
+                {(['left', 'right', 'full'] as const).map((position) => (
+                  <label key={position}>
                     <input
                       type="radio"
-                      name="field-width"
-                      checked={requestFieldWidth(config, selected) === width}
-                      onChange={() =>
-                        update({
-                          ...config,
-                          fieldWidths: {
-                            ...config.fieldWidths,
-                            [selected]: width,
-                          },
-                        })
-                      }
+                      name="field-position"
+                      checked={placements[selected] === position}
+                      onChange={() => update(setRequestFieldPlacement(config, selected, position))}
                     />
-                    {width === 'half' ? '半宽 · 1/2' : '全宽 · 1/1'}
+                    {position === 'full' ? '整行' : position === 'left' ? '左列' : '右列'}
                   </label>
                 ))}
               </div>
+              <p className="sr-help">左右列各自向下排列，整行字段排在两列之后。</p>
             </fieldset>
-            {field?.type === 'address' ? <fieldset className="rf-address-required" disabled={busy}>
-              <legend>填写要求</legend>
-              {([['required', '必填'], ['optional', '选填'], ['onsite', '服务方式为现场时显示且必填']] as const).map(([rule, label]) => <label className="sr-check-line" key={rule}>
-                <input type="radio" name={`address-required-${selected}`} value={rule} checked={(config.fieldRequiredWhen?.[selected] === 'onsite' ? 'onsite' : required(selected) ? 'required' : 'optional') === rule} onChange={() => {
+            {specialRequirement ? <fieldset className="rf-address-required" disabled={busy}>
+              <legend>特殊填写要求</legend>
+              {([['required', '必填'], ['optional', '选填'], [specialRequirement, fieldRequirementLabels[specialRequirement]]] as const).map(([rule, label]) => <label className="sr-check-line" key={rule}>
+                <input type="radio" name={`field-required-${selected}`} value={rule} checked={(config.fieldRequiredWhen?.[selected] ?? (required(selected) ? 'required' : 'optional')) === rule} onChange={() => {
                   const conditions = { ...config.fieldRequiredWhen };
-                  if (rule === 'onsite') conditions[selected] = 'onsite'; else delete conditions[selected];
-                  update({ ...config, fieldRequired: { ...config.fieldRequired, [selected]: rule === 'required' }, fieldRequiredWhen: conditions });
+                  if (rule === 'required' || rule === 'optional') delete conditions[selected]; else conditions[selected] = rule as FieldRequirement;
+                  updateWithDependencies({ ...config, fieldRequired: { ...config.fieldRequired, [selected]: rule === 'required' }, fieldRequiredWhen: conditions });
                 }} />{label}
               </label>)}
             </fieldset> : <label className="sr-check-line">
@@ -543,6 +553,7 @@ export function RequestFormBuilder({
               />
               必填
             </label>}
+            {selected === 'edition' && fixed && <p className="sr-help">其他字段的显示条件依赖授权版本，因此该字段必须保留并填写。</p>}
             {selected === 'method' ? (
               <p className="sr-help">
                 引用服务目录：{service.deliveryMethods.join('、')}

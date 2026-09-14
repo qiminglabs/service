@@ -11,7 +11,6 @@ export type RuleScope = keyof typeof ruleScopes;
 export const factCatalog = {
   title: { type: 'string', label: '申请主题' },
   description: { type: 'string', label: '申请说明' },
-  businessImpact: { type: 'string', label: '业务影响（生产环境、测试环境、不涉及业务）' },
   expectedServiceDate: { type: 'string', label: '期望服务日期（YYYY-MM-DD）' },
   expectedLeadDays: { type: 'number', label: '期望服务日期距检查当天的自然天数；未填或无效时不通过数值比较' },
   customerName: { type: 'string', label: '客户名称' },
@@ -72,6 +71,17 @@ export function normalizeStoredSubmissionRule(value: unknown): SubmissionRule {
     return { ...data, promptText: [...new Set(messages)].join('\n') || data.requirement };
   };
   const active = rule.active ? object(rule.active) : undefined;
+  // Retire the entire rule rather than silently dropping one condition from an
+  // AND/OR expression. Keep its text available for administrators to rewrite.
+  const checks = (active?.compiled as CompiledRule | undefined)?.checks;
+  const retiredFieldUsed = Array.isArray(checks) && checks.some(check =>
+    Array.isArray(check?.conditions) && check.conditions.some(condition => condition && String(condition.fact) === 'businessImpact'),
+  );
+  if (retiredFieldUsed) return {
+    ...upgrade(rule, active?.compiled), status: 'error',
+    error: '“业务影响”字段已移除，此规则已停用，请修改检验要求后重新转译并测试。',
+    active: { ...upgrade(active!, active?.compiled), enabled: false },
+  } as SubmissionRule;
   return { ...upgrade(rule, active?.compiled), ...(active ? { active: upgrade(active, active.compiled) } : {}) } as SubmissionRule;
 }
 export function parseCompiledRule(value: unknown): CompiledRule {

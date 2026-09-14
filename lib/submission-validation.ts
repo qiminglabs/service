@@ -1,4 +1,5 @@
-import { readLocal, visibleMaterialFiles } from './service-requests.ts';
+import { readLocal } from './service-requests.ts';
+import { requestMaterialIssues } from './request-materials.ts';
 import type { ServiceRequest } from './service-requests';
 import { applicantRemovalIssue, customerCollaboratorsIssue, isRequestApplicant, requestAudience } from './request-collaboration.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
@@ -16,12 +17,8 @@ export class SubmissionValidationError extends Error {
     this.name = 'SubmissionValidationError'; this.failures = failures; this.events = events;
   }
 }
-export const builtinSubmissionRules: (RuleDefinition & { id: string })[] = [
-  { id: 'builtin-applicant', scope: 'all', events: ['submit', 'resubmit'], requirement: '仅申请创建人可以提交，申请人必须保留在协作人中。', promptText: '请由申请创建人提交，并保留申请人在协作人中。' },
-  { id: 'builtin-presales', scope: 'internal', events: ['submit', 'resubmit'], requirement: '内部协作人至少包含一位已启用的 SmartX 售前工程师。', promptText: '内部申请提交前，请至少添加一位已启用的 SmartX 售前工程师为内部协作人。' },
-  { id: 'builtin-customer', scope: 'all', events: ['submit', 'resubmit', 'request-confirmation'], requirement: '至少一位客户协作人；所有客户协作人须为当前客户已启用的联系人。', promptText: '请至少添加一位客户协作人，并确保全部为当前客户已启用的联系人。' },
-  { id: 'builtin-completeness', scope: 'all', events: ['submit', 'resubmit'], requirement: '基本信息、申请项及必填材料通过齐套检验，关联资料有效。', promptText: '请按具体缺项补全基础信息、申请项及必填材料，并检查关联资料。' },
-];
+export { builtinSubmissionRules } from './submission-rule-builtins.ts';
+import { builtinSubmissionRules } from './submission-rule-builtins.ts';
 export function submissionEvent(record: ServiceRequest): RuleEvent {
   return record.operations?.draftReturns?.length ? 'resubmit' : 'submit';
 }
@@ -46,7 +43,7 @@ export function ruleFacts(record: ServiceRequest, refs: ValidationContext, now =
   const validDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
   const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   return {
-    title: record.title, description: record.description, businessImpact: record.businessImpact ?? '',
+    title: record.title, description: record.description,
     expectedServiceDate: date ?? '', expectedLeadDays: validDate ? (Date.parse(date) - today) / 86400000 : null,
     customerName: refs.customers.find(c => c.id === record.customerId)?.name ?? '', itemCount: record.items.length,
     internalCount: new Set(people.map(p => p.id)).size,
@@ -57,7 +54,7 @@ export function ruleFacts(record: ServiceRequest, refs: ValidationContext, now =
     allItemsDescribed: record.items.length > 0 && record.items.every(item => !!item.description.trim()),
     hasOnsiteItem: record.items.some(item => item.method === '现场'), hasRemoteItem: record.items.some(item => item.method === '远程'),
     hasBusinessObjects: record.items.length > 0 && record.items.every(item => item.businessObjectIds.length > 0),
-    requiredMaterialsComplete: record.items.every(item => item.config.materials.filter(m => m.required).every(m => visibleMaterialFiles(item.materials.find(material => material.requirementId === m.id), refs.audience ?? requestAudience(record), refs.materialActorId ?? refs.currentActor?.id).length > 0)),
+    requiredMaterialsComplete: requestMaterialIssues(record, refs.audience ?? requestAudience(record)).length === 0,
     completeness: requestCompletenessIssues(record, refs).length === 0,
     managerAssigned: (refs.users ?? []).some(u => u.id === record.operations?.assessment?.managerId && u.status === '启用' && fixedIdentityRoles[u.id] === 'SmartX 项目经理'),
     assessedDays: assessedEffort(record) ?? null,
@@ -96,11 +93,13 @@ export function runValidationQueue(record: ServiceRequest, refs: ValidationConte
       case 'builtin-customer': { const issue = customerCollaboratorsIssue(record, refs.contacts); if (issue) messages = [issue]; break; }
       case 'builtin-completeness': messages = requestCompletenessIssues(record, context); break;
     }
-    failures.push(...messages.map(message => ({ ruleId: rule.id, requirement: rule.requirement, message: message === rule.promptText ? message : `${rule.promptText} ${message}` })));
+    failures.push(...messages.map(message => ({ ruleId: rule.id, requirement: rule.requirement, message: message === rule.promptText ? message : `${rule.promptText}${rule.id === 'builtin-completeness' ? '' : ' '}${message}` })));
   }
   if (!Array.isArray(stored) || stored.length > 200) return [...failures, { ruleId: 'queue', requirement: '规则配置有效', message: '校验规则配置损坏，请联系管理员修复后重试。' }];
-  for (const rule of stored as SubmissionRule[]) {
+  for (const saved of stored as SubmissionRule[]) {
+    let rule = saved;
     try {
+      rule = normalizeStoredSubmissionRule(saved);
       if (!rule || typeof rule !== 'object') throw new Error();
       if (!rule.active) { if (!['pending', 'error'].includes(rule.status)) throw new Error(); continue; }
       if (typeof rule.active.enabled !== 'boolean') throw new Error();

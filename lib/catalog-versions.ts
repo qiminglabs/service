@@ -1,6 +1,7 @@
 import { defaultConfig, openDatabase, applyCatalogConfigRules } from './service-requests';
 import { workspaceDayQuantityIssue } from './day-quantity.ts';
 import type { CatalogService, RequestConfig } from './service-requests';
+import { prepareMaterialDeduplication } from './request-materials.ts';
 
 export type VersionedService = CatalogService & {
   version?: number;
@@ -28,6 +29,7 @@ export async function commitCatalogVersion(
     reason: string;
   },
 ) {
+  if (change.config) change = { ...change, config: await prepareMaterialDeduplication(change.config) };
   const db = await openDatabase();
   let savedConfig: RequestConfig | undefined;
   try {

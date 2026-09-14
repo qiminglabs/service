@@ -21,6 +21,7 @@ export function DateField({
   readonly = false,
   disabled = false,
   required = false,
+  hideLabel = false,
 }: {
   id?: string;
   label?: string;
@@ -29,6 +30,7 @@ export function DateField({
   readonly?: boolean;
   disabled?: boolean;
   required?: boolean;
+  hideLabel?: boolean;
 }) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
@@ -43,7 +45,7 @@ export function DateField({
 
   return (
     <div className="sr-service-date-field">
-      <label htmlFor={fieldId}>
+      <label htmlFor={fieldId} className={hideLabel ? 'sr-only' : undefined}>
         <span>
           {label}
           {required ? (

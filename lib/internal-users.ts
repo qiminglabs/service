@@ -60,6 +60,14 @@ export const localInternalUsers: DirectoryUser[] = [
     department: '客户成功部',
     status: '停用',
   },
+  {
+    id: 'USR-008',
+    phone: '138 0000 0008',
+    name: '沈川',
+    email: 'shen.chuan@example.com',
+    department: '硬件产品部',
+    status: '启用',
+  },
 ];
 
 export const fixedIdentityRoles: Readonly<Record<string, string>> =
@@ -71,6 +79,7 @@ export const fixedIdentityRoles: Readonly<Record<string, string>> =
     'USR-007': 'SmartX 销售经理',
     'USR-003': 'SmartX 项目经理',
     'USR-004': 'SmartX 服务工程师',
+    'USR-008': 'SmartX 硬件产品经理',
   });
 
 type NamedRecord = { id: string; name: string; status: string };

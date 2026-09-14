@@ -1,4 +1,5 @@
 import { runValidationQueue, validationEventsForTransition, SubmissionValidationError } from './submission-validation.ts';
+import { requestFieldLabel } from './request-field-labels.ts';
 import { submissionRulesId } from './submission-rule-schema.ts';
 export { requestIssues } from './request-validation-builtins.ts';
 import { addressLabel, isAddressValue, addressComplete } from './request-address.ts';
@@ -8,9 +9,11 @@ import { workspaceDayQuantityIssue } from './day-quantity.ts';
 import { effortPricingSaveIssue, entitlementPricingContext } from './request-pricing.ts';
 import { projectCreationSaveIssue } from './request-projects.ts';
 import { isInternal } from './request-operations.ts';
+import { editionFeatureFields, isEditionRequirement, type FieldRequirement } from './request-field-requirements.ts';
 import { supplementSaveIssue } from './request-supplements.ts';
 import { customerDecisionIssue } from './request-customer-decision.ts';
-import { assessmentLockIssue, currentPlan, planSalesOwnerIssue } from './request-assessment.ts';
+import { assessmentLockIssue, assessmentBasisSaveIssue, currentPlan, planSalesOwnerIssue } from './request-assessment.ts';
+import { hardwareAssessmentSaveIssue, invalidateHardwareReview, hardwareItems, isHardwareProductManager } from './request-hardware-assessment.ts';
 import type { OperationActor, RequestOperations } from './request-operations';
 
 export type CatalogService = {
@@ -62,7 +65,7 @@ export async function readRequestConfigs(
 ): Promise<RequestConfig[]> {
   if (audience === 'internal') {
     return (await readLocal<RequestConfig>('configs')).map(
-      normalizeRequestConfig,
+      normalizeCatalogRequestConfig,
     );
   }
   const references = await readLocal<{ id: string; payload?: RequestConfig }>(
@@ -73,7 +76,7 @@ export async function readRequestConfigs(
       (record) => record.payload?.serviceId &&
         record.id === customerRequestConfigId(record.payload.serviceId),
     )
-    .map((record) => normalizeRequestConfig(record.payload!));
+    .map((record) => normalizeCatalogRequestConfig(record.payload!));
 }
 
 export function resolveRequestConfig(
@@ -82,7 +85,7 @@ export function resolveRequestConfig(
 ): RequestConfig {
   // The caller supplies only the selected audience's configs. Never fall back
   // from customer configuration to internal configuration, even for empty forms.
-  return applyCatalogConfigRules(service, normalizeRequestConfig(
+  return applyCatalogConfigRules(service, normalizeCatalogRequestConfig(
     configs.find((config) => config.serviceId === service.id) ?? defaultConfig(service),
   ));
 }
@@ -135,8 +138,9 @@ export type StoredFile = {
 };
 export type FieldKey = string;
 export const fieldLabels: Record<string, string> = {
-  edition: '产品版本类型',
-  version: '产品版本号',
+  ...Object.fromEntries(editionFeatureFields.map(field => [field.id, field.name])),
+  edition: '授权版本',
+  version: '版本号',
   nodes: '节点数',
 };
 export type MaterialRequirement = {
@@ -147,10 +151,14 @@ export type MaterialRequirement = {
   template?: StoredFile;
   templateUrl?: string;
   onlineTemplateUrl?: string;
+  deduplicate?: boolean;
+  templateDigest?: string;
 };
-export function visibleMaterialFiles(material: ItemMaterial | undefined, audience: RequestAudience = 'internal', actorId?: string): StoredFile[] {
-  return materialFiles(material).filter(file => audience === 'internal'
-    || (!!actorId && file.uploaderAudience === 'customer' && file.uploadedById === actorId));
+export function requestMaterialsCustomerVisible(record: ServiceRequest): boolean {
+  return requestAudience(record) === 'customer';
+}
+export function requestMaterialFiles(record: ServiceRequest, material: ItemMaterial | undefined, audience: RequestAudience = 'internal'): StoredFile[] {
+  return audience === 'internal' || requestMaterialsCustomerVisible(record) ? materialFiles(material) : [];
 }
 export function attributeMaterialFile(file: StoredFile, actor: OperationActor): StoredFile {
   return { ...file, uploadedById: actor.id, uploaderAudience: actor.role === '客户' ? 'customer' : 'internal' };
@@ -172,10 +180,11 @@ export function customerMaterialSaveIssue(record: ServiceRequest, previous: Serv
 }
 export function attributeRequestMaterials(record: ServiceRequest, previous: ServiceRequest | undefined, actor?: OperationActor): ServiceRequest {
   if (!actor?.id) return record;
+  const originals = new Map((previous?.items ?? []).flatMap(item => item.materials.flatMap(material => materialFiles(material).map(file => [file.id, file] as const))));
   return { ...record, items: record.items.map(item => ({ ...item, materials: item.materials.map(material => {
     const old = previous?.items.find(entry => entry.id === item.id)?.materials.find(entry => entry.requirementId === material.requirementId);
     return withMaterialFiles(material, materialFiles(material).map(file => {
-      const before = materialFiles(old).find(entry => entry.id === file.id);
+      const before = materialFiles(old).find(entry => entry.id === file.id) ?? originals.get(file.id);
       // Preserve unseen originals, including their bytes, when a customer saves the request.
       if (before && actor.role === '客户' && !(before.uploaderAudience === 'customer' && before.uploadedById === actor.id)) return before;
       return before && JSON.stringify(before) === JSON.stringify(file) ? before : attributeMaterialFile(file, actor);
@@ -183,8 +192,11 @@ export function attributeRequestMaterials(record: ServiceRequest, previous: Serv
   }) })) };
 }
 export type RequestConfig = {
+  /** One-time default removal; later manual additions of version remain valid. */
+  versionFieldDefaultRemoved?: boolean;
   fieldOrder?: string[];
   fieldWidths?: Record<string, 'full' | 'half'>;
+  fieldColumns?: Record<string, 'left' | 'right'>;
   fieldRowStarts?: string[];
   basicFields?: {
     description?: { enabled: boolean; required: boolean };
@@ -198,7 +210,7 @@ export type RequestConfig = {
   revision: number;
   fields: FieldKey[];
   fieldRequired?: Record<string, boolean>;
-  fieldRequiredWhen?: Record<string, 'onsite'>;
+  fieldRequiredWhen?: Record<string, FieldRequirement>;
   fieldNames: Record<string, string>;
   fieldOptions: Record<string, string[]>;
   materials: MaterialRequirement[];
@@ -280,6 +292,8 @@ export type RequestItem = {
 // Capture only on an explicit application-item save. Pricing and reservations
 // continue to use current workspace objects, never these display snapshots.
 export function snapshotItemBusinessObjects(item: RequestItem, objects: ObjectRef[], priceUnit: string | undefined, records: ServiceRequest[], requestId: string, customerId: string, savedAt = new Date().toISOString()): RequestItem {
+  item = clearHiddenItemFields(item);
+  if (!businessObjectsEnabled(item.config)) return item;
   const selected = item.businessObjectIds.map(id => {
     const object = objects.find(object => object.id === id && object.customerId === customerId && object.status === '启用' && matchesObjectProduct(object, item.config));
     if (!object) throw new Error('请取消关联已停用、不属于当前客户或不符合可搜索产品的业务对象。');
@@ -442,11 +456,6 @@ export function requestProgressSteps(request: RequestStatus | ServiceRequest) {
             : 'upcoming',
     }));
 }
-export const businessImpactOptions = ['生产环境', '测试环境', '不涉及业务'] as const;
-export type BusinessImpact = (typeof businessImpactOptions)[number];
-function businessImpactIssue(value: unknown): string | null {
-  return businessImpactOptions.includes(value as BusinessImpact) ? null : '请选择业务影响：生产环境、测试环境或不涉及业务。';
-}
 export type ServiceRequest = {
   id: string;
   title: string;
@@ -454,7 +463,8 @@ export type ServiceRequest = {
   contactId: string;
   description: string;
   expectedServiceDate?: string;
-  businessImpact?: BusinessImpact | '';
+  /** Retained only for compatibility with historical records; no longer collected or validated. */
+  businessImpact?: string;
   owner: string;
   createdBy?: string;
   createdById?: string;
@@ -481,27 +491,27 @@ export function itemDisplayFields(item: RequestItem, names: Record<string, strin
     }
     return value || '未填写';
   };
-  const keys = [...new Set(['method', ...item.config.fields])].filter(key => key !== 'description' && key !== 'businessObjects' && requestFieldIsVisible(item.config, key, item.method));
-  const fields = keys.map(key => ({ key, label: names[key] || item.config.fieldNames?.[key] || fieldLabels[key] || (key === 'method' ? '服务方式' : key), value: display(key === 'method' ? item.method : item.values[key]) }));
+  const keys = [...new Set(['method', ...item.config.fields])].filter(key => key !== 'description' && key !== 'businessObjects' && requestFieldIsVisible(item.config, key, item.method, item.values));
+  const fields = keys.map(key => ({ key, label: requestFieldLabel(key, names[key] || item.config.fieldNames?.[key] || fieldLabels[key] || (key === 'method' ? '服务方式' : key)), value: display(key === 'method' ? item.method : item.values[key]) }));
   if (businessObjectsEnabled(item.config)) fields.push({ key: 'businessObjects', label: names.businessObjects || '业务对象', value: item.businessObjectIds.map(id => itemObjectName(item, id, objects)).join('、') || '未关联' });
   return fields;
 }
 export function itemSummaryFields(item: RequestItem, names: Record<string, string> = {}, objects: Pick<ObjectRef, 'id' | 'name'>[] = []): { key: string; label: string; value: string; address: boolean }[] {
-  const defaults: Record<string, string> = { ...fieldLabels, method: '服务方式', edition: '产品版本', businessObjects: '业务对象', productForm: '产品形态', address: '地址', tibCount: 'TiB 数', instanceCount: '实例数', clusterCount: '集群数', expectedProvider: '期望服务商' };
+  const defaults: Record<string, string> = { ...fieldLabels, method: '服务方式', edition: '授权版本', businessObjects: '业务对象', productForm: '产品形态', address: '地址', tibCount: 'TiB 数', instanceCount: '实例数', clusterCount: '集群数', expectedProvider: '期望服务商' };
   const keys = [...new Set(['method', 'edition', 'nodes', 'version', ...item.config.fields, ...Object.keys(item.values), 'businessObjects'])].filter(key => key !== 'description');
   return keys.flatMap(key => {
-    if (!requestFieldIsVisible(item.config, key, item.method)) return [];
+    if (!requestFieldIsVisible(item.config, key, item.method, item.values)) return [];
     let value = (key === 'method' ? item.method : key === 'businessObjects' ? item.businessObjectIds.map(id => itemObjectName(item, id, objects)).join('、') : item.values[key] ?? '').trim();
     const address = key === 'address' || isAddressValue(value);
     if (isAddressValue(value)) value = addressLabel(value);
     else if (value.startsWith('[')) {
       try { const parsed: unknown = JSON.parse(value); if (Array.isArray(parsed)) value = parsed.filter(entry => typeof entry === 'string' && entry.trim()).map(entry => entry.trim()).join('、'); } catch { /* Keep legacy text readable. */ }
     }
-    return value ? [{ key, label: names[key] || item.config.fieldNames?.[key] || defaults[key] || key, value, address }] : [];
+    return value ? [{ key, label: requestFieldLabel(key, names[key] || item.config.fieldNames?.[key] || defaults[key] || key), value, address }] : [];
   });
 }
 export function itemSummary(item: RequestItem): string {
-  return itemSummaryFields(item, { edition: '产品版本' }).map(field => `${field.label}：${field.value}`).join(' · ');
+  return itemSummaryFields(item, { edition: '授权版本' }).map(field => `${field.label}：${field.value}`).join(' · ');
 }
 export function newRequest(
   title: string,
@@ -521,7 +531,6 @@ export function newRequest(
     createdByAudience: creatorRole === '客户' ? 'customer' : 'internal',
     description: '',
     expectedServiceDate: '',
-    businessImpact: '',
     owner,
     createdBy: owner,
     ...(createdById ? { createdById } : {}),
@@ -552,7 +561,6 @@ export function requestIdentityIssue(
   existing?: ServiceRequest,
   actor?: OperationActor,
 ): string | null {
-  if (record.businessImpact !== undefined && record.businessImpact !== '' && businessImpactIssue(record.businessImpact)) return businessImpactIssue(record.businessImpact);
   if (existing) {
     if (existing.status === '草稿' && !['草稿', '已取消'].includes(record.status) && (record.status !== '待评估' || !isRequestApplicant(existing, actor))) return '仅创建人可以提交服务请求。';
     if (existing.customerId !== record.customerId)
@@ -566,7 +574,7 @@ export function requestIdentityIssue(
     )
       return '创建人和创建时间不支持修改。';
     if (existing.status === '草稿' && actor?.role === '客户' && !canCheckRequestCompleteness(existing, actor)) {
-      const fields = ['title', 'contactId', 'description', 'expectedServiceDate', 'businessImpact', 'items', 'status', 'submittedAt'] as const;
+      const fields = ['title', 'contactId', 'description', 'expectedServiceDate', 'items', 'status', 'submittedAt'] as const;
       if (fields.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '非本人发起的服务申请仅支持只读查看，不允许修改或提交。';
     }
@@ -586,7 +594,7 @@ export function requestIdentityIssue(
           && !currentPlan(record) && record.operations?.assessment?.rounds.length === 0;
         if (!validReturn) return '仅待评估阶段的负责项目经理可以退回草稿。';
       }
-      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'businessImpact'] as const;
+      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate'] as const;
       if (frozen.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '提交后基本信息只读，不支持修改。';
       if (JSON.stringify(existing.items) !== JSON.stringify(record.items)
@@ -614,7 +622,7 @@ export type RequestAccessContext = {
 export function canCreateRequest({ actor, customerId }: RequestAccessContext): boolean {
   if (!actor.id) return false;
   if (actor.role === '客户') return Boolean(customerId);
-  return ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师'].includes(actor.role);
+  return ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师', 'SmartX 硬件产品经理'].includes(actor.role);
 }
 
 export function requestCreationAccessIssue(record: ServiceRequest, access: RequestAccessContext): string | null {
@@ -634,11 +642,12 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory, cus
     && !!contacts?.some(c => c.id === actor.id && c.customerId === record.customerId && c.status === '启用')
     && !!record.externalCollaborators?.some(p => p.contactId === actor.id);
 
-  if (['SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师'].includes(actor.role)) {
+  if (['SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师', 'SmartX 硬件产品经理'].includes(actor.role)) {
     const assessment = record.operations?.assessment;
     if (assessment?.plans.some(plan => plan.salesId === actor.id)
       || assessment?.approvals.some(approval => approval.approverId === actor.id)) return true;
   }
+  if (record.status === '待评估' && hardwareItems(record).length && isHardwareProductManager(actor) && directory.some(person => person.id === actor.id)) return true;
   if (isInternal(actor.role) && record.internalParticipants?.some(person => person.userId === actor.id)) return true;
   if (record.createdById) return false;
   // Legacy records stored a display name. Ambiguous names and old role labels
@@ -649,7 +658,7 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory, cus
 }
 
 export function canAddExternalCollaborators(record: ServiceRequest, access: RequestAccessContext): boolean {
-  return ['草稿', '待评估'].includes(record.status) && canAccessRequest(record, access) && ['客户', 'SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师'].includes(access.actor.role);
+  return ['草稿', '待评估'].includes(record.status) && canAccessRequest(record, access) && ['客户', 'SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师', 'SmartX 硬件产品经理'].includes(access.actor.role);
 }
 
 export function customerCollaborationIssue(record: ServiceRequest, existing: ServiceRequest, access: RequestAccessContext): string | null {
@@ -705,13 +714,14 @@ export function requestCreationIssue(
   ) {
     return '请选择有效且已启用的客户。';
   }
-  return businessImpactIssue(record.businessImpact);
+  return null;
 }
 export class RequestIdentityError extends Error {}
 export function defaultConfig(service: CatalogService): RequestConfig {
   const installation = service.category === '产品实施交付';
   return {
     serviceId: service.id,
+    versionFieldDefaultRemoved: true,
     revision: 1,
     basicFields: {
       description: { enabled: true, required: true },
@@ -719,7 +729,7 @@ export function defaultConfig(service: CatalogService): RequestConfig {
         ? { enabled: true, required: true, products: ['SMTX OS 系统'] }
         : { enabled: false, required: false },
     },
-    fields: installation ? ['edition', 'version', 'nodes'] : [],
+    fields: installation ? ['edition', 'nodes'] : [],
     fieldNames: { ...fieldLabels },
     fieldOptions: {},
     materials: [
@@ -764,7 +774,10 @@ export function copyRequestItem(source: RequestItem): RequestItem {
   return copy;
 }
 
-export function requestFieldIsRequired(config: RequestConfig, fieldId: string, method: string): boolean {
+export function requestFieldIsRequired(config: RequestConfig, fieldId: string, method: string, values: Record<string, string> = {}): boolean {
+  const requirement = config.fieldRequiredWhen?.[fieldId];
+  if (isEditionRequirement(requirement))
+    return config.fields.includes('edition') && (values.edition === '企业版' || (requirement === 'standard-or-enterprise' && values.edition === '标准版'));
   if (config.fieldRequiredWhen?.[fieldId] === 'onsite') {
     if (method.trim() === '现场') return true;
     try { const values: unknown = JSON.parse(method); return Array.isArray(values) && values.includes('现场'); } catch { return false; }
@@ -772,8 +785,30 @@ export function requestFieldIsRequired(config: RequestConfig, fieldId: string, m
   return config.fieldRequired?.[fieldId] !== false;
 }
 
-export function requestFieldIsVisible(config: RequestConfig, fieldId: string, method: string): boolean {
-  return config.fieldRequiredWhen?.[fieldId] !== 'onsite' || requestFieldIsRequired(config, fieldId, method);
+export function requestFieldIsVisible(config: RequestConfig, fieldId: string, method: string, values: Record<string, string> = {}): boolean {
+  return !config.fieldRequiredWhen?.[fieldId] || requestFieldIsRequired(config, fieldId, method, values);
+}
+
+// Save-time cleanup only: never call while changing a controlling field or reading
+// stored records. The editor keeps its original values until a save succeeds.
+export function clearHiddenItemFields(item: RequestItem): RequestItem {
+  const next = {
+    ...item,
+    values: Object.fromEntries(Object.entries(item.values).filter(([id]) =>
+      !['method', 'description', 'businessObjects'].includes(id)
+      && item.config.fields.includes(id) && requestFieldIsVisible(item.config, id, item.method, item.values),
+    )),
+    description: item.config.basicFields?.description?.enabled === false ? '' : item.description,
+  };
+  if (!businessObjectsEnabled(item.config)) {
+    next.businessObjectIds = [];
+    delete next.businessObjectSnapshot;
+  }
+  return next;
+}
+
+export function clearHiddenRequestFields(record: ServiceRequest): ServiceRequest {
+  return { ...record, items: record.items.map(clearHiddenItemFields) };
 }
 
 export function itemBasicIssues(item: RequestItem): string[] {
@@ -821,10 +856,10 @@ export function itemBasicIssues(item: RequestItem): string[] {
       !Number.isNaN(Date.parse(item.method));
   if (!methodValid) issues.push('服务方式');
   for (const key of item.config.fields) {
-    if (key === 'businessObjects' || !requestFieldIsVisible(item.config, key, item.method)) continue;
+    if (key === 'businessObjects' || !requestFieldIsVisible(item.config, key, item.method, item.values)) continue;
     const value = (item.values[key] ?? '').trim();
     const empty = !value || value === '[]';
-    if (empty && !requestFieldIsRequired(item.config, key, item.method)) continue;
+    if (empty && !requestFieldIsRequired(item.config, key, item.method, item.values)) continue;
     if (isAddressValue(value) && !addressComplete(value)) {
       issues.push(`${item.config.fieldNames?.[key] ?? '地址'}（请填写详细地址）`);
       continue;
@@ -839,7 +874,7 @@ export function itemBasicIssues(item: RequestItem): string[] {
       issues.push(
         key === 'nodes'
           ? '节点数（正整数）'
-          : (item.config.fieldNames?.[key] ??
+          : requestFieldLabel(key, item.config.fieldNames?.[key] ??
               fieldLabels[key] ??
               `申请字段 ${key}`),
       );
@@ -847,6 +882,23 @@ export function itemBasicIssues(item: RequestItem): string[] {
   return issues;
 }
 
+// Apply only to live catalog forms, not existing application/history snapshots.
+export function normalizeCatalogRequestConfig(config: RequestConfig): RequestConfig {
+  const normalized = normalizeRequestConfig(config);
+  if (normalized.versionFieldDefaultRemoved) return normalized;
+  const omitVersion = <T,>(value?: Record<string, T>): Record<string, T> | undefined => value
+    ? Object.fromEntries(Object.entries(value).filter(([id]) => id !== 'version')) : undefined;
+  return { ...normalized, versionFieldDefaultRemoved: true,
+    fields: normalized.fields.filter(id => id !== 'version'),
+    fieldOrder: normalized.fieldOrder?.filter(id => id !== 'version'),
+    fieldRowStarts: normalized.fieldRowStarts?.filter(id => id !== 'version'),
+    fieldRequired: omitVersion(normalized.fieldRequired),
+    fieldRequiredWhen: omitVersion(normalized.fieldRequiredWhen),
+    fieldOptions: omitVersion(normalized.fieldOptions) ?? {},
+    fieldWidths: omitVersion(normalized.fieldWidths),
+    fieldColumns: omitVersion(normalized.fieldColumns),
+  };
+}
 export function normalizeRequestConfig(
   config: RequestConfig & {
     fieldNames?: Record<string, string>;
@@ -864,7 +916,7 @@ export function normalizeRequestConfig(
         required: config.basicFields?.businessObjects?.required ?? false,
       },
     },
-    fieldNames: { ...fieldLabels, ...config.fieldNames },
+    fieldNames: Object.fromEntries(Object.entries({ ...fieldLabels, ...config.fieldNames }).map(([id, name]) => [id, requestFieldLabel(id, name)])),
     fieldOptions: Object.fromEntries(
       Object.entries(config.fieldOptions ?? {}).map(([fieldId, options]) => [
         fieldId,
@@ -873,13 +925,13 @@ export function normalizeRequestConfig(
     ),
   };
 }
-export function itemIssues(item: RequestItem, audience: RequestAudience = 'internal', actorId?: string): string[] {
+export function itemIssues(item: RequestItem): string[] {
   const issues = itemBasicIssues(item);
   for (const requirement of item.config.materials.filter((m) => m.required)) {
     const material = item.materials.find(
       (m) => m.requirementId === requirement.id,
     );
-    if (!visibleMaterialFiles(material, audience, actorId).length) issues.push(`上传${requirement.name}`);
+    if (!materialFiles(material).length) issues.push(`上传${requirement.name}`);
   }
   return issues;
 }
@@ -993,7 +1045,7 @@ export async function saveLocal(
           referenceRead.onsuccess = () => {
             const savedWorkspace = referenceRead.result.find((entry: { id: string }) => entry.id === 'workspace')?.payload;
             const previous = current.result ? withRequestCollaborators(normalizeStoredRequest(current.result), savedWorkspace?.contacts ?? [], savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []) : undefined;
-            const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, access) ?? businessImpactIssue(serviceRequest.businessImpact) : null;
+            const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, access) : null;
             if (creationIssue) {
               reject(new RequestIdentityError(creationIssue));
               transaction.abort();
@@ -1009,7 +1061,9 @@ export async function saveLocal(
             const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? []);
             const projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor);
             const issue = customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? projectIssue ?? supplementIssue ?? decisionIssue
-              ?? requestIdentityIssue(serviceRequest, previous, access?.actor);
+              ?? requestIdentityIssue(serviceRequest, previous, access?.actor)
+              ?? hardwareAssessmentSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
+              ?? assessmentBasisSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []);
             if (issue) {
               reject(new RequestIdentityError(issue));
               transaction.abort();
@@ -1017,7 +1071,11 @@ export async function saveLocal(
               if (serviceRequest.status === '已取消') {
                 serviceRequest = { ...serviceRequest, cancelledFromStatus: previous && previous.status !== '已取消' ? previous.status : requestCancellationStage(previous ?? serviceRequest) };
               }
+              // Check access and immutable fields against the original input first;
+              // canonical cleanup must not grant permission to edit a locked item.
+              serviceRequest = clearHiddenRequestFields(serviceRequest);
               serviceRequest = attributeRequestMaterials(serviceRequest, previous, access?.actor);
+              serviceRequest = invalidateHardwareReview(serviceRequest, previous);
               const changedPlan = JSON.stringify(currentPlan(serviceRequest)) !== JSON.stringify(previous ? currentPlan(previous) : undefined);
               const startingConfirmation = serviceRequest.operations?.assessment?.confirmation && !previous?.operations?.assessment?.confirmation;
               const changedEffort = JSON.stringify(serviceRequest.operations?.assessment?.effort) !== JSON.stringify(previous?.operations?.assessment?.effort);

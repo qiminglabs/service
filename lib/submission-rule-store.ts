@@ -4,6 +4,8 @@ import type { OperationActor } from './request-operations';
 import type { InternalUser } from './service-requests';
 import { parseCompiledRule, parseRuleDefinition, normalizeStoredSubmissionRule, submissionRulesId } from './submission-rule-schema.ts';
 import type { RuleDefinition, SubmissionRule } from './submission-rule-schema';
+import { ruleCompilationKey, RuleConflictError, testSubmissionRule } from './submission-rule-conflicts.ts';
+import type { RuleTestResult } from './submission-rule-conflicts';
 export async function readSubmissionRules(): Promise<SubmissionRule[]> {
   const refs = await readLocal<{ id: string; payload?: unknown }>('references');
   const rules = refs.find(r => r.id === submissionRulesId)?.payload ?? [];
@@ -56,8 +58,29 @@ export async function finishRuleCompilation(actor: OperationActor, draft: Submis
     if (result.error) return { ...rule, status: 'error', error: result.error.slice(0, 1500) };
     const compiled = parseCompiledRule(result.compiled);
     if (!result.summary?.trim()) throw new Error('缺少转译说明。');
+    const tested = testSubmissionRule(rule, compiled, result.summary, rules, rule.id);
+    if (tested.conflicts.length) throw new RuleConflictError(tested.conflicts);
     return { ...rule, status: 'ready', error: undefined, updatedAt: new Date().toISOString(), active: { ...parseRuleDefinition(rule), compiled, summary: result.summary, enabled: true } };
     });
+  });
+}
+// Persist only the tested compilation. Recheck the latest rules inside the same
+// transaction so a new conflicting rule cannot slip in between test and save.
+export async function saveTestedSubmissionRule(actor: OperationActor, definition: RuleDefinition, tested: RuleTestResult, existing?: Pick<SubmissionRule, 'id' | 'revision'>) {
+  const parsed = parseRuleDefinition(definition);
+  if (!tested || tested.key !== ruleCompilationKey(parsed)) throw new Error('检验要求、适用申请或检查时机已变化，请重新转译并测试。');
+  if (tested.conflicts.length) throw new RuleConflictError(tested.conflicts);
+  return mutateRules(actor, rules => {
+    const previous = existing ? rules.find(r => r.id === existing.id) : undefined;
+    if (existing && (!previous || previous.revision !== existing.revision)) throw new Error('规则已被其他页面修改，请刷新后重试。');
+    const current = testSubmissionRule(parsed, tested.compiled, tested.summary, rules, existing?.id);
+    if (current.conflicts.length) throw new RuleConflictError(current.conflicts);
+    const next: SubmissionRule = {
+      ...parsed, id: previous?.id ?? crypto.randomUUID(), revision: (previous?.revision ?? 0) + 1,
+      status: 'ready', updatedAt: new Date().toISOString(), updatedBy: actor.name,
+      active: { ...parsed, compiled: current.compiled, summary: current.summary, enabled: true },
+    };
+    return previous ? rules.map(r => r.id === previous.id ? next : r) : [...rules, next];
   });
 }
 export async function toggleSubmissionRule(actor: OperationActor, rule: SubmissionRule) {
@@ -66,6 +89,10 @@ export async function toggleSubmissionRule(actor: OperationActor, rule: Submissi
     return rules.map(current => {
     if (current.id !== rule.id) return current;
     if (current.revision !== rule.revision || !current.active) throw new Error('规则已变化，请刷新后重试。');
+    if (!current.active.enabled) {
+      const tested = testSubmissionRule(current.active, current.active.compiled, current.active.summary, rules, current.id);
+      if (tested.conflicts.length) throw new RuleConflictError(tested.conflicts);
+    }
     return { ...current, revision: current.revision + 1, updatedAt: new Date().toISOString(), updatedBy: actor.name, active: { ...current.active, enabled: !current.active.enabled } };
     });
   });

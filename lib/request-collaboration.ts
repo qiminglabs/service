@@ -10,7 +10,7 @@ export function requestAudience(record: ServiceRequest): 'internal' | 'customer'
 export function isRequestApplicant(record: ServiceRequest, actor?: OperationActor): boolean {
   return !!actor?.id && actor.id === record.createdById && (requestAudience(record) === 'customer'
     ? actor.role === '客户'
-    : ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师'].includes(actor.role));
+    : ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师', 'SmartX 硬件产品经理'].includes(actor.role));
 }
 export function withRequestCollaborators(record: ServiceRequest, contacts: ContactRef[], customers: CustomerRef[] = [], users: InternalUser[] = []): ServiceRequest {
   const audience = record.createdByAudience ?? (users.some(user => user.id === record.createdById) ? 'internal' : requestAudience(record));

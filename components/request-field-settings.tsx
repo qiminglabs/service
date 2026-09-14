@@ -16,8 +16,11 @@ import {
 import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { RequestRuleSettings } from '@/components/request-rule-settings';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
+import { editionFeatureFields, editionFieldRequirement, fieldRequirementLabels, fieldOptionsIssue } from '@/lib/request-field-requirements';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DateField } from '@/components/date-field';
+import { requestFieldLabel } from '@/lib/request-field-labels';
 import {
   Combobox,
   ComboboxInput,
@@ -66,8 +69,9 @@ const systemFields: Record<
     referenceTarget?: 'partners' | 'businessObjects';
   }
 > = {
-  edition: { name: '产品版本', type: 'single' },
-  version: { name: '产品版本号', type: 'single' },
+  edition: { name: '授权版本', type: 'single' },
+  version: { name: '版本号', type: 'single' },
+  ...Object.fromEntries(editionFeatureFields.map(field => [field.id, { name: field.name, type: 'single' as const }])),
   nodes: { name: '节点数', type: 'integer' },
   description: { name: '需求说明', type: 'textarea' },
   businessObjects: {
@@ -108,7 +112,7 @@ export function normalizeRequestFields(
     fields.map((field) => ({
       ...field,
       type: systemFields[field.id]?.type ?? field.type ?? 'single',
-      name: systemFields[field.id]?.name ?? field.name,
+      name: requestFieldLabel(field.id, field.name?.trim() || systemFields[field.id]?.name || field.name),
       referenceTarget:
         systemFields[field.id]?.referenceTarget ?? field.referenceTarget,
       options: field.options.map((option) =>
@@ -118,12 +122,13 @@ export function normalizeRequestFields(
   );
 }
 export const initialRequestFields = normalizeRequestFields([
+  ...editionFeatureFields.map(field => ({ id: field.id, name: field.name, type: 'single' as const, options: ['是', '否'] })),
   {
     id: 'edition',
-    name: '产品版本',
+    name: '授权版本',
     options: ['基础版', '敏捷版', '标准版', '企业版'],
   },
-  { id: 'version', name: '产品版本号', options: ['5.0.1', '5.0.2', '5.0.3'] },
+  { id: 'version', name: '版本号', options: ['5.0.1', '5.0.2', '5.0.3'] },
   { id: 'nodes', name: '节点数', type: 'integer', options: [] },
   { id: 'description', name: '需求说明', type: 'textarea', options: [] },
   {
@@ -177,12 +182,14 @@ export function RequestFieldSettings({
   const [options, setOptions] = useState<FieldOption[]>([]);
   const [newOption, setNewOption] = useState('');
   const [error, setError] = useState('');
+  const creating = target === 'new';
   const locked = target !== null && isSystemField(target);
   const isChoice =
     (type === 'single' || type === 'multiple') && target !== 'businessObjects';
   function open(id: string) {
-    if (!['edition', 'version'].includes(id)) return;
+    if (!ready) return;
     const field = fields.find((field) => field.id === id);
+    if (id !== 'new' && !field) return;
     setTarget(id);
     setName(field?.name ?? '');
     setType(field?.type ?? 'single');
@@ -202,7 +209,10 @@ export function RequestFieldSettings({
       setError('选项已存在（包含已停用选项），请修改或启用原选项。');
       return null;
     }
-    return [...options, ...values.map((value) => ({ value, enabled: true }))];
+    const next = [...options.map(option => ({ ...option, value: option.value.trim() })), ...values.map((value) => ({ value, enabled: true }))];
+    const issue = fieldOptionsIssue(next);
+    if (issue) { setError(issue); return null; }
+    return next;
   }
   function add() {
     if (!newOption.trim()) {
@@ -216,7 +226,7 @@ export function RequestFieldSettings({
     setError('');
   }
   function save() {
-    if (!target || !['edition', 'version'].includes(target)) return;
+    if (!ready || !target) return;
     if (!name.trim()) {
       setError('请输入字段名称。');
       return;
@@ -227,26 +237,31 @@ export function RequestFieldSettings({
       setError('字段名称已存在。');
       return;
     }
-    const next = isChoice ? addedOptions() : options;
+    const current = fields.find((field) => field.id === target);
+    if (!creating && !current) return;
+    const next = isChoice ? addedOptions() : current?.options ?? [];
     if (!next) return;
-    if (isChoice && !next.length) {
+    if (!locked && isChoice && !next.length) {
       setError('请至少新建一个选项。');
       return;
     }
-    const current = fields.find((field) => field.id === target);
-    const changed = current && (
+    const changed = creating || (current && (
+      current.name !== name.trim() ||
       current.options.length !== next.length ||
       current.options.some((option, index) =>
         option.value !== next[index]?.value || option.enabled !== next[index]?.enabled,
       )
-    );
+    ));
     if (changed) {
       const updatedAt = new Date().toISOString();
-      onChange(
-        fields.map((item) => item.id === target
-          ? { ...item, options: next, updatedAt, updatedBy: actor || '未选择用户' }
-          : item),
-      );
+      const field: RequestField = {
+        ...(current ?? { id: `field-${crypto.randomUUID()}`, type }),
+        name: name.trim(),
+        options: next,
+        updatedAt,
+        updatedBy: actor || '未选择用户',
+      };
+      onChange(creating ? [...fields, field] : fields.map(item => item.id === target ? field : item));
     }
     setTarget(null);
   }
@@ -266,7 +281,7 @@ export function RequestFieldSettings({
               {tab.label}{tab.key === 'request-items' && <span>{fields.length}</span>}
             </TabsTrigger>)}
           </TabsList>
-
+          {section === 'forms' && <Button disabled={!ready} onClick={() => open('new')}><Plus size={16} />创建字段</Button>}
         </div>
         {section === 'forms' && <TabsContent value="request-items">
           <div className="table-scroll">
@@ -286,7 +301,7 @@ export function RequestFieldSettings({
                   <tr key={field.id}>
                     <td>
                       <strong>{field.name}</strong>
-                      <span className="request-system-field">系统预置</span>
+                      {isSystemField(field.id) && <span className="request-system-field">系统预置</span>}
                     </td>
                     <td>{fieldTypes[field.type]}</td>
                     <td>
@@ -318,17 +333,13 @@ export function RequestFieldSettings({
                     </td>
                     <td>{field.updatedBy ?? '—'}</td>
                     <td>
-                      {!['edition', 'version'].includes(field.id) ? (
-                        <span className="sr-help">系统预置</span>
-                      ) : (
                         <Button
                           variant="ghost"
                           disabled={!ready}
                           onClick={() => open(field.id)}
                         >
-                          编辑选项
+                          编辑
                         </Button>
-                      )}
 
                     </td>
                   </tr>
@@ -354,12 +365,14 @@ export function RequestFieldSettings({
         <DialogContent className="request-field-dialog">
           <DialogHeader>
             <DialogTitle>
-              编辑选项
+              {creating ? '创建字段' : '编辑字段'}
             </DialogTitle>
             <DialogDescription>
               {locked
-                ? '系统字段名称和类型不可修改，仅支持管理选项。保存后生效。'
-                : '配置字段名称和类型；单选、多选字段可维护选项及启用状态。保存后生效。'}
+                ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项，字段类型不可修改。'
+                : creating
+                  ? '创建后可在服务目录的申请表单中添加使用。'
+                  : '可修改名称和选项；字段类型创建后不可修改，以保留历史数据。'}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -370,10 +383,10 @@ export function RequestFieldSettings({
             className="sr-form-grid"
           >
             <label htmlFor="request-field-name">
-              字段名称
+              字段名称（标签）
               <Input
                 id="request-field-name"
-                disabled={locked}
+                required
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 placeholder="请输入字段名称"
@@ -382,7 +395,7 @@ export function RequestFieldSettings({
             <label>
               字段类型
               <select
-                disabled={locked}
+                disabled={!creating}
                 value={type}
                 onChange={(event) => {
                   setType(event.target.value as RequestFieldType);
@@ -398,6 +411,12 @@ export function RequestFieldSettings({
                   ))}
               </select>
             </label>
+            {target && editionFieldRequirement(target) && (
+              <div className="sr-span">
+                <strong>特殊填写要求</strong>
+                <p className="sr-help">{fieldRequirementLabels[editionFieldRequirement(target)!]}。添加到服务表单时默认启用，可在字段属性中调整。</p>
+              </div>
+            )}
             {isChoice && (
               <section
                 className="sr-span request-field-editor"
@@ -411,7 +430,7 @@ export function RequestFieldSettings({
                   </small>
                 </h3>
                 <p className="sr-help">
-                  停用后不可新增选择，已填写的历史值会保留。
+                  修改或停用选项后，已填写的历史值会保留；服务表单的可用选项需同步检查。
                 </p>
                 <div className="request-field-option-list">
                   <table className="reference-table">
@@ -424,8 +443,11 @@ export function RequestFieldSettings({
                     </thead>
                     <tbody>
                       {options.map((option, index) => (
-                        <tr key={option.value}>
-                          <td>{option.value}</td>
+                        <tr key={index}>
+                          <td><Input aria-label={`选项 ${index + 1} 名称`} value={option.value} onChange={(event) => {
+                            setOptions(items => items.map((item, i) => i === index ? { ...item, value: event.target.value } : item));
+                            setError('');
+                          }} /></td>
                           <td>
                             <span
                               className="request-field-option-status"
@@ -706,15 +728,15 @@ export function RequestFieldControl({
         onChange={(event) => onChange(event.target.value)}
       />
     );
+  if (field.type === 'date')
+    return <DateField label={field.name} hideLabel value={value} onChange={onChange} disabled={disabled} />;
   return (
     <Input
       aria-label={field.name}
       type={
         field.type === 'integer' || field.type === 'decimal'
           ? 'number'
-          : field.type === 'date'
-            ? 'date'
-            : 'text'
+          : 'text'
       }
       step={
         field.type === 'integer'

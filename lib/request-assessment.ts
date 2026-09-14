@@ -4,6 +4,8 @@ import { calculateEffortPricing, type EffortPricingLine, type EffortPricingInput
 import { assetDayMethod, requestDayRequirements, allocationMethodIssue, planDayGaps, formatDayRequirements, type DayMethod, type DayRequirement } from './request-asset-coverage.ts';
 import { portalSwitchIdentities } from './portal-context.ts';
 import { operationIdentities } from './internal-users.ts';
+import { isRequestApplicant, requestAudience } from './request-collaboration.ts';
+import { hardwareItems, isHardwareProductManager, hardwareReviewers, hardwareReviewSource, hardwarePassIssue, type HardwareAssessment } from './request-hardware-assessment.ts';
 import type {
   ServiceRequest,
   CatalogService,
@@ -18,6 +20,29 @@ import {
   isInternal,
 } from './request-operations.ts';
 import type { OperationActor, RequestAsset } from './request-operations.ts';
+
+export function canManageAssessmentBasis(record: ServiceRequest, actor?: OperationActor, customers: CustomerRef[] = [], users: InternalUser[] = []): boolean {
+  if (!actor?.id || !isInternal(actor.role)) return false;
+  if (requestAudience(record) === 'internal') return isRequestApplicant(record, actor);
+  return customerOwner(record, customers, users)?.id === actor.id;
+}
+
+function assessmentBasisPermissionMessage(record: ServiceRequest): string {
+  return requestAudience(record) === 'internal'
+    ? '服务依据关联及发起客户确认由本申请的内部申请人执行。'
+    : '服务依据关联及发起客户确认由当前客户所有人执行。';
+}
+
+export function assessmentBasisSaveIssue(next: ServiceRequest, previous: ServiceRequest | undefined, actor?: OperationActor, customers: CustomerRef[] = [], users: InternalUser[] = []): string | null {
+  const plan = currentPlan(next);
+  const confirmation = assessmentOf(next).confirmation;
+  // Releasing a plan after re-estimation, return or cancellation is not a new association.
+  const changingBasis = !!plan && JSON.stringify(plan) !== JSON.stringify(previous && currentPlan(previous));
+  const confirming = !!confirmation && JSON.stringify(confirmation) !== JSON.stringify(previous && assessmentOf(previous).confirmation);
+  if (!(changingBasis || confirming)) return null;
+  const source = previous ?? next;
+  return canManageAssessmentBasis(source, actor, customers, users) ? null : assessmentBasisPermissionMessage(source);
+}
 
 export type Followup = {
   id: string;
@@ -71,6 +96,7 @@ export type GapApproval = {
   decidedBy?: string;
 };
 export type Assessment = {
+  hardware?: HardwareAssessment;
   needsReview?: boolean; // Legacy field, no longer controls assessment.
   effort?: { days: number; estimatedDays?: number; lines?: EffortPricingLine[]; at: string; author: string; note?: string };
   managerId: string;
@@ -94,6 +120,7 @@ export type Assessment = {
   };
 };
 export type AssessmentAction =
+  | { type: 'hardware-review'; outcome: AssessmentRound['outcome']; opinion: string }
   | { type: 'return-draft'; reason: string }
   | { type: 'effort'; items: EffortPricingInput[]; note?: string }
   | {
@@ -291,7 +318,7 @@ export function applyAssessmentAction(
       !isProjectManager(actor) ||
       (assessment.managerId && assessment.managerId !== actor.id)
     )
-      throw new Error('评估及客户确认由负责本请求的项目经理执行。');
+      throw new Error('材料评估及人天核定由负责本请求的项目经理执行。');
   };
   const text = (s: string, label: string) => {
     if (!s.trim()) throw new Error(`请填写${label}。`);
@@ -314,13 +341,29 @@ export function applyAssessmentAction(
     throw new Error(
       '额度特批审批中，暂不能修改人天核定或服务依据，请等待审批完成。',
     );
-  if (action.type === 'review') {
+  if (action.type === 'hardware-review') {
+    if (!hardwareItems(record).length) throw new Error('当前请求没有硬件兼容性测试申请项。');
+    if (assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('材料评估已通过，双方评估结论已锁定。');
+    if (!isHardwareProductManager(actor) || !hardwareReviewers(users).some(user => user.id === actor.id)) throw new Error('仅已启用的硬件产品经理可提交硬件产品经理评估。');
+    text(action.opinion, '评估意见');
+    if (!['需补充', '评估通过'].includes(action.outcome)) throw new Error('请选择有效评估结论。');
+    const hardware = assessment.hardware = { reviewerId: actor.id, reviewer: actor.name, assignmentId: assessment.hardware?.assignmentId ?? crypto.randomUUID(), rounds: assessment.hardware?.rounds ?? [] };
+    hardware.rounds.push({ id: crypto.randomUUID(), assignmentId: hardware.assignmentId, authorId: actor.id, author: actor.name, at: now,
+      outcome: action.outcome, opinion: action.opinion.trim(),
+      itemIds: hardwareItems(record).map(item => item.id), source: hardwareReviewSource(record) });
+    title = `硬件产品经理评估 · ${action.outcome}`;
+    detail = action.opinion.trim();
+  } else if (action.type === 'review') {
     manager();
     text(action.opinion, '评估意见');
     if (assessment.rounds.some((r) => r.outcome === '评估通过'))
       throw new Error('材料评估已通过，不支持新增评估。');
     if (!['评估通过', '需补充'].includes(action.outcome))
       throw new Error('请选择有效评估结论。');
+    if (action.outcome === '评估通过') {
+      const issue = hardwarePassIssue(record, users);
+      if (issue) throw new Error(issue);
+    }
     const id = crypto.randomUUID();
     assessment.managerId = actor.id;
     assessment.manager = actor.name;
@@ -392,7 +435,7 @@ export function applyAssessmentAction(
     title = '人天核定';
     detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.kind === 'entitlement' ? `差额权益 ${line.deficitEntitlements}` : line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
   } else if (action.type === 'plan') {
-    manager();
+    if (!canManageAssessmentBasis(record, actor, customers, users)) throw new Error(assessmentBasisPermissionMessage(record));
     const round = assessment.rounds.find((r) => r.outcome === '评估通过');
     if (!round) throw new Error('请先完成材料评估。');
     const effort = assessedEffort(record);
@@ -510,7 +553,7 @@ export function applyAssessmentAction(
     title = `额度特批${action.approve ? '通过' : '拒绝'}`;
     detail = action.note;
   } else if (action.type === 'confirm') {
-    manager();
+    if (!canManageAssessmentBasis(record, actor, customers, users)) throw new Error(assessmentBasisPermissionMessage(record));
     if (!plan || assessedEffort(record) === undefined || !assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('请先完成材料评估、人天核定和服务依据关联。');
     const gap = planGap(plan);
     const approval = assessment.approvals.find(
@@ -541,6 +584,8 @@ export function applyAssessmentAction(
   const next = {
     ...record,
     status,
+    ...(action.type === 'hardware-review' && assessment.hardware && !record.internalParticipants?.some(person => person.userId === assessment.hardware!.reviewerId)
+      ? { internalParticipants: [...(record.internalParticipants ?? []), { userId: assessment.hardware.reviewerId, name: assessment.hardware.reviewer }] } : {}),
     operations: { ...operationsOf(record), assessment },
   };
   if (action.type === 'plan' || action.type === 'confirm') {

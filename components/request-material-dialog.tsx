@@ -10,6 +10,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -30,7 +31,8 @@ import {
 } from '@/components/ui/dialog';
 import {
   checkFile,
-  visibleMaterialFiles,
+  requestMaterialFiles,
+  requestMaterialsCustomerVisible,
   attributeMaterialFile,
   downloadFile,
   fileAccept,
@@ -45,6 +47,7 @@ import type {
   MaterialRequirement,
   ItemMaterial,
   StoredFile,
+  ServiceRequest,
 } from '@/lib/service-requests';
 import {
   canEditTemplate,
@@ -62,6 +65,7 @@ const LocalDocumentEditor = lazy(() =>
 );
 export function RequestMaterialDialog({
   actor,
+  record,
   item,
   requirement,
   readonly,
@@ -71,6 +75,7 @@ export function RequestMaterialDialog({
   onClose,
 }: {
   actor: OperationActor;
+  record: ServiceRequest;
   item: RequestItem;
   requirement: MaterialRequirement;
   readonly: boolean;
@@ -101,7 +106,10 @@ export function RequestMaterialDialog({
   const uploadRef = useRef<HTMLInputElement>(null);
   const lock = useRef(false);
   const internal = actor.role !== '客户';
-  const files = visibleMaterialFiles(material, internal ? 'internal' : 'customer', actor.id);
+  const customerVisible = requestMaterialsCustomerVisible(record);
+  const files = requestMaterialFiles(record, material, internal ? 'internal' : 'customer');
+  const canEditFile = (file: StoredFile) => !readonly && (internal || (file.uploaderAudience === 'customer' && file.uploadedById === actor.id));
+  const editingReadonly = readonly || (!!editingFileId && !files.some(file => file.id === editingFileId && canEditFile(file)));
   const blocked = busy || loading || saving;
   const templateName =
     requirement.template?.name ?? requirement.templateUrl ?? '';
@@ -168,12 +176,13 @@ export function RequestMaterialDialog({
   }
   async function save() {
     if (lock.current || blocked || readonly) return;
+    if (!internal && !customerVisible) return;
     lock.current = true;
     setSaving(true);
     setProblem('');
     try {
       let next = withMaterialFiles(material, materialFiles(material));
-      if (editor && editorChanged) {
+      if (editor && editorChanged && !editingReadonly) {
         const file = attributeMaterialFile(onlineMaterialFile(editor), actor);
         next = saveMaterialFile(next, file, editingFileId);
       }
@@ -186,6 +195,7 @@ export function RequestMaterialDialog({
       setSaving(false);
     }
   }
+  if (!internal && !customerVisible) return null;
   return (
     <Dialog
       open
@@ -209,8 +219,8 @@ export function RequestMaterialDialog({
         <div className="sr-document-body">
           {internal && !readonly && (
             <div className="sr-material-visibility-notice" role="note">
-              <span className="sr-assessment-badge">仅内部可见</span>
-              <span>此处上传或在线填写的材料仅内部人员可见，不会展示给客户。</span>
+              {customerVisible ? <CustomerVisibleBadge /> : <span className="sr-assessment-badge">仅内部可见</span>}
+              <span>{customerVisible ? '此申请由客户中心发起，上传或在线填写的材料对客户可见。' : '此申请由内部发起，上传或在线填写的材料仅内部人员可见。'}</span>
             </div>
           )}
           {!editing && (
@@ -367,11 +377,12 @@ export function RequestMaterialDialog({
               <LocalDocumentEditor
                 key={editingFileId ?? 'new-document'}
                 value={editor}
-                readonly={readonly}
+                readonly={editingReadonly}
                 busy={blocked}
                 dirty={dirty}
                 onBack={() => setShowEditor(false)}
                 onChange={(next) => {
+                  if (editingReadonly) return;
                   setEditor(next);
                   setEditorChanged(true);
                   setDirty(true);
@@ -425,7 +436,7 @@ export function RequestMaterialDialog({
                             setEditorChanged(false);
                           }}
                         >
-                          {readonly ? '查看正文' : '在线编辑'}
+                          {canEditFile(file) ? '在线编辑' : '查看正文'}
                         </Button>
                       )}
                       <Button
@@ -438,7 +449,7 @@ export function RequestMaterialDialog({
                         <Download size={14} />
                         下载
                       </Button>
-                      {!readonly && (
+                      {canEditFile(file) && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -520,7 +531,7 @@ export function RequestMaterialDialog({
                 variant="destructive"
                 disabled={blocked}
                 onClick={() => {
-                  if (!deleteTarget || readonly || blocked) return;
+                  if (!deleteTarget || !canEditFile(deleteTarget) || blocked) return;
                   setMaterial((m) => removeMaterialFile(m, deleteTarget.id));
                   if (editingFileId === deleteTarget.id) {
                     setEditor(null);

@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { builtinSubmissionRules } from '@/lib/submission-validation';
 import { ruleScopes, ruleEvents } from '@/lib/submission-rule-schema';
 import type { RuleEvent, RuleScope, SubmissionRule } from '@/lib/submission-rule-schema';
-import { canManageSubmissionRules, readSubmissionRules, saveRuleDraft, finishRuleCompilation, toggleSubmissionRule } from '@/lib/submission-rule-store';
+import { canManageSubmissionRules, readSubmissionRules, saveTestedSubmissionRule, toggleSubmissionRule } from '@/lib/submission-rule-store';
+import { ruleCompilationKey, RuleConflictError, testSubmissionRule } from '@/lib/submission-rule-conflicts';
+import type { RuleTestResult } from '@/lib/submission-rule-conflicts';
 import type { OperationActor } from '@/lib/request-operations';
 
 export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
@@ -22,6 +24,12 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
   const [events, setEvents] = useState<RuleEvent[]>(['submit', 'resubmit']);
   const [requirement, setRequirement] = useState('');
   const [promptText, setPromptText] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [tested, setTested] = useState<RuleTestResult>();
+  const [testError, setTestError] = useState('');
+  const definition = { scope, events, requirement, promptText };
+  const testCurrent = tested?.key === ruleCompilationKey(definition);
+  const canSave = testCurrent && tested && !tested.conflicts.length && !!promptText.trim();
   const lock = useRef(false);
   const canManage = canManageSubmissionRules(actor);
   useEffect(() => {
@@ -31,36 +39,44 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
     return () => { active = false; window.removeEventListener('focus', load); };
   }, []);
   function edit(rule?: SubmissionRule) {
+    setTested(undefined); setTestError('');
     setTarget(rule); setScope(rule?.scope ?? 'all'); setEvents(rule?.events ?? ['submit', 'resubmit']);
     setPromptText(rule?.promptText ?? '');
     setRequirement(rule?.requirement ?? ''); setFormError(''); setOpen(true);
   }
+  function invalidateTest() { setTested(undefined); setTestError(''); setFormError(''); }
+  async function translateAndTest() {
+    if (lock.current || !canManage || !ready) return;
+    if (!events.length) { setTestError('请至少选择一个检查时机。'); return; }
+    if (!requirement.trim()) { setTestError('请输入自然语言描述检验要求。'); return; }
+    lock.current = true; setBusy(true); setTesting(true); setTested(undefined); setTestError(''); setFormError('');
+    try {
+      const response = await fetch('/api/submission-rules/compile', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(definition), signal: AbortSignal.timeout(100_000),
+      });
+      const result: { compiled?: unknown; summary?: string; error?: string } = await response.json();
+      if (!response.ok || result.error) throw new Error(result.error || 'AI 转译失败，请稍后重试。');
+      if (!result.compiled || !result.summary) throw new Error('没有获得完整的可执行规则，请改写后重试。');
+      const latest = await readSubmissionRules();
+      setRules(latest);
+      setTested(testSubmissionRule(definition, result.compiled, result.summary, latest, target?.id));
+    } catch (issue) {
+      setTestError(issue instanceof Error ? issue.message : '转译或测试失败，请重试。');
+    } finally { lock.current = false; setBusy(false); setTesting(false); }
+  }
   async function save() {
     if (lock.current || !canManage || !ready) return;
-    if (!events.length) { setFormError('请至少选择一个检查时机。'); return; }
-    if (!requirement.trim()) { setFormError('请输入检验要求。'); return; }
+    if (!tested || !testCurrent || tested.conflicts.length) { setFormError('请先转译并测试，处理所有冲突后再保存。'); return; }
     if (!promptText.trim()) { setFormError('请输入提示文本。'); return; }
     lock.current = true; setBusy(true); setFormError(''); setNotice('');
-    let saved: SubmissionRule | undefined;
     try {
-      saved = await saveRuleDraft(actor, { scope, events, requirement, promptText }, target);
-      setTarget(saved); setRules(await readSubmissionRules());
-      let result: { compiled?: unknown; summary?: string; error?: string };
-      try {
-        const response = await fetch('/api/submission-rules/compile', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scope, events, requirement, promptText }), signal: AbortSignal.timeout(100_000),
-        });
-        result = await response.json();
-        if (!response.ok && !result.error) result = { error: 'AI 转译失败，请稍后重试。' };
-        if (!result.error && !result.compiled) result = { error: '没有获得可执行规则，请改写后重试。' };
-      } catch { result = { error: '无法连接 AI 服务，文字要求已保存，请稍后重试转译。' }; }
-      const updated = await finishRuleCompilation(actor, saved, result);
-      setRules(updated); setTarget(updated.find(r => r.id === saved!.id));
-      if (result.error) { setFormError(result.error); return; }
+      setRules(await saveTestedSubmissionRule(actor, definition, tested, target));
       setOpen(false); setNotice('规则已保存并加入校验队列，下次命中检查时机时生效。');
-    } catch (issue) { setFormError(issue instanceof Error ? issue.message : '规则保存失败，请重试。'); }
-    finally { lock.current = false; setBusy(false); }
+    } catch (issue) {
+      if (issue instanceof RuleConflictError) setTested({ ...tested, conflicts: issue.conflicts });
+      setFormError(issue instanceof Error ? issue.message : '规则保存失败，请重试。');
+    } finally { lock.current = false; setBusy(false); }
   }
   async function toggle(rule: SubmissionRule) {
     if (lock.current || !canManage) return;
@@ -105,15 +121,29 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
           <div className="submission-rule-form-body">
           <div className="submission-rule-field">
             <label htmlFor="rule-scope">适用申请</label>
-            <NativeSelect id="rule-scope" value={scope} disabled={busy} onChange={event => setScope(event.target.value as RuleScope)}>{Object.entries(ruleScopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect>
+            <NativeSelect id="rule-scope" value={scope} disabled={busy} onChange={event => { setScope(event.target.value as RuleScope); invalidateTest(); }}>{Object.entries(ruleScopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</NativeSelect>
           </div>
           <fieldset className="submission-rule-event-picker" disabled={busy}><legend>检查时机 <span>可多选</span></legend>
-            {Object.entries(ruleEvents).map(([value, label]) => <label key={value}><Checkbox disabled={busy} checked={events.includes(value as RuleEvent)} onCheckedChange={checked => setEvents(previous => checked ? [...previous, value as RuleEvent] : previous.filter(event => event !== value))} />{label}</label>)}
+            {Object.entries(ruleEvents).map(([value, label]) => <label key={value}><Checkbox disabled={busy} checked={events.includes(value as RuleEvent)} onCheckedChange={checked => { setEvents(previous => checked ? [...previous, value as RuleEvent] : previous.filter(event => event !== value)); invalidateTest(); }} />{label}</label>)}
           </fieldset>
           <div className="submission-rule-field">
             <label htmlFor="rule-requirement">自然语言描述检验要求 <em aria-hidden="true">*</em></label>
-            <p id="rule-requirement-help" className="submission-rule-field-help">保存后将 AI 转译，支持字段必填、人数和数量比较、协作人角色、必填材料齐套等检查。</p>
-            <Textarea id="rule-requirement" aria-describedby="rule-requirement-help" rows={3} maxLength={2000} required disabled={busy} value={requirement} onChange={event => setRequirement(event.target.value)} placeholder="例如：必须填写申请说明；期望服务日期至少提前 3 天；内部协作人至少包含一位服务工程师。" />
+            <p id="rule-requirement-help" className="submission-rule-field-help">支持字段必填、人数和数量比较、协作人角色、必填材料齐套等检查。请先转译并测试，通过后保存。</p>
+            <Textarea id="rule-requirement" aria-describedby="rule-requirement-help" rows={3} maxLength={2000} required disabled={busy} value={requirement} onChange={event => { setRequirement(event.target.value); invalidateTest(); }} placeholder="例如：必须填写申请说明；期望服务日期至少提前 3 天；内部协作人至少包含一位服务工程师。" />
+            <div className="submission-rule-test-actions"><Button type="button" variant="outline" disabled={busy || !canManage || !ready} onClick={() => void translateAndTest()}>{testing ? '正在转译并测试…' : '转译并测试'}</Button></div>
+            <div aria-live="polite" aria-atomic="true">
+              {testing && <p className="submission-rule-field-help" role="status">正在转译，并检查与当前生效规则的冲突…</p>}
+              {testError && <p className="sr-error" role="alert">{testError}</p>}
+              {testCurrent && tested && <div className="submission-rule-test-result" data-conflicts={!!tested.conflicts.length}>
+                <strong>{tested.conflicts.length ? '发现冲突或检查未完成，暂不能保存' : '转译并测试通过'}</strong>
+                <p><b>执行条件：</b>{tested.summary}</p>
+                {tested.conflicts.length ? <><b>可能的冲突项</b><ul>{tested.conflicts.map((conflict, index) => <li key={index}>
+                  <b>{conflict.context}</b><p>{conflict.message}</p>
+                  {conflict.requirements.map((text, i) => <p key={i}>{text}</p>)}
+                </li>)}</ul></> : <p>在当前支持的条件范围内，未发现规则自身或与相同适用申请、检查时机下已启用规则的冲突。保存后生效。</p>}
+              </div>}
+              {!testing && !tested && !testError && <p className="submission-rule-field-help">尚未测试；修改检验要求、适用申请或检查时机后需重新测试。</p>}
+            </div>
           </div>
           <div className="submission-rule-field">
             <label htmlFor="rule-prompt">提示文本 <em aria-hidden="true">*</em></label>
@@ -121,9 +151,9 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
             <Textarea id="rule-prompt" aria-describedby="rule-prompt-help" rows={2} maxLength={4000} required disabled={busy} value={promptText} onChange={event => setPromptText(event.target.value)} placeholder="例如：请填写申请说明后再提交。" />
           </div>
           {formError && <p className="sr-error" role="alert">{formError}{target?.active?.enabled && ' 原规则仍然生效。'}</p>}
-          {busy && <p className="sr-help" role="status">文字要求保存后正在转译，请稍候…</p>}
+          {busy && !testing && <p className="sr-help" role="status">正在保存…</p>}
           </div>
-          <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>取消</Button><Button type="submit" disabled={busy || !canManage}>{busy ? '正在保存并转译…' : '保存并转译'}</Button></DialogFooter>
+          <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>取消</Button><Button type="submit" disabled={busy || !canManage || !ready || !canSave}>{busy && !testing ? '正在保存…' : '保存'}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

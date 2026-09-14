@@ -6,7 +6,8 @@ import type { RuleEvent } from '@/lib/submission-rule-schema';
 import { isRequestApplicant, requestAudience } from '@/lib/request-collaboration';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { RequestFormBuilder } from '@/components/request-form-builder';
-import { requestFormOrder, requestFieldGridColumn } from '@/lib/request-form-layout';
+import { requestFormOrder } from '@/lib/request-form-layout';
+import { RequestFormLayout } from '@/components/request-form-layout';
 import { initializeRequestSamples } from '@/lib/demo-service-requests';
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
@@ -28,6 +29,8 @@ import {
 import type { RequestField } from '@/components/request-field-settings';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
+import { RequestMaterialsPanel } from '@/components/request-materials-panel';
+import { prepareMaterialDeduplication, requestMaterialGroup, materialDialogItem, synchronizeRequestMaterials, saveRequestMaterialGroup } from '@/lib/request-materials';
 import { RequestStatusProgress } from '@/components/request-status-progress';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { DateField } from '@/components/date-field';
@@ -87,7 +90,6 @@ import {
   canCreateRequest,
   requestCreationAccessIssue,
   requestCreationIssue,
-  businessImpactOptions,
   requestStatuses,
   requestStatusTone,
   RequestIdentityError,
@@ -95,14 +97,14 @@ import {
   matchesObjectProduct,
   objectEntitlementAvailability,
   snapshotItemBusinessObjects,
+  clearHiddenRequestFields,
   savedItemBusinessObjects,
   defaultConfig,
   readRequestConfigs,
   resolveRequestConfig,
   serviceAvailableForRequest,
   fieldLabels,
-  itemIssues,
-  visibleMaterialFiles,
+  requestMaterialsCustomerVisible,
   itemSummaryFields,
   itemBasicIssues,
   requestFieldIsRequired,
@@ -229,7 +231,7 @@ function RequestCustomerLabel({ required = false, hint = '创建后不可修改�
   </span>;
 }
 
-function RequestItemsPanel({ record, objects, actor, busy, readonly, showCompleteness, canAdd = true, onAdd, onEdit, onRemove, onCopy, onMaterial }: {
+function RequestItemsPanel({ record, objects, actor, busy, readonly, showCompleteness, canAdd = true, onAdd, onEdit, onRemove, onCopy }: {
   record: ServiceRequest;
   objects: ObjectRef[];
   actor: OperationActor;
@@ -241,59 +243,43 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
   onEdit: (item: RequestItem) => void;
   onRemove: (id: string) => void;
   onCopy: (id: string) => void;
-  onMaterial: (target: { itemId: string; requirementId: string }) => void;
 }) {
   const fieldNames = Object.fromEntries(useContext(RequestFieldsContext).map(field => [field.id, field.name]));
   const internal = isInternal(actor.role);
-  const audience = internal ? 'internal' : 'customer';
   return <section className={`sr-panel${internal ? ' sr-customer-visible-panel' : ''}`}>
     <div className="sr-panel-heading">
       <div>
         <div className="sr-panel-title-with-visibility">
-          <h3>申请项 <span>{record.items.length}</span></h3>
+          <h3>服务项</h3>
           {internal && <CustomerVisibleBadge />}
         </div>
-        <p>{!showCompleteness ? '申请内容只读，可查看基础信息。' : readonly ? '申请内容已锁定，可查看基础信息和已提交材料。' : '点击申请项中的材料入口，在弹窗中填写或上传。'}</p>
+        {readonly && <p>服务项内容只读，可查看详细信息。</p>}
       </div>
-      {!readonly && <Button variant="outline" disabled={busy || !canAdd} onClick={onAdd}><Plus size={15} />添加申请项</Button>}
+      {!readonly && <Button variant="outline" disabled={busy || !canAdd} onClick={onAdd}><Plus size={15} />添加服务项</Button>}
     </div>
     {!record.items.length ? <div className="sr-empty">
       <FileText size={30} />
-      <h3>还没有申请项</h3>
+      <h3>还没有服务项</h3>
       <p>{canAdd ? '从服务目录添加所需服务。同一种服务可以分项申请。' : '请先选择客户，再从服务目录添加所需服务。'}</p>
     </div> : <div className="sr-item-list">
       {record.items.map((item, index) => {
-        const missing = showCompleteness ? itemIssues(item, audience, actor.id) : [];
         const basicMissing = showCompleteness ? itemBasicIssues(item) : [];
         const summary = itemSummaryFields(item, fieldNames, objects);
         const inlineFields = summary.filter(field => !field.address);
         const addressFields = summary.filter(field => field.address);
-        return <article key={item.id} className="sr-item-entry">
+        return <article key={item.id} id={`sr-service-${record.id}-${item.id}`} className="sr-item-entry">
           <div className="sr-item-row">
             <span className="sr-item-number">{String(index + 1).padStart(2, '0')}</span>
             <div className="sr-item-copy">
-              <h4>{item.serviceName}{showCompleteness && <span className="sr-badge" data-tone={missing.length ? 'amber' : 'green'}>{missing.length ? '待完善' : '已完整'}</span>}</h4>
+              <h4>{item.serviceName}{basicMissing.length > 0 && <span className="sr-badge" data-tone="amber">待完善</span>}</h4>
               {(summary.length > 0 || item.description.trim()) && <div className="sr-item-summary">
                 <div className="sr-item-summary-fields">
                   {inlineFields.map(field => <span className="sr-summary-field" key={field.key}><span className="sr-summary-label">{field.label}</span><span className="sr-summary-value">{field.value}</span></span>)}
-                  {item.description.trim() && <TooltipProvider><Tooltip><TooltipTrigger render={<button type="button" className="sr-description-hint" aria-label="查看需求说明"><CircleAlert size={16} /></button>} /><TooltipContent className="sr-description-tooltip" side="top"><div><strong className="sr-tooltip-heading">需求说明</strong><div>{item.description}</div></div></TooltipContent></Tooltip></TooltipProvider>}
+                  {item.description.trim() && <TooltipProvider><Tooltip><TooltipTrigger render={<button type="button" className="sr-description-hint" aria-label={`查看${fieldNames.description ?? '需求说明'}`}><CircleAlert size={16} /></button>} /><TooltipContent className="sr-description-tooltip" side="top"><div><strong className="sr-tooltip-heading">{fieldNames.description ?? '需求说明'}</strong><div>{item.description}</div></div></TooltipContent></Tooltip></TooltipProvider>}
                 </div>
                 {addressFields.map(field => <div className="sr-summary-address" key={field.key}><span className="sr-summary-label">{field.label}</span><span className="sr-summary-value">{field.value}</span></div>)}
               </div>}
               {basicMissing.length > 0 && <p className="sr-missing">待补充：{basicMissing.join('、')}</p>}
-              {item.config.materials.map(requirement => {
-                const material = item.materials.find(material => material.requirementId === requirement.id);
-                const complete = visibleMaterialFiles(material, audience, actor.id).length > 0;
-                if (!showCompleteness && !complete) return null;
-                return <div key={requirement.id} className="sr-material-entry">
-                  <span className={!showCompleteness ? 'sr-help' : complete ? 'sr-complete' : requirement.required ? 'sr-missing' : 'sr-help'}>
-                    {showCompleteness && (complete ? '已完成：' : requirement.required ? '待补充：上传' : '选填：')}{requirement.name}
-                  </span>
-                  <button className="sr-material-link" disabled={busy} onClick={() => onMaterial({ itemId: item.id, requirementId: requirement.id })} aria-label={requirement.name + (readonly || complete ? '，查看材料' : '，补充材料')}>
-                    {readonly || complete ? '查看材料' : '补充材料'}<ChevronRight size={13} />
-                  </button>
-                </div>;
-              })}
             </div>
             <div className="sr-item-actions">
               <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{readonly ? '查看详细信息' : '编辑详细信息'}</Button>
@@ -416,10 +402,11 @@ export function RequestWorkspace(props: Props) {
         const repair = repairCustomerRequestApprover(records, props.users);
         if (repair && canAccessRequest(repair, access)) {
           await saveLocal('requests', repair, access);
+          const savedRepair = clearHiddenRequestFields(repair);
           records = records.map((record) =>
-            record.id === repair.id ? repair : record,
+            record.id === repair.id ? savedRepair : record,
           );
-          setDraft((current) => (current?.id === repair.id ? repair : current));
+          setDraft((current) => (current?.id === repair.id ? savedRepair : current));
         }
         const visible = records.filter((record) =>
           canAccessRequest(record, access),
@@ -466,12 +453,13 @@ export function RequestWorkspace(props: Props) {
     saveLock.current = true;
     setBusy(true);
     setError('');
-    const next = withRequestContact(
+    let next = withRequestContact(
       { ...record, updatedAt: new Date().toISOString() },
       props.contacts, props.customers, props.users,
     );
     try {
       await saveLocal('requests', next, access);
+      next = clearHiddenRequestFields(next);
       setReservationRecords((previous) => [
         next,
         ...previous.filter((record) => record.id !== next.id),
@@ -505,10 +493,11 @@ export function RequestWorkspace(props: Props) {
     if (!availableServices.some(service => service.id === source.serviceId)) {
       setError('该目录已停用或未开放给当前站点，不能复制申请项。'); return;
     }
-    const items = [...record.items];
+    const items = [...synchronizeRequestMaterials(record).items];
     items.splice(items.findIndex(item => item.id === id) + 1, 0, copyRequestItem(source));
-    if (creating) updateCreation({ items });
-    else await persist({ ...record, items }, '已复制申请项，请按需修改内容并补充材料');
+    const copied = synchronizeRequestMaterials({ ...record, items });
+    if (creating) updateCreation({ items: copied.items });
+    else await persist(copied, '已复制服务项，请按需修改内容并补充材料');
   }
   async function createDraft() {
     if (!ready || busy || !canCreate || !creation) return;
@@ -544,7 +533,7 @@ export function RequestWorkspace(props: Props) {
     try {
       // Read at selection time as configuration may have changed in another tab.
       const latest = await readRequestConfigs(audience);
-      setPendingItem(newItem(service, resolveRequestConfig(service, latest)));
+      setPendingItem(newItem(service, await prepareMaterialDeduplication(resolveRequestConfig(service, latest))));
     } catch {
       setItemError('无法读取申请配置，请重试。');
     } finally {
@@ -608,12 +597,12 @@ export function RequestWorkspace(props: Props) {
       if (!service || !serviceAvailableForRequest(service, audience)) throw new Error('该服务目录已停用、不存在或未开放给当前申请站点，请重新选择。');
       const savedItem = snapshotItemBusinessObjects(pendingItem, workspace.businessObjects ?? [], service.priceUnit, requests.value, itemParent.id, itemParent.customerId);
       const exists = itemParent.items.some((i) => i.id === savedItem.id);
-      const next = {
+      const next = synchronizeRequestMaterials({
         ...itemParent,
         items: exists
           ? itemParent.items.map(item => item.id === savedItem.id ? savedItem : item)
           : [...itemParent.items, savedItem],
-      };
+      });
       if (createOpen) {
         updateCreation({ items: next.items });
         setAddOpen(false); setPendingItem(null); setItemError('');
@@ -622,7 +611,7 @@ export function RequestWorkspace(props: Props) {
       if (
         await persistItemChanges(
           next,
-          '申请项基础信息已保存，可在该申请项中补充材料',
+          '服务项详细信息已保存，可在申请材料区域补充材料',
         )
       ) {
         setAddOpen(false);
@@ -649,16 +638,11 @@ export function RequestWorkspace(props: Props) {
         : record;
     return persist(next, message);
   }
-  async function saveItemMaterials(id: string, materials: ItemMaterial[]) {
+  async function saveItemMaterials(id: string, material: ItemMaterial) {
     if (!draft || !canEditRequestItems(draft, props.currentActor)) return false;
     const ok = await persistItemChanges(
-      {
-        ...draft,
-        items: draft.items.map((existing) =>
-          existing.id === id ? { ...existing, materials } : existing,
-        ),
-      },
-      '申请项材料已保存到本机',
+      saveRequestMaterialGroup(draft, id, material.requirementId, material, props.currentActor),
+      '申请材料已保存到本机',
     );
     return ok;
   }
@@ -673,12 +657,9 @@ export function RequestWorkspace(props: Props) {
       (customer) => customer.id === draft?.customerId,
     )?.ownerUserId,
   );
-  const materialItem = draft?.items.find(
-    (item) => item.id === materialTarget?.itemId,
-  );
-  const materialRequirement = materialItem?.config.materials.find(
-    (m) => m.id === materialTarget?.requirementId,
-  );
+  const selectedMaterialGroup = draft && materialTarget ? requestMaterialGroup(draft, materialTarget.itemId, materialTarget.requirementId) : undefined;
+  const materialItem = selectedMaterialGroup ? materialDialogItem(selectedMaterialGroup) : undefined;
+  const materialRequirement = selectedMaterialGroup?.requirement;
   const filtered = requests.filter((record) => {
     if (!canAccessRequest(record, access)) return false;
     const customer =
@@ -697,7 +678,6 @@ export function RequestWorkspace(props: Props) {
         | 'title'
         | 'description'
         | 'expectedServiceDate'
-        | 'businessImpact'
         | 'externalCollaborators'
         | 'internalParticipants'
       >
@@ -1026,9 +1006,6 @@ export function RequestWorkspace(props: Props) {
                   <li key={`${index}-${failure.ruleId}`} title={failure.requirement}>{failure.message}</li>
                 ))}
               </ul>
-              <p>
-                基础字段请点击“编辑详细信息”；材料请点击对应申请项的“补充材料”。
-              </p>
             </section>
           )}
           <RequestOperationsTabs
@@ -1158,13 +1135,6 @@ export function RequestWorkspace(props: Props) {
                     updateDraft({ expectedServiceDate })
                   }
                 />
-                <label htmlFor="sr-business-impact">
-                  业务影响 <em>*</em>
-                  <select id="sr-business-impact" required value={draft.businessImpact ?? ''} onChange={event => updateDraft({ businessImpact: event.target.value as ServiceRequest['businessImpact'] })}>
-                    <option value="">{readonly ? '未填写' : '请选择业务影响'}</option>
-                    {businessImpactOptions.map(option => <option key={option} value={option}>{option}</option>)}
-                  </select>
-                </label>
                 <label className="sr-span">
                   申请说明（选填）
                   <textarea
@@ -1183,9 +1153,10 @@ export function RequestWorkspace(props: Props) {
               record={draft} actor={props.currentActor} busy={busy} readonly={itemsReadonly} showCompleteness={showCompleteness}
               onAdd={() => { setCatalogQuery(''); setPendingItem(null); setItemError(''); setAddOpen(true); }}
               onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setAddOpen(true); }}
-              onRemove={setRemoveId} onMaterial={setMaterialTarget}
+              onRemove={setRemoveId}
               onCopy={id => { void duplicateItem(draft, id, false); }}
             />
+            <RequestMaterialsPanel record={draft} actor={props.currentActor} readonly={itemsReadonly} busy={busy} onMaterial={setMaterialTarget} />
             <section
               className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}
               aria-labelledby="sr-system-heading"
@@ -1197,6 +1168,10 @@ export function RequestWorkspace(props: Props) {
                 </div>
               </div>
               <dl className="sr-system-info">
+                <div>
+                  <dt>提交站点</dt>
+                  <dd>{requestAudience(draft) === 'customer' ? '客户中心' : '内部系统'}</dd>
+                </div>
                 <div>
                   <dt>创建时间</dt>
                   <dd>{dateLabel(draft.createdAt)}</dd>
@@ -1225,18 +1200,12 @@ export function RequestWorkspace(props: Props) {
         </>
       ))}
 
-      {materialItem &&
+      {draft && materialItem &&
         materialRequirement &&
-        (showCompleteness ||
-          visibleMaterialFiles(
-            materialItem.materials.find(
-              (material) => material.requirementId === materialRequirement.id,
-            ),
-            audience,
-            props.currentActor.id,
-          ).length > 0) && (
+        (isInternal(props.currentRole) || requestMaterialsCustomerVisible(draft)) && (
           <RequestMaterialDialog
             key={materialItem.id + ':' + materialRequirement.id}
+            record={draft}
             item={materialItem}
             requirement={materialRequirement}
             actor={props.currentActor}
@@ -1244,14 +1213,7 @@ export function RequestWorkspace(props: Props) {
             busy={busy}
             error={error}
             onClose={() => setMaterialTarget(null)}
-            onSave={(material) =>
-              saveItemMaterials(materialItem.id, [
-                ...materialItem.materials.filter(
-                  (m) => m.requirementId !== material.requirementId,
-                ),
-                material,
-              ])
-            }
+            onSave={(material) => saveItemMaterials(materialItem.id, material)}
           />
         )}
       {canCreate && createOpen && creation && (
@@ -1325,13 +1287,6 @@ export function RequestWorkspace(props: Props) {
               </label>
             )}
             <DateField id="sr-create-expected-date" label="期望服务日期" value={creation.expectedServiceDate ?? ''} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate })} />
-            <label htmlFor="sr-create-business-impact">
-              业务影响 <em>*</em>
-              <select id="sr-create-business-impact" required value={creation.businessImpact ?? ''} onChange={event => updateCreation({ businessImpact: event.target.value as ServiceRequest['businessImpact'] })}>
-                <option value="">请选择业务影响</option>
-                {businessImpactOptions.map(option => <option key={option} value={option}>{option}</option>)}
-              </select>
-            </label>
             <label className="sr-span">申请说明（选填）
               <textarea rows={3} value={creation.description} onChange={event => updateCreation({ description: event.target.value })} placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。" />
             </label>
@@ -1342,10 +1297,10 @@ export function RequestWorkspace(props: Props) {
             record={creation} actor={props.currentActor} busy={busy} readonly={false} showCompleteness={true} canAdd={ready && !!createCustomer}
             onAdd={() => { setPendingItem(null); setCatalogQuery(''); setItemError(''); setError(''); setAddOpen(true); }}
             onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setError(''); setAddOpen(true); }}
-            onRemove={id => updateCreation({ items: creation.items.filter(item => item.id !== id) })}
+            onRemove={id => updateCreation({ items: synchronizeRequestMaterials(creation).items.filter(item => item.id !== id) })}
             onCopy={id => { void duplicateItem(creation, id, true); }}
-            onMaterial={setCreateMaterialTarget}
           />
+          <RequestMaterialsPanel record={creation} actor={props.currentActor} readonly={false} busy={busy} onMaterial={setCreateMaterialTarget} />
           </div>
           <aside className="sr-collaboration-column" aria-label="协作人">
             <RequestExternalCollaborators showCustomerVisibility={!customerPortal} applicantId={customerPortal ? creation.createdById : undefined} contacts={props.contacts.filter(contact => contact.customerId === createCustomer)} description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。" value={creation.externalCollaborators ?? []} readonly={!createCustomer} allowRemove={true} busy={busy} onChange={externalCollaborators => updateCreation({ externalCollaborators })} />
@@ -1356,11 +1311,12 @@ export function RequestWorkspace(props: Props) {
       )}
 
       {createOpen && creation && createMaterialTarget && (() => {
-        const item = creation.items.find(item => item.id === createMaterialTarget.itemId);
-        const requirement = item?.config.materials.find(requirement => requirement.id === createMaterialTarget.requirementId);
-        if (!item || !requirement) return null;
-        return <RequestMaterialDialog key={`${item.id}:${requirement.id}`} item={item} requirement={requirement} actor={props.currentActor} readonly={false} busy={busy} error="" onClose={() => setCreateMaterialTarget(null)} onSave={async material => {
-          updateCreation({ items: creation.items.map(existing => existing.id === item.id ? { ...existing, materials: [...existing.materials.filter(saved => saved.requirementId !== material.requirementId), material] } : existing) });
+        const group = requestMaterialGroup(creation, createMaterialTarget.itemId, createMaterialTarget.requirementId);
+        if (!group) return null;
+        const item = materialDialogItem(group);
+        const requirement = group.requirement;
+        return <RequestMaterialDialog key={`${item.id}:${requirement.id}`} record={creation} item={item} requirement={requirement} actor={props.currentActor} readonly={false} busy={busy} error="" onClose={() => setCreateMaterialTarget(null)} onSave={async material => {
+          updateCreation({ items: saveRequestMaterialGroup(creation, item.id, requirement.id, material, props.currentActor).items });
           setCreateMaterialTarget(null);
           return true;
         }} />;
@@ -1372,8 +1328,8 @@ export function RequestWorkspace(props: Props) {
         }}>
           <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog" showCloseButton={!busy}>
             <DialogHeader>
-              <DialogTitle>{pendingReadonly && pendingItem ? '申请项详细信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑申请项' : '添加申请项'}</DialogTitle>
-              <DialogDescription>{pendingReadonly && pendingItem ? '申请项信息仅供查看。' : pendingItem ? (createOpen ? '填写并保存基础信息，材料可返回请求表单补充。' : '填写并保存基础信息，材料可在申请详情页中补充。') : '选择本次申请的服务目录。'}</DialogDescription>
+              <DialogTitle>{pendingReadonly && pendingItem ? '服务项详细信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑服务项' : '添加服务项'}</DialogTitle>
+              <DialogDescription>{pendingReadonly && pendingItem ? '申请项信息仅供查看。' : pendingItem ? (createOpen ? '填写并保存服务项信息，材料可返回申请材料区域补充。' : '填写并保存服务项信息，材料可在申请材料区域补充。') : '选择本次申请的服务目录。'}</DialogDescription>
             </DialogHeader>
           <div className="sr-item-dialog-body">
             {pendingItem ? (
@@ -1499,7 +1455,7 @@ export function RequestWorkspace(props: Props) {
             {pendingItem && !pendingReadonly && (
               <Button disabled={busy} onClick={() => void savePendingItem()}>
                 <Save size={15} />
-                {busy ? '正在保存…' : '保存申请项'}
+                {busy ? '正在保存…' : '保存服务项'}
               </Button>
             )}
             </DialogFooter>
@@ -1515,9 +1471,9 @@ export function RequestWorkspace(props: Props) {
       >
         <DialogContent className="sr-dialog">
           <DialogHeader>
-            <DialogTitle>移除此申请项？</DialogTitle>
+            <DialogTitle>移除此服务项？</DialogTitle>
             <DialogDescription>
-              该项的填写内容和已保存附件将一并从请求中移除，其他申请项不受影响。
+              该服务项及其独立材料将从请求中移除，其他服务项和仍被使用的共用材料将保留。
             </DialogDescription>
           </DialogHeader>
           {error && (
@@ -1531,7 +1487,7 @@ export function RequestWorkspace(props: Props) {
               disabled={busy}
               onClick={() => setRemoveId(null)}
             >
-              保留申请项
+              保留服务项
             </Button>
             <Button
               variant="destructive"
@@ -1543,7 +1499,7 @@ export function RequestWorkspace(props: Props) {
                   (await persistItemChanges(
                     {
                       ...draft,
-                      items: draft.items.filter((i) => i.id !== removeId),
+                      items: synchronizeRequestMaterials(draft).items.filter((i) => i.id !== removeId),
                     },
                     '申请项已移除',
                   ))
@@ -1734,12 +1690,6 @@ function ItemBasicFields({
   const fields = useContext(RequestFieldsContext);
   const methodField = fields.find((field) => field.id === 'method');
   const formOrder = requestFormOrder(value.config);
-  const designed = !!(value.config.fieldOrder || value.config.fieldWidths);
-  const fieldStyle = (id: string) => designed ? {
-    order: formOrder.indexOf(id),
-    gridColumn: requestFieldGridColumn(value.config, id),
-    minWidth: 0,
-  } : undefined;
   const methodOptions =
     methodField?.options
       .filter(
@@ -1747,210 +1697,282 @@ function ItemBasicFields({
       )
       .map((option) => option.value) ?? value.methods;
   return (
-    <div className={`sr-basic-fields${designed ? ' rf-live-form' : ''}`}>
-      {' '}
+    <div className="sr-basic-fields">
       <section className="sr-sheet-section">
         <h3>服务需求</h3>
-        <fieldset disabled={readonly || busy} className="sr-form-grid">
-          <label style={fieldStyle('method')}>
-            {methodField?.name ?? '服务方式'} <em>*</em>
-            {methodField && methodField.type !== 'single' ? (
-              <RequestFieldControl
-                disabled={readonly || busy}
-                field={methodField}
-                availableOptions={value.methods}
-                value={value.method}
-                onChange={(method) =>
-                  update({ method, methodFieldType: (methodField.type === 'lookup' || methodField.type === 'address') ? 'single' : methodField.type })
-                }
-              />
-            ) : (
-              <select
-                value={value.method}
-                onChange={(e) =>
-                  update({ method: e.target.value, methodFieldType: 'single' })
-                }
-              >
-                <option value="">请选择</option>
-                {value.method && !methodOptions.includes(value.method) && (
-                  <option disabled value={value.method}>
-                    {value.method}（已停用）
-                  </option>
-                )}
-                {methodOptions.map((m) => (
-                  <option key={m}>{m}</option>
-                ))}
-              </select>
+        <fieldset
+          disabled={readonly || busy}
+          className="sr-form-grid sr-live-fields"
+        >
+          <RequestFormLayout
+            config={value.config}
+            visibleIds={formOrder.filter(
+              (id) =>
+                ['method', 'description', 'businessObjects'].includes(id) ||
+                requestFieldIsVisible(
+                  value.config,
+                  id,
+                  value.method,
+                  value.values,
+                ),
             )}
-          </label>
-          {value.config.basicFields?.description?.enabled !== false && (
-            <label className="sr-span" style={fieldStyle('description')}>
-              需求说明{' '}
-              {value.config.basicFields?.description?.required !== false ? (
-                <em>*</em>
-              ) : (
-                <small>选填</small>
-              )}
-              <textarea
-                rows={4}
-                value={value.description}
-                onChange={(e) => update({ description: e.target.value })}
-                placeholder="说明本项服务的目标、范围和期望结果，环境细节可在材料中补充。"
-              />
-            </label>
-          )}
-          {value.config.fields.map((key) => {
-            if (key === 'businessObjects') return null;
-            const visible = requestFieldIsVisible(value.config, key, value.method);
-            const field = fields.find((item) => item.id === key);
-            const label =
-              field?.name ??
-              value.config.fieldNames?.[key] ??
-              fieldLabels[key] ??
-              key;
-            return (
-              <div className="request-field-input" key={key} style={{ ...fieldStyle(key), visibility: visible ? undefined : 'hidden' }} aria-hidden={!visible || undefined}>
-                <span>
-                  {label}{' '}
-                  {!requestFieldIsRequired(value.config, key, value.method) ? (
-                    <small>选填</small>
+            renderField={(key) => {
+              if (key === 'method')
+                return (
+                  <label>
+                    {methodField?.name ?? '服务方式'} <em>*</em>
+                    {methodField && methodField.type !== 'single' ? (
+                      <RequestFieldControl
+                        disabled={readonly || busy}
+                        field={methodField}
+                        availableOptions={value.methods}
+                        value={value.method}
+                        onChange={(method) =>
+                          update({
+                            method,
+                            methodFieldType:
+                              methodField.type === 'lookup' ||
+                              methodField.type === 'address'
+                                ? 'single'
+                                : methodField.type,
+                          })
+                        }
+                      />
+                    ) : (
+                      <select
+                        value={value.method}
+                        onChange={(e) =>
+                          update({
+                            method: e.target.value,
+                            methodFieldType: 'single',
+                          })
+                        }
+                      >
+                        <option value="">请选择</option>
+                        {value.method &&
+                          !methodOptions.includes(value.method) && (
+                            <option disabled value={value.method}>
+                              {value.method}（已停用）
+                            </option>
+                          )}
+                        {methodOptions.map((m) => (
+                          <option key={m}>{m}</option>
+                        ))}
+                      </select>
+                    )}
+                  </label>
+                );
+              if (key === 'description')
+                return (
+                  <label>
+                    {fields.find((field) => field.id === 'description')?.name ??
+                      '需求说明'}{' '}
+                    {value.config.basicFields?.description?.required !==
+                    false ? (
+                      <em>*</em>
+                    ) : (
+                      <small>选填</small>
+                    )}
+                    <textarea
+                      rows={4}
+                      value={value.description}
+                      onChange={(e) => update({ description: e.target.value })}
+                      placeholder="说明本项服务的目标、范围和期望结果，环境细节可在材料中补充。"
+                    />
+                  </label>
+                );
+              if (key === 'businessObjects')
+                return (
+                  <section className="sr-sheet-section">
+                    <h3>
+                      {fields.find((field) => field.id === 'businessObjects')
+                        ?.name ?? '业务对象'}{' '}
+                      <span>
+                        {value.config.basicFields?.businessObjects?.required
+                          ? '必填'
+                          : '选填'}{' '}
+                        · 可多选
+                      </span>
+                    </h3>
+                    {value.config.basicFields?.businessObjects?.required && (
+                      <p className="sr-help">
+                        请至少关联一个当前客户的业务对象。
+                      </p>
+                    )}
+                    <fieldset
+                      disabled={readonly || busy}
+                      className="sr-object-options"
+                    >
+                      <ul aria-label="可关联的业务对象">
+                        {(readonly
+                          ? savedItemBusinessObjects(value)
+                          : objects
+                              .filter(
+                                (o) =>
+                                  (o.status === '启用' &&
+                                    matchesObjectProduct(o, value.config)) ||
+                                  value.businessObjectIds.includes(o.id),
+                              )
+                              .map((object) => ({
+                                object,
+                                entitlement: objectEntitlementAvailability(
+                                  object,
+                                  priceUnit,
+                                  reservationRecords,
+                                  requestId,
+                                ),
+                                recorded: true,
+                              }))
+                        ).map(({ object: o, entitlement, recorded }) => {
+                          return (
+                            <li key={o.id}>
+                              <label>
+                                <input
+                                  type="checkbox"
+                                  disabled={
+                                    readonly ||
+                                    busy ||
+                                    ((o.status !== '启用' ||
+                                      !matchesObjectProduct(o, value.config)) &&
+                                      !value.businessObjectIds.includes(o.id))
+                                  }
+                                  checked={value.businessObjectIds.includes(
+                                    o.id,
+                                  )}
+                                  onChange={(e) =>
+                                    update({
+                                      businessObjectIds: e.target.checked
+                                        ? [...value.businessObjectIds, o.id]
+                                        : value.businessObjectIds.filter(
+                                            (id) => id !== o.id,
+                                          ),
+                                    })
+                                  }
+                                />
+                                <span className="sr-object-copy">
+                                  <span className="sr-object-name">
+                                    {o.name}
+                                    <small>
+                                      （
+                                      {recorded
+                                        ? `${o.nodeCount} 节点`
+                                        : '申请时数量未记录'}
+                                      ）
+                                    </small>
+                                  </span>
+                                  {entitlement && (
+                                    <span
+                                      className="sr-object-entitlement"
+                                      data-insufficient={
+                                        entitlement.insufficient || undefined
+                                      }
+                                    >
+                                      <span title="可用权益 / 集群节点数">
+                                        {entitlement.name}（
+                                        {entitlement.available ?? '未维护'}/
+                                        {entitlement.required}）
+                                      </span>
+                                      {entitlement.insufficient && (
+                                        <span className="sr-object-entitlement-warning">
+                                          权益不足，可继续申请
+                                        </span>
+                                      )}
+                                      {entitlement.available === undefined && (
+                                        <span className="sr-help">
+                                          权益数量未维护，可继续申请
+                                        </span>
+                                      )}
+                                    </span>
+                                  )}
+                                  <span className="sr-object-sn">
+                                    序列号：{o.sn?.trim() || '未填写'}
+                                  </span>
+                                  {!readonly && o.status !== '启用' && (
+                                    <span className="sr-missing">
+                                      已停用，请取消关联
+                                    </span>
+                                  )}
+                                </span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {!objects.length && (
+                        <p className="sr-help">
+                          {customerId
+                            ? '该客户暂时没有可关联的业务对象。'
+                            : '请先在申请单中选择客户。'}
+                        </p>
+                      )}
+                    </fieldset>
+                  </section>
+                );
+
+              if (key === 'businessObjects') return null;
+              const visible = requestFieldIsVisible(
+                value.config,
+                key,
+                value.method,
+                value.values,
+              );
+              if (!visible) return null;
+              const field = fields.find((item) => item.id === key);
+              const label =
+                field?.name ??
+                value.config.fieldNames?.[key] ??
+                fieldLabels[key] ??
+                key;
+              return (
+                <div className="request-field-input" key={key}>
+                  <span>
+                    {label}{' '}
+                    {!requestFieldIsRequired(
+                      value.config,
+                      key,
+                      value.method,
+                      value.values,
+                    ) ? (
+                      <small>选填</small>
+                    ) : (
+                      <em>*</em>
+                    )}
+                  </span>
+                  {key !== 'nodes' && field ? (
+                    <RequestFieldControl
+                      disabled={readonly || busy}
+                      field={field}
+                      value={value.values[key] ?? ''}
+                      availableOptions={value.config.fieldOptions?.[key]}
+                      onChange={(next) =>
+                        update({ values: { ...value.values, [key]: next } })
+                      }
+                    />
                   ) : (
-                    <em>*</em>
+                    <Input
+                      type={key === 'nodes' ? 'number' : 'text'}
+                      min={key === 'nodes' ? 1 : undefined}
+                      step={key === 'nodes' ? 1 : undefined}
+                      value={value.values[key] ?? ''}
+                      onChange={(e) =>
+                        update({
+                          values: { ...value.values, [key]: e.target.value },
+                        })
+                      }
+                      aria-label={label}
+                      placeholder={
+                        key === 'nodes'
+                          ? '填写本项涉及的节点数'
+                          : `填写${label}`
+                      }
+                    />
                   )}
-                </span>
-                {key !== 'nodes' && field ? (
-                  <RequestFieldControl
-                    disabled={readonly || busy}
-                    field={field}
-                    value={value.values[key] ?? ''}
-                    availableOptions={value.config.fieldOptions?.[key]}
-                    onChange={(next) =>
-                      update({ values: { ...value.values, [key]: next } })
-                    }
-                  />
-                ) : (
-                  <Input
-                    type={key === 'nodes' ? 'number' : 'text'}
-                    min={key === 'nodes' ? 1 : undefined}
-                    step={key === 'nodes' ? 1 : undefined}
-                    value={value.values[key] ?? ''}
-                    onChange={(e) =>
-                      update({
-                        values: { ...value.values, [key]: e.target.value },
-                      })
-                    }
-                    aria-label={label}
-                    placeholder={
-                      key === 'nodes' ? '填写本项涉及的节点数' : `填写${label}`
-                    }
-                  />
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            }}
+          />
         </fieldset>
       </section>
-      {businessObjectsEnabled(value.config) && (
-        <section className="sr-sheet-section" style={fieldStyle('businessObjects')}>
-          <h3>
-            业务对象{' '}
-            <span>
-              {value.config.basicFields?.businessObjects?.required
-                ? '必填'
-                : '选填'}{' '}
-              · 可多选
-            </span>
-          </h3>
-          {value.config.basicFields?.businessObjects?.required && (
-            <p className="sr-help">请至少关联一个当前客户的业务对象。</p>
-          )}
-          <fieldset disabled={readonly || busy} className="sr-object-options">
-            <ul aria-label="可关联的业务对象">
-              {(readonly ? savedItemBusinessObjects(value) : objects
-                .filter(
-                  (o) =>
-                    (o.status === '启用' &&
-                      matchesObjectProduct(o, value.config)) ||
-                    value.businessObjectIds.includes(o.id),
-                )
-                .map(object => ({ object, entitlement: objectEntitlementAvailability(object, priceUnit, reservationRecords, requestId), recorded: true })))
-                .map(({ object: o, entitlement, recorded }) => {
-                  return (
-                    <li key={o.id}>
-                      <label>
-                        <input
-                          type="checkbox"
-                          disabled={
-                            readonly ||
-                            busy ||
-                            ((o.status !== '启用' ||
-                              !matchesObjectProduct(o, value.config)) &&
-                              !value.businessObjectIds.includes(o.id))
-                          }
-                          checked={value.businessObjectIds.includes(o.id)}
-                          onChange={(e) =>
-                            update({
-                              businessObjectIds: e.target.checked
-                                ? [...value.businessObjectIds, o.id]
-                                : value.businessObjectIds.filter(
-                                    (id) => id !== o.id,
-                                  ),
-                            })
-                          }
-                        />
-                        <span className="sr-object-copy">
-                          <span className="sr-object-name">
-                            {o.name}
-                            <small>（{recorded ? `${o.nodeCount} 节点` : '申请时数量未记录'}）</small>
-                          </span>
-                          {entitlement && (
-                            <span
-                              className="sr-object-entitlement"
-                              data-insufficient={
-                                entitlement.insufficient || undefined
-                              }
-                            >
-                              <span title="可用权益 / 集群节点数">
-                                {entitlement.name}（
-                                {entitlement.available ?? '未维护'}/
-                                {entitlement.required}）
-                              </span>
-                              {entitlement.insufficient && (
-                                <span className="sr-object-entitlement-warning">
-                                  权益不足，可继续申请
-                                </span>
-                              )}
-                              {entitlement.available === undefined && (
-                                <span className="sr-help">
-                                  权益数量未维护，可继续申请
-                                </span>
-                              )}
-                            </span>
-                          )}
-                          <span className="sr-object-sn">
-                            序列号：{o.sn?.trim() || '未填写'}
-                          </span>
-                          {!readonly && o.status !== '启用' && (
-                            <span className="sr-missing">
-                              已停用，请取消关联
-                            </span>
-                          )}
-                        </span>
-                      </label>
-                    </li>
-                  );
-                })}
-            </ul>
-            {!objects.length && (
-              <p className="sr-help">
-                {customerId
-                  ? '该客户暂时没有可关联的业务对象。'
-                  : '请先在申请单中选择客户。'}
-              </p>
-            )}
-          </fieldset>
-        </section>
-      )}
     </div>
   );
 }
@@ -2009,7 +2031,7 @@ export function RequestCatalogSettings({
         </Button>
       </div>
       <p>
-        申请项字段：
+        服务项字段：
         {config.fields
           .map(
             (fieldId) =>
@@ -2140,8 +2162,8 @@ export function RequestCatalogSettings({
                   setConfig(savedConfig ?? next);
                   setSaved(true);
                   setOpen(false);
-                } catch {
-                  setError(localError);
+                } catch (error) {
+                  setError(error instanceof Error ? error.message : localError);
                 } finally {
                   setBusy(false);
                 }

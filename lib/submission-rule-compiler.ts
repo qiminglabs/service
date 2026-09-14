@@ -16,8 +16,9 @@ export function ruleCompilerRequest(definition: RuleDefinition, model: string) {
   };
 }
 export async function compileSubmissionRule(input: unknown, config: { key?: string; model?: string }, transport: typeof fetch = globalThis.fetch.bind(globalThis)): Promise<{ status: number; error?: string; compiled?: CompiledRule; summary?: string }> {
-  const definition = parseRuleDefinition(input);
-  if (!config.key || !config.model) return { status: 503, error: 'AI 规则转译尚未配置模型服务，文字要求已保留但尚未生效，请联系管理员。' };
+  // Prompt text is required when saving, but does not participate in translation.
+  const definition = parseRuleDefinition({ ...(input && typeof input === 'object' ? input : {}), promptText: '校验未通过' });
+  if (!config.key || !config.model) return { status: 503, error: 'AI 规则转译尚未配置模型服务，请联系管理员。当前内容尚未保存。' };
   try {
     const relayUrl = typeof __ASSISTANT_DEV_RELAY_URL__ !== 'undefined' ? __ASSISTANT_DEV_RELAY_URL__ : '';
     const relayToken = typeof __ASSISTANT_DEV_RELAY_TOKEN__ !== 'undefined' ? __ASSISTANT_DEV_RELAY_TOKEN__ : '';
@@ -37,6 +38,6 @@ export async function compileSubmissionRule(input: unknown, config: { key?: stri
     if (!result.supported) return { status: 422, error: result.explanation };
     return { status: 200, compiled: parseCompiledRule({ version: 1, checks: result.checks }), summary: result.explanation.trim() };
   } catch (error) {
-    return { status: 502, error: error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name) ? 'AI 转译超时，文字要求已保留，请重试。' : '未获得可执行的完整规则，文字要求已保留，请修改后重新转译。' };
+    return { status: 502, error: error instanceof Error && ['AbortError', 'TimeoutError'].includes(error.name) ? 'AI 转译超时，请重试。当前内容尚未保存。' : '未获得可执行的完整规则，请修改后重新转译。当前内容尚未保存。' };
   }
 }
