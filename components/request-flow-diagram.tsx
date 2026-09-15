@@ -38,7 +38,6 @@ export function RequestFlowDiagram({ activeTab, tabId, onTabSelect }: {
   const navigation = (tab: RequestFlowTab) => ({ href: `#${tabId(tab)}`, active: activeTab === tab, onNavigate: () => onTabSelect(tab) });
   return <details className="request-flow-map-panel">
     <summary>服务请求流程图<ChevronDown size={16} aria-hidden="true" /></summary>
-    <p className="request-flow-map-help">各环节下方标注处理人；点击蓝色节点，打开下方对应配置。</p>
     <div className="request-flow-map-scroll">
       <svg className="request-flow-map" viewBox="0 0 1320 356" role="group" aria-label="服务请求流程及处理人：申请人提交，系统分配负责人；硬件产品经理先评估，负责项目经理完成材料评估及人天核定；内部申请人或客户所有人关联服务依据。额度不足时由负责销售发起特殊审批，指定审批人审批。客户确认后，由负责项目经理受理并转换服务项目。两个分配节点及特殊审批流程可跳转配置。">
         <defs><marker id={arrowId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a8be" /></marker></defs>
@@ -73,10 +72,9 @@ export function RequestFlowDiagram({ activeTab, tabId, onTabSelect }: {
         <FlowNode x={714} y={154} label="服务依据关联" owners={['内部申请人', '或客户所有人']} />
         <FlowNode x={714} y={266} label="特殊审批流程" owners={['负责销售发起', '指定上级审批人审批']} optional {...navigation('approval-designer')} />
         <FlowNode x={904} y={154} width={120} label="客户确认" owners={['客户']} />
-        <FlowNode x={1060} y={154} width={84} label="待受理" owners={['项目经理']} />
+        <FlowNode x={1060} y={154} width={84} label="待受理" owners={['负责项目经理']} />
         <FlowNode x={1178} y={154} label="转换服务项目" owners={['负责项目经理']} terminal pending={!serviceProjectCreationEnabled} />
       </svg>
     </div>
-    <p className="request-flow-map-help request-flow-map-responsibility">内部申请由内部申请人关联服务依据并发起客户确认；外部申请由客户所有人处理，客户完成确认。两个分配节点由系统执行，分配规则由系统管理员维护。</p>
   </details>;
 }

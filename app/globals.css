@@ -6481,16 +6481,14 @@ body:has(.submission-rule-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .request-flow-map-node text { fill: #294461; font-size: 13px; font-weight: 500; }
 .request-flow-map-node[data-optional] rect { fill: #f6f9fd; stroke-dasharray: 4 3; }
 .request-flow-map-node[data-terminal] rect { fill: #edf5ff; stroke: #b8d8f6; }
-.request-flow-map-node .request-flow-map-owner { fill: var(--text-neutral-secondary); font-size: 12px; font-weight: 400; }
+.request-flow-map-node .request-flow-map-owner { fill: var(--text-neutral-secondary); font-size: 11px; font-weight: 400; }
 .request-flow-map-node .request-flow-map-pending { fill: var(--text-neutral-secondary); font-size: 12px; font-weight: 400; }
 .request-flow-map-node[data-interactive] rect { fill: var(--fill-outstanding-thin); stroke: var(--primary); stroke-dasharray: none; }
-.request-flow-map-node[data-interactive] .request-flow-map-node-title { fill: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
-.request-flow-map-node[data-interactive] a { cursor: pointer; }
+.request-flow-map-node[data-interactive] .request-flow-map-node-title { fill: var(--primary); text-decoration: none; }
+.request-flow-map-node[data-interactive] a { cursor: pointer; text-decoration: none; }
 .request-flow-map-node[data-interactive] a:hover rect, .request-flow-map-node[data-active] rect { fill: var(--fill-outstanding-light); stroke-width: 2; }
 .request-flow-map-node a:focus-visible { outline: none; }
 .request-flow-map-node a:focus-visible rect { stroke: var(--primary); stroke-width: 3; }
-.request-flow-map-help { margin: 0; padding: 0 16px 8px; font-size: 13px; line-height: 1.7; color: var(--text-neutral-secondary); }
-.request-flow-map-responsibility { padding-top: 4px; padding-bottom: 14px; }
 .request-flow-map-labels { fill: #788ba1; font-size: 11px; }
 @media (max-width: 700px) { .request-flow-map-panel { margin: 12px; } }
 
