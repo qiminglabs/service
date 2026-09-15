@@ -19,7 +19,7 @@ import { RequestFlowSettings } from '@/components/request-flow-settings';
 import { ApprovalFlowSettings } from '@/components/approval-flow-settings';
 import { ExecutionFlowSettings } from '@/components/execution-flow-settings';
 import { RequestRuleSettings } from '@/components/request-rule-settings';
-import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
+import { backendSettingsSections, type BackendSettingsSection, type RequestFlowTab } from '@/lib/backend-settings';
 import { initialApplicationFields, isSystemApplicationField, normalizeApplicationFields } from '@/lib/request-application-fields';
 import { editionFeatureFields, editionFieldRequirement, fieldRequirementLabels, fieldOptionsIssue } from '@/lib/request-field-requirements';
 import { Button } from '@/components/ui/button';
@@ -174,6 +174,16 @@ export function RequestFieldSettings({
 }) {
   const currentSection = backendSettingsSections.find(item => item.key === section)!;
   const [activeTab, setActiveTab] = useState<string>(currentSection.tabs[0].key);
+  const settingsTabsId = useId();
+  const tabId = (key: string) => `${settingsTabsId}-settings-tab-${key}`;
+  function selectFlowTab(key: RequestFlowTab) {
+    setActiveTab(key);
+    requestAnimationFrame(() => {
+      const tab = document.getElementById(tabId(key));
+      tab?.focus({ preventScroll: true });
+      tab?.scrollIntoView({ block: 'start', inline: 'nearest' });
+    });
+  }
   const applicationTab = activeTab === 'application-fields';
   const fields = applicationTab ? applicationFields : serviceFields;
   const onChange = applicationTab ? onApplicationFieldsChange : onServiceFieldsChange;
@@ -272,7 +282,7 @@ export function RequestFieldSettings({
       className="reference-panel backend-settings-panel"
       aria-label={currentSection.label}
     >
-      {section === 'request-flow' && <RequestFlowDiagram />}
+      {section === 'request-flow' && <RequestFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={selectFlowTab} />}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
           <TabsList
@@ -280,7 +290,7 @@ export function RequestFieldSettings({
             className="reference-tabs"
             aria-label={currentSection.label}
           >
-            {currentSection.tabs.map(tab => <TabsTrigger key={tab.key} value={tab.key} className="reference-tab">
+            {currentSection.tabs.map(tab => <TabsTrigger key={tab.key} id={tabId(tab.key)} value={tab.key} className="reference-tab">
               {tab.label}{tab.key === 'request-items' && <span>{serviceFields.length}</span>}{tab.key === 'application-fields' && <span>{applicationFields.length}</span>}
             </TabsTrigger>)}
           </TabsList>

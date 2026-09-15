@@ -7,7 +7,7 @@ export const backendSettingsSections = [
   { key: 'request-flow', label: '服务请求流程', tabs: [
     { key: 'assessment-manager', label: '项目经理分配' },
     { key: 'assessment-hardware', label: '硬件产品经理分配' },
-    { key: 'approval-designer', label: '审批流程设计' },
+    { key: 'approval-designer', label: '特殊审批流程' },
   ] },
   { key: 'pricing', label: '计价与权益', tabs: [{ key: 'entitlement-conversions', label: '权益换算' }] },
   { key: 'execution-flow', label: '服务执行流程', tabs: [
@@ -17,3 +17,4 @@ export const backendSettingsSections = [
 ] as const;
 
 export type BackendSettingsSection = typeof backendSettingsSections[number]['key'];
+export type RequestFlowTab = Extract<typeof backendSettingsSections[number], { key: 'request-flow' }>['tabs'][number]['key'];
