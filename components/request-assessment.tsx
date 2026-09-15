@@ -307,7 +307,6 @@ export function RequestAssessment({
               <div><strong>硬件产品经理评估</strong> <Badge>{hardwareRound?.outcome ?? (passed && !a.hardware ? '无需补评' : a.hardware?.rounds.length ? '待重新评估' : '待评估')}</Badge></div>
               {hardwareReviewer && editable && !passed && <Button disabled={disabled} onClick={() => open('hardware-review')}>填写评估</Button>}
             </div>
-            {a.routing?.hardware && <p className="sr-help" title={a.routing.hardware.reason}>负责人：{a.routing.hardware.userName || '待分配 · 请联系管理员'}</p>}
             {hardwareRound ? <div className="sr-assessment-rounds"><article>
               <RecordMeta author={hardwareRound.author} at={hardwareRound.at} />
               <p>{hardwareRound.opinion}</p>
@@ -318,7 +317,6 @@ export function RequestAssessment({
               <div><strong>项目经理评估</strong> <Badge>{a.rounds.at(-1)?.outcome ?? '待评估'}</Badge></div>
               {manager && editable && !passed && <Button disabled={disabled} onClick={() => open('round')}>填写评估</Button>}
             </div>
-            {a.routing?.manager && <p className="sr-help" title={a.routing.manager.reason}>负责人：{a.routing.manager.userName || '待分配 · 请联系管理员'}</p>}
             {!a.rounds.length ? (
               <p className="sr-help">等待项目经理查看申请材料并记录评估结论。</p>
             ) : (
@@ -549,7 +547,7 @@ export function RequestAssessment({
         </section></>}
         {presales && <section className="sr-assessment-plan">
           <div className="sr-assessment-section-title"><strong>评估完成</strong>{record.status === '评估完成' && <Badge>已完成</Badge>}</div>
-          <p className="sr-help">{record.status === '评估完成' ? '售前评估已完成。如需继续交付，由负责项目经理点击页面上方“转为交付”。' : '完成人天核定后结束售前评估。'}</p>
+          <p className="sr-help">{record.status === '评估完成' ? '售前评估已完成。如需继续交付，由负责项目经理点击页面上方“转为服务交付”。' : '完成人天核定后结束售前评估。'}</p>
         </section>}
       </div>
       <Dialog

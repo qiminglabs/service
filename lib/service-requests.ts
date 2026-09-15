@@ -417,7 +417,16 @@ export type RequestStage = Exclude<RequestStatus, '已取消'>;
 export function normalizeStoredRequest(
   record: ServiceRequest | (Omit<ServiceRequest, 'status'> & { status: '已转工单' }),
 ): ServiceRequest {
-  const normalized = record.status === '已转工单' ? { ...record, status: '已转服务项目' as const } : record;
+  let normalized = record.status === '已转工单' ? { ...record, status: '已转服务项目' as const } : record;
+  // Keep saved conversion events and untouched demo titles in the current terminology.
+  if (normalized.operations?.activities?.some(event => event.category === '评估' && ['转为交付', '转为服务'].includes(event.title))) {
+    normalized = { ...normalized, operations: { ...normalized.operations,
+      activities: normalized.operations.activities.map(event => event.category === '评估' && ['转为交付', '转为服务'].includes(event.title)
+        ? { ...event, title: '转为服务交付' } : event) } };
+  }
+  if (normalized.id.startsWith('SR-DEMO-') && ['售前评估转交付－待关联服务依据', '售前评估转为服务－待关联服务依据'].includes(normalized.title)) {
+    normalized = { ...normalized, title: '售前评估转为服务交付－待关联服务依据' };
+  }
   return normalized.requestType === undefined ? { ...normalized, requestType: '服务交付' } : normalized;
 }
 export function requestStatusTone(status: RequestStatus) {
@@ -583,7 +592,7 @@ export function requestIdentityIssue(
   if (existing) {
     if (existing.status !== '草稿' && requestTypeOf(existing) !== requestTypeOf(record)
       && !(requestTypeOf(existing) === '售前评估' && existing.status === '评估完成' && requestTypeOf(record) === '服务交付' && record.status === '待评估'))
-      return '提交后申请类型不可直接修改，请通过“转为交付”操作变更。';
+      return '提交后申请类型不可直接修改，请通过“转为服务交付”操作变更。';
     if (existing.status === '草稿' && !['草稿', '已取消'].includes(record.status) && (record.status !== '待评估' || !isRequestApplicant(existing, actor))) return '仅创建人可以提交服务请求。';
     if (existing.customerId !== record.customerId)
       return '服务请求创建后不支持修改客户。';

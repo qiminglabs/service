@@ -334,7 +334,7 @@ export function applyAssessmentAction(
   if (record.status !== '待评估')
     throw new Error('仅待评估阶段可处理评估工作。');
   if (requestTypeOf(record) === '售前评估' && ['plan', 'gap-submit', 'gap-decide', 'confirm'].includes(action.type))
-    throw new Error('售前评估须先完成评估并转为交付，再进入后续交付流程。');
+    throw new Error('售前评估须先完成评估并转为服务交付，再进入后续交付流程。');
   const assessment = structuredClone(assessmentOf(record));
   const manager = () => {
     if (

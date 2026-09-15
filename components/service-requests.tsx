@@ -268,7 +268,6 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
     {!record.items.length ? <div className="sr-empty">
       <FileText size={30} />
       <h3>还没有服务项</h3>
-      <p>{canAdd ? '从服务目录添加所需服务。同一种服务可以分项申请。' : '请先选择客户，再从服务目录添加所需服务。'}</p>
     </div> : <div className="sr-item-list">
       {record.items.map((item, index) => {
         const basicMissing = showCompleteness ? itemBasicIssues(item) : [];
@@ -494,7 +493,7 @@ export function RequestWorkspace(props: Props) {
         setShowIssues(true);
       } else if (failureHeading) {
         setValidationResult({ requestId: record.id, events: [], heading: failureHeading,
-          failures: [{ ruleId: 'delivery-conversion', requirement: '转为交付', message: error instanceof RequestIdentityError ? error.message : localError }] });
+          failures: [{ ruleId: 'delivery-conversion', requirement: '转为服务交付', message: error instanceof RequestIdentityError ? error.message : localError }] });
         setShowIssues(true);
       } else setError(error instanceof RequestIdentityError ? error.message : localError);
       return false;
@@ -506,7 +505,7 @@ export function RequestWorkspace(props: Props) {
   function checkBeforeDeliveryConversion(record: ServiceRequest) {
     const issue = deliveryConversionIssue(record, props.currentActor, props.users);
     const missing = issue ? [issue] : deliveryConversionMaterialIssues(record);
-    setValidationResult({ requestId: record.id, events: [], heading: '尚未转为交付，请补充以下内容',
+    setValidationResult({ requestId: record.id, events: [], heading: '尚未转为服务交付，请补充以下内容',
       failures: missing.map(message => ({ ruleId: 'delivery-conversion', requirement: '服务交付齐套要求', message })) });
     setShowIssues(missing.length > 0);
     return missing.length === 0;
@@ -516,13 +515,13 @@ export function RequestWorkspace(props: Props) {
     const record = draft?.id === conversion.id ? draft : conversion;
     setConversion(null);
     setError('');
-    const heading = '尚未转为交付，请补充以下内容';
+    const heading = '尚未转为服务交付，请补充以下内容';
     try {
       if (!checkBeforeDeliveryConversion(record)) return;
       await persist(convertAssessmentToDelivery(record, props.currentActor, props.users), '已转为服务交付，请继续关联服务依据。', heading);
     } catch (issue) {
       setValidationResult({ requestId: record.id, events: [], heading,
-        failures: [{ ruleId: 'delivery-conversion', requirement: '转为交付', message: issue instanceof Error ? issue.message : '转换失败，请重试。' }] });
+        failures: [{ ruleId: 'delivery-conversion', requirement: '转为服务交付', message: issue instanceof Error ? issue.message : '转换失败，请重试。' }] });
       setShowIssues(true);
     }
   }
@@ -1005,7 +1004,7 @@ export function RequestWorkspace(props: Props) {
             <div className="detail-actions">
               {draft.status === '评估完成' && requestTypeOf(draft) === '售前评估'
                 && !deliveryConversionIssue(draft, props.currentActor, props.users) && (
-                <Button disabled={busy} onClick={() => { if (busy || saveLock.current) return; setError(''); if (checkBeforeDeliveryConversion(draft)) setConversion(structuredClone(draft)); }}>转为交付</Button>
+                <Button disabled={busy} onClick={() => { if (busy || saveLock.current) return; setError(''); if (checkBeforeDeliveryConversion(draft)) setConversion(structuredClone(draft)); }}>转为服务交付</Button>
               )}
               {isProjectCreationEligible(draft, props.currentActor) && (
                 <Button

@@ -58,7 +58,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     titles.push('共用环境材料－双服务项草稿', '共用环境材料－三服务项评估', '共用环境材料－巡检组合确认');
     states.push('草稿', '待评估', '待确认');
     selections.push([days], [days, inspection], [days, upgrade]);
-    titles.push('售前评估－方案评估中', '售前评估－评估已完成', '售前评估转交付－待关联服务依据');
+    titles.push('售前评估－方案评估中', '售前评估－评估已完成', '售前评估转为服务交付－待关联服务依据');
     states.push('待评估', '评估完成', '待评估');
   }
   const routing = references.find(reference => reference.id === assessmentRoutingId)?.payload;
