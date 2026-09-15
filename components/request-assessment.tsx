@@ -1,5 +1,7 @@
 'use client';
 
+import { canPerformAssessmentRole } from '@/lib/assessment-routing';
+
 import type { ValidationFailure } from '@/lib/submission-validation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
@@ -27,16 +29,14 @@ import {
   planAssetDays,
   planGap,
   assetAvailable,
-  isProjectManager,
   isSalesUser,
   applyAssessmentAction,
 } from '@/lib/request-assessment';
 import { activeEntitlementAllocations, effortEntitlementAllocations, entitlementLabel } from '@/lib/request-entitlement-reservations';
 import { assetDayMethod, requestDayRequirements, coverageByMethod, allocationMethodIssue, planDayGaps, formatDayRequirements } from '@/lib/request-asset-coverage';
 import type { AssessmentAction, GapApproval } from '@/lib/request-assessment';
-import { operationIdentities } from '@/lib/internal-users';
 import { requestAudience } from '@/lib/request-collaboration';
-import { hardwareItems, hardwareReviewers, currentHardwareReview, hardwarePassIssue } from '@/lib/request-hardware-assessment';
+import { hardwareItems, currentHardwareReview, hardwarePassIssue } from '@/lib/request-hardware-assessment';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import { readLocal } from '@/lib/service-requests';
 import { itemMinimumDays, itemPriceCoefficient, calculateBillableDays, calculateEffortPricing, effortTotalsByMethod, entitlementPricingContext, itemEntitlementKind, calculateEntitlementLines, type EntitlementPricingContext } from '@/lib/request-pricing';
@@ -144,7 +144,7 @@ export function RequestAssessment({
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
   const needsHardware = hardwareItems(record).length > 0;
   const hardwareRound = passed ? a.hardware?.rounds.at(-1) : currentHardwareReview(record);
-  const hardwareReviewer = actor.role === 'SmartX 硬件产品经理' && hardwareReviewers(users).some(user => user.id === actor.id);
+  const hardwareReviewer = canPerformAssessmentRole(record, actor, 'hardware', users);
   const customerConfirmed = ['待受理', '已转服务项目'].includes(record.status);
   const latestDecision = record.operations?.customerDecisions?.at(-1);
   const confirmedDecision = customerConfirmed && latestDecision?.accepted && latestDecision.planId === a.confirmation?.planId
@@ -164,7 +164,7 @@ export function RequestAssessment({
   const currentApprovals = a.approvals.filter(item => item.planId === plan?.id && item.state !== '已失效').slice(-1);
   const editable = record.status === '待评估' && !busy;
   const manager =
-    isProjectManager(actor) && (!a.managerId || a.managerId === actor.id);
+    canPerformAssessmentRole(record, actor, 'manager', users);
   const confirmationReady = passed && effort !== undefined && !!plan && (gap < 1e-8 || !!approved);
   const basisOwner = canManageAssessmentBasis(record, actor, customers, users);
   const canConfirm = basisOwner && editable && confirmationReady;
@@ -281,11 +281,7 @@ export function RequestAssessment({
         <div className="sr-assessment-manager">
           <span>项目经理</span>
           <strong>
-            {a.manager ||
-              operationIdentities(users).find(
-                (user) => user.role === 'SmartX 项目经理',
-              )?.name ||
-              '待分配'}
+            {a.manager || '待分配'}
           </strong>
         </div>
       </div>
@@ -315,6 +311,7 @@ export function RequestAssessment({
               <div><strong>硬件产品经理评估</strong> <Badge>{hardwareRound?.outcome ?? (passed && !a.hardware ? '无需补评' : a.hardware?.rounds.length ? '待重新评估' : '待评估')}</Badge></div>
               {hardwareReviewer && editable && !passed && <Button disabled={disabled} onClick={() => open('hardware-review')}>填写评估</Button>}
             </div>
+            {a.routing?.hardware && <p className="sr-help" title={a.routing.hardware.reason}>负责人：{a.routing.hardware.userName || '待分配 · 请联系管理员'}</p>}
             {hardwareRound ? <div className="sr-assessment-rounds"><article>
               <RecordMeta author={hardwareRound.author} at={hardwareRound.at} />
               <p>{hardwareRound.opinion}</p>
@@ -325,6 +322,7 @@ export function RequestAssessment({
               <div><strong>项目经理评估</strong> <Badge>{a.rounds.at(-1)?.outcome ?? '待评估'}</Badge></div>
               {manager && editable && !passed && <Button disabled={disabled} onClick={() => open('round')}>填写评估</Button>}
             </div>}
+            {a.routing?.manager && <p className="sr-help" title={a.routing.manager.reason}>负责人：{a.routing.manager.userName || '待分配 · 请联系管理员'}</p>}
             {!a.rounds.length ? (
               <p className="sr-help">等待项目经理查看申请材料并记录评估结论。</p>
             ) : (

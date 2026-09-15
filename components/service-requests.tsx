@@ -1,9 +1,11 @@
 'use client';
 
+import { canPerformAssessmentRole } from '@/lib/assessment-routing';
+
 import { checkSubmissionQueue, SubmissionValidationError, submissionEvent, validationHeading } from '@/lib/submission-validation';
 import type { ValidationFailure } from '@/lib/submission-validation';
 import type { RuleEvent } from '@/lib/submission-rule-schema';
-import { isRequestApplicant, requestAudience } from '@/lib/request-collaboration';
+import { isRequestApplicant, requestAudience, hardwareCollaboratorId, hardwareCollaboratorRemovalIssue } from '@/lib/request-collaboration';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { RequestFormBuilder } from '@/components/request-form-builder';
 import { requestFormOrder } from '@/lib/request-form-layout';
@@ -25,6 +27,7 @@ import {
   fieldTypes,
   RequestFieldControl,
   RequestFieldsContext,
+  ApplicationFieldsContext,
 } from '@/components/request-field-settings';
 import type { RequestField } from '@/components/request-field-settings';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -222,8 +225,9 @@ function RequestFormPage({ title, description, backLabel, busy, onClose, actions
 }
 
 function RequestCustomerLabel({ required = false, hint = '创建后不可修改客户。' }: { required?: boolean; hint?: string }) {
+  const label = useContext(ApplicationFieldsContext).find(field => field.id === 'customerId')?.name ?? '客户';
   return <span className="sr-customer-label">
-    客户{required && <em>*</em>}
+    {label}{required && <em>*</em>}
     <TooltipProvider><Tooltip>
       <TooltipTrigger render={<span tabIndex={0} role="img" className="sr-description-hint" aria-label="客户说明" onClick={event => event.preventDefault()}><CircleAlert size={16} aria-hidden="true" /></span>} />
       <TooltipContent className="sr-description-tooltip" side="top">{hint}</TooltipContent>
@@ -293,6 +297,8 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
 }
 
 export function RequestWorkspace(props: Props) {
+  const applicationFields = useContext(ApplicationFieldsContext);
+  const applicationLabel = (id: string, fallback: string) => applicationFields.find(field => field.id === id)?.name ?? fallback;
   const access = {
     actor: props.currentActor,
     directory: props.identityDirectory,
@@ -435,10 +441,12 @@ export function RequestWorkspace(props: Props) {
     refresh();
     window.addEventListener('focus', refresh);
     window.addEventListener('catalog-version-saved', refresh);
+    window.addEventListener('assessment-routing-updated', refresh);
     return () => {
       active = false;
       window.removeEventListener('focus', refresh);
       window.removeEventListener('catalog-version-saved', refresh);
+      window.removeEventListener('assessment-routing-updated', refresh);
     };
   }, []);
   useEffect(() => {
@@ -459,7 +467,7 @@ export function RequestWorkspace(props: Props) {
     );
     try {
       await saveLocal('requests', next, access);
-      next = clearHiddenRequestFields(next);
+      next = (await readLocal<ServiceRequest>('requests')).find(record => record.id === next.id) ?? clearHiddenRequestFields(next);
       setReservationRecords((previous) => [
         next,
         ...previous.filter((record) => record.id !== next.id),
@@ -678,6 +686,7 @@ export function RequestWorkspace(props: Props) {
         | 'title'
         | 'description'
         | 'expectedServiceDate'
+        | 'expectedProvider'
         | 'externalCollaborators'
         | 'internalParticipants'
       >
@@ -699,7 +708,8 @@ export function RequestWorkspace(props: Props) {
     if (!draft || busy) return;
     const removalIssue =
       requestContactRemovalIssue({ ...draft, ...patch }, draft) ??
-      customerOwnerRemovalIssue({ ...draft, ...patch }, draft, props.customers);
+      customerOwnerRemovalIssue({ ...draft, ...patch }, draft, props.customers) ??
+      hardwareCollaboratorRemovalIssue({ ...draft, ...patch }, draft);
     if (removalIssue) {
       setError(removalIssue);
       return;
@@ -795,7 +805,7 @@ export function RequestWorkspace(props: Props) {
                   <Search size={16} />
                   <Input
                     aria-label="搜索服务请求"
-                    placeholder="搜索申请主题、编号或客户"
+                    placeholder={`搜索${applicationLabel('title', '申请主题')}、编号或${applicationLabel('customerId', '客户')}`}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -826,10 +836,10 @@ export function RequestWorkspace(props: Props) {
               <table className="sr-table app-list-table">
                 <thead>
                   <tr>
-                    <th>申请主题 / 编号</th>
+                    <th>{applicationLabel('title', '申请主题')} / 编号</th>
                     <th>客户</th>
                     <th>申请项</th>
-                    <th>期望服务日期</th>
+                    <th>{applicationLabel('expectedServiceDate', '期望服务日期')}</th>
                     <th>状态</th>
                     <th>最近更新</th>
                     <th>操作</th>
@@ -953,10 +963,7 @@ export function RequestWorkspace(props: Props) {
                 </Button>
               )}
               {draft.status === '待评估' &&
-                isProjectManager(props.currentActor) &&
-                (!draft.operations?.assessment?.managerId ||
-                  draft.operations.assessment.managerId ===
-                    props.currentActor.id) && (
+                canPerformAssessmentRole(draft, props.currentActor, 'manager', props.users) && (
                   <Button
                     variant="outline"
                     className="ct-button ct-button--ordinary"
@@ -1060,6 +1067,7 @@ export function RequestWorkspace(props: Props) {
                 />
                 {isInternal(props.currentRole) && (
                   <RequestInternalInfo
+                    hardwareReviewerId={hardwareCollaboratorId(draft)}
                     applicantId={requestAudience(draft) === 'internal' ? draft.createdById : undefined}
                     ownerUserId={
                       props.customers.find(
@@ -1104,7 +1112,7 @@ export function RequestWorkspace(props: Props) {
               </div>
               <fieldset disabled={readonly || busy} className="sr-form-grid">
                 <label htmlFor="sr-title">
-                  申请主题 <em>*</em>
+                  {applicationLabel('title', '申请主题')} <em>*</em>
                   <Input
                     id="sr-title"
                     value={draft.title}
@@ -1127,7 +1135,7 @@ export function RequestWorkspace(props: Props) {
                 </label>
                 <DateField
                   id="sr-expected-service-date"
-                  label="期望服务日期"
+                  label={applicationLabel('expectedServiceDate', '期望服务日期')}
                   value={draft.expectedServiceDate ?? ''}
                   readonly={readonly}
                   disabled={busy}
@@ -1136,7 +1144,7 @@ export function RequestWorkspace(props: Props) {
                   }
                 />
                 <label className="sr-span">
-                  申请说明（选填）
+                  {applicationLabel('description', '申请说明')}（选填）
                   <textarea
                     value={draft.description}
                     onChange={(e) =>
@@ -1249,7 +1257,7 @@ export function RequestWorkspace(props: Props) {
           </div>
           <fieldset className="sr-form-grid" disabled={busy}>
             <label htmlFor="sr-create-title">
-              申请主题 <em>*</em>
+              {applicationLabel('title', '申请主题')} <em>*</em>
               <Input
                 id="sr-create-title"
                 required
@@ -1286,8 +1294,8 @@ export function RequestWorkspace(props: Props) {
                 </select>
               </label>
             )}
-            <DateField id="sr-create-expected-date" label="期望服务日期" value={creation.expectedServiceDate ?? ''} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate })} />
-            <label className="sr-span">申请说明（选填）
+            <DateField id="sr-create-expected-date" label={applicationLabel('expectedServiceDate', '期望服务日期')} value={creation.expectedServiceDate ?? ''} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate })} />
+            <label className="sr-span">{applicationLabel('description', '申请说明')}（选填）
               <textarea rows={3} value={creation.description} onChange={event => updateCreation({ description: event.target.value })} placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。" />
             </label>
           </fieldset>
@@ -1625,9 +1633,6 @@ export function RequestWorkspace(props: Props) {
               disabled={busy}
               onClick={async () => {
                 if (!draft || !isRequestApplicant(draft, props.currentActor)) return;
-                const projectManager = operationIdentities(props.users).find(
-                  (user) => user.role === 'SmartX 项目经理',
-                );
                 if (
                   await persist(
                     appendActivity(
@@ -1638,8 +1643,6 @@ export function RequestWorkspace(props: Props) {
                           ...operationsOf(draft),
                           assessment: {
                             ...emptyAssessment(),
-                            managerId: projectManager?.id ?? '',
-                            manager: projectManager?.name ?? '',
                           },
                         },
                         submittedAt: new Date().toISOString(),

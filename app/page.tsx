@@ -1,5 +1,7 @@
 'use client';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
+import { initializeCatalogFormsFromBackupV2 } from '@/lib/catalog-form-initialization';
+import { responsibleTeams } from '@/lib/customer-teams';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
 import { parseDayQuantity, formatDays } from '@/lib/day-quantity';
 import { calculateBillableDays } from '@/lib/request-pricing';
@@ -96,10 +98,12 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   RequestFieldSettings,
   RequestFieldsContext,
+  ApplicationFieldsContext,
   normalizeRequestFields,
   initialRequestFields,
   type RequestField,
 } from '@/components/request-field-settings';
+import { initialApplicationFields, normalizeApplicationFields } from '@/lib/request-application-fields';
 import { importedServiceCatalogSeeds } from './service-catalog-import';
 
 type ServiceStatus = '草稿' | '已启用' | '已停用';
@@ -133,7 +137,7 @@ type CatalogForm = {
   internalNote: string;
 };
 
-const responsibleTeams = ['金融', '商业', '港澳', '其他'] as const;
+
 const serviceCategories = [
   '产品实施交付',
   '产品增值服务',
@@ -794,6 +798,10 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const [referenceFormError, setReferenceFormError] = useState('');
   const [requestFields, setRequestFields] =
     useState<RequestField[]>(initialRequestFields);
+  const [applicationFields, setApplicationFields] = useState<RequestField[]>(initialApplicationFields);
+  const resolvedApplicationFields = useMemo(() => applicationFields.map(field => field.referenceTarget === 'partners'
+    ? { ...field, options: partners.map(partner => ({ value: partner.name, enabled: true })) }
+    : field), [applicationFields, partners]);
   const resolvedRequestFields = useMemo(() => requestFields.map(field => field.referenceTarget === 'partners'
     ? { ...field, options: partners.map(partner => ({ value: partner.name, enabled: true })) }
     : field), [requestFields, partners]);
@@ -802,11 +810,12 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 
   useEffect(() => {
     let active = true;
-    readLocal<{
+    initializeCatalogFormsFromBackupV2().then(() => readLocal<{
       id: string;
       payload: {
         customerOwnersInitialized?: boolean;
         requestFields?: RequestField[];
+        applicationFields?: RequestField[];
         services: Service[];
         customers: Customer[];
         contacts: Contact[];
@@ -817,13 +826,14 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         partnerUsers?: PartnerUser[];
         serviceCertifications?: ServiceCertification[];
       };
-    }>('references')
+    }>('references'))
       .then((records) => {
         if (!active) return;
         const snapshot = records.find(
           (record) => record.id === 'workspace',
         )?.payload;
         if (snapshot) {
+          setApplicationFields(normalizeApplicationFields(snapshot.applicationFields));
           const storedRequestFields = normalizeRequestFields(
             snapshot.requestFields ?? initialRequestFields,
           );
@@ -891,6 +901,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         payload: {
           customerOwnersInitialized: true,
           requestFields,
+          applicationFields,
           services: serviceRecords,
           customers,
           contacts,
@@ -913,6 +924,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   }, [
     referencesReady,
     requestFields,
+    applicationFields,
     serviceRecords,
     customers,
     contacts,
@@ -930,6 +942,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     try {
       await resetLocalDemoData({
         requestFields: initialRequestFields,
+        applicationFields: initialApplicationFields,
         services,
         customers: initialCustomers,
         contacts: initialContacts,
@@ -1468,6 +1481,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           {activeView === 'requests' ? (
             referencesReady && portal.views.includes('requests') ? (
               <RequestFieldsContext.Provider value={resolvedRequestFields}>
+                <ApplicationFieldsContext.Provider value={resolvedApplicationFields}>
                 <RequestWorkspace
                   key={`${currentActor.id}:${portal.organizationId}`}
                   services={serviceRecords}
@@ -1491,6 +1505,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                   )}
                   createToken={requestCreateToken}
                 />
+                </ApplicationFieldsContext.Provider>
               </RequestFieldsContext.Provider>
             ) : (
               <p className="sr-workspace">
@@ -1591,6 +1606,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               actorIdentity={currentActor}
               fields={requestFields}
               onChange={setRequestFields}
+              applicationFields={applicationFields}
+              onApplicationFieldsChange={setApplicationFields}
               ready={referencesReady}
             />
           ) : (

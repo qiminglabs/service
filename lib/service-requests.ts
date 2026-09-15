@@ -1,9 +1,12 @@
+import { canPerformAssessmentRole, routeAssessmentOnSave, routingSaveIssue } from './assessment-routing.ts';
+import { assessmentRoutingId } from './assessment-routing-schema.ts';
 import { runValidationQueue, validationEventsForTransition, SubmissionValidationError } from './submission-validation.ts';
 import { requestFieldLabel } from './request-field-labels.ts';
+import { withoutServiceExpectedProvider } from './request-application-fields.ts';
 import { submissionRulesId } from './submission-rule-schema.ts';
 export { requestIssues } from './request-validation-builtins.ts';
 import { addressLabel, isAddressValue, addressComplete } from './request-address.ts';
-import { withRequestCollaborators, requestAudience, isRequestApplicant, applicantRemovalIssue } from './request-collaboration.ts';
+import { withRequestCollaborators, withHardwareCollaborators, hardwareCollaboratorRemovalIssue, requestAudience, isRequestApplicant, applicantRemovalIssue } from './request-collaboration.ts';
 import { entitlementAvailable } from './request-entitlement-reservations.ts';
 import { workspaceDayQuantityIssue } from './day-quantity.ts';
 import { effortPricingSaveIssue, entitlementPricingContext } from './request-pricing.ts';
@@ -89,7 +92,7 @@ export function resolveRequestConfig(
     configs.find((config) => config.serviceId === service.id) ?? defaultConfig(service),
   ));
 }
-export type CustomerRef = { id: string; name: string; status: string; ownerUserId?: string };
+export type CustomerRef = { id: string; name: string; status: string; ownerUserId?: string; team?: string };
 export type ContactRef = CustomerRef & {
   customerId: string;
   phone?: string;
@@ -463,6 +466,7 @@ export type ServiceRequest = {
   contactId: string;
   description: string;
   expectedServiceDate?: string;
+  expectedProvider?: string;
   /** Retained only for compatibility with historical records; no longer collected or validated. */
   businessImpact?: string;
   owner: string;
@@ -552,7 +556,7 @@ export function canEditRequestItems(record: ServiceRequest, actor?: OperationAct
   if (record.status === '草稿') return !actor || canCheckRequestCompleteness(record, actor);
   const assessment = record.operations?.assessment;
   return record.status === '待评估' && !!actor?.id && actor.role === 'SmartX 项目经理'
-    && (!assessment?.managerId || assessment.managerId === actor.id)
+    && canPerformAssessmentRole(record, actor, 'manager')
     && !assessment?.rounds.some(round => round.outcome === '评估通过');
 }
 
@@ -574,7 +578,7 @@ export function requestIdentityIssue(
     )
       return '创建人和创建时间不支持修改。';
     if (existing.status === '草稿' && actor?.role === '客户' && !canCheckRequestCompleteness(existing, actor)) {
-      const fields = ['title', 'contactId', 'description', 'expectedServiceDate', 'items', 'status', 'submittedAt'] as const;
+      const fields = ['title', 'contactId', 'description', 'expectedServiceDate', 'expectedProvider', 'items', 'status', 'submittedAt'] as const;
       if (fields.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '非本人发起的服务申请仅支持只读查看，不允许修改或提交。';
     }
@@ -594,7 +598,7 @@ export function requestIdentityIssue(
           && !currentPlan(record) && record.operations?.assessment?.rounds.length === 0;
         if (!validReturn) return '仅待评估阶段的负责项目经理可以退回草稿。';
       }
-      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate'] as const;
+      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'expectedProvider'] as const;
       if (frozen.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '提交后基本信息只读，不支持修改。';
       if (JSON.stringify(existing.items) !== JSON.stringify(record.items)
@@ -647,7 +651,7 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory, cus
     if (assessment?.plans.some(plan => plan.salesId === actor.id)
       || assessment?.approvals.some(approval => approval.approverId === actor.id)) return true;
   }
-  if (record.status === '待评估' && hardwareItems(record).length && isHardwareProductManager(actor) && directory.some(person => person.id === actor.id)) return true;
+  if (record.status === '待评估' && hardwareItems(record).length && canPerformAssessmentRole(record, actor, 'hardware') && isHardwareProductManager(actor) && directory.some(person => person.id === actor.id)) return true;
   if (isInternal(actor.role) && record.internalParticipants?.some(person => person.userId === actor.id)) return true;
   if (record.createdById) return false;
   // Legacy records stored a display name. Ambiguous names and old role labels
@@ -679,6 +683,8 @@ export function requestCollaborationSaveIssue(
   access?: RequestAccessContext,
 ): string | null {
   const { contacts, customers, users } = refs;
+  const hardwareRemovalIssue = hardwareCollaboratorRemovalIssue(record, previous);
+  record = withHardwareCollaborators(record, users);
   const old = previous ? withRequestCollaborators(previous, contacts, customers, users) : undefined;
   if (access && !canAccessRequest(old ?? record, { ...access, contacts }))
     return '无权访问此服务请求，当前身份可能已停用。';
@@ -698,7 +704,7 @@ export function requestCollaborationSaveIssue(
     !users.some(user => user.id === person.userId && user.status === '启用')
     && !old?.internalParticipants?.some(previousPerson => previousPerson.userId === person.userId)))
     return '只能添加已启用的内部用户。';
-  return null;
+  return hardwareRemovalIssue;
 }
 export function requestCreationIssue(
   record: ServiceRequest,
@@ -751,7 +757,7 @@ export function newItem(
   service: CatalogService,
   config: RequestConfig,
 ): RequestItem {
-  const snapshot = structuredClone(applyCatalogConfigRules(service, normalizeRequestConfig(config)));
+  const snapshot = structuredClone(applyCatalogConfigRules(service, withoutServiceExpectedProvider(normalizeRequestConfig(config))));
   return {
     id: crypto.randomUUID(),
     serviceId: service.id,
@@ -775,6 +781,7 @@ export function copyRequestItem(source: RequestItem): RequestItem {
 }
 
 export function requestFieldIsRequired(config: RequestConfig, fieldId: string, method: string, values: Record<string, string> = {}): boolean {
+  if (fieldId === 'expectedProvider') return false;
   const requirement = config.fieldRequiredWhen?.[fieldId];
   if (isEditionRequirement(requirement))
     return config.fields.includes('edition') && (values.edition === '企业版' || (requirement === 'standard-or-enterprise' && values.edition === '标准版'));
@@ -786,6 +793,7 @@ export function requestFieldIsRequired(config: RequestConfig, fieldId: string, m
 }
 
 export function requestFieldIsVisible(config: RequestConfig, fieldId: string, method: string, values: Record<string, string> = {}): boolean {
+  if (fieldId === 'expectedProvider') return false;
   return !config.fieldRequiredWhen?.[fieldId] || requestFieldIsRequired(config, fieldId, method, values);
 }
 
@@ -808,7 +816,9 @@ export function clearHiddenItemFields(item: RequestItem): RequestItem {
 }
 
 export function clearHiddenRequestFields(record: ServiceRequest): ServiceRequest {
-  return { ...record, items: record.items.map(clearHiddenItemFields) };
+  const next = { ...record, items: record.items.map(clearHiddenItemFields) };
+  delete next.expectedProvider;
+  return next;
 }
 
 export function itemBasicIssues(item: RequestItem): string[] {
@@ -884,7 +894,7 @@ export function itemBasicIssues(item: RequestItem): string[] {
 
 // Apply only to live catalog forms, not existing application/history snapshots.
 export function normalizeCatalogRequestConfig(config: RequestConfig): RequestConfig {
-  const normalized = normalizeRequestConfig(config);
+  const normalized = withoutServiceExpectedProvider(normalizeRequestConfig(config));
   if (normalized.versionFieldDefaultRemoved) return normalized;
   const omitVersion = <T,>(value?: Record<string, T>): Record<string, T> | undefined => value
     ? Object.fromEntries(Object.entries(value).filter(([id]) => id !== 'version')) : undefined;
@@ -1032,6 +1042,7 @@ export async function saveLocal(
   record: ServiceRequest | RequestConfig | { id: string; payload: unknown },
   access?: RequestAccessContext,
 ): Promise<void> {
+  if (store === 'references' && 'id' in record && record.id === assessmentRoutingId) throw new Error('请通过服务请求流程配置保存分配规则。');
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -1039,12 +1050,17 @@ export async function saveLocal(
       const records = transaction.objectStore(store);
       if (store === 'requests') {
         let serviceRequest = normalizeStoredRequest(record as ServiceRequest);
+        // Keep the submitted list so automatic additions cannot hide an explicit removal.
+        const incomingParticipants = serviceRequest.internalParticipants;
         const current = records.get(serviceRequest.id);
         current.onsuccess = () => {
           const referenceRead = transaction.objectStore('references').getAll();
           referenceRead.onsuccess = () => {
             const savedWorkspace = referenceRead.result.find((entry: { id: string }) => entry.id === 'workspace')?.payload;
-            const previous = current.result ? withRequestCollaborators(normalizeStoredRequest(current.result), savedWorkspace?.contacts ?? [], savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []) : undefined;
+            // Apply system additions symmetrically before immutable-field comparisons.
+            serviceRequest = withHardwareCollaborators(serviceRequest, savedWorkspace?.users ?? []);
+            const storedPrevious = current.result ? normalizeStoredRequest(current.result) : undefined;
+            const previous = storedPrevious ? withRequestCollaborators(storedPrevious, savedWorkspace?.contacts ?? [], savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []) : undefined;
             const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, access) : null;
             if (creationIssue) {
               reject(new RequestIdentityError(creationIssue));
@@ -1060,7 +1076,7 @@ export async function saveLocal(
             const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
             const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? []);
             const projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor);
-            const issue = customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? projectIssue ?? supplementIssue ?? decisionIssue
+            const issue = routingSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? []) ?? customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? projectIssue ?? supplementIssue ?? decisionIssue
               ?? requestIdentityIssue(serviceRequest, previous, access?.actor)
               ?? hardwareAssessmentSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
               ?? assessmentBasisSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []);
@@ -1088,8 +1104,10 @@ export async function saveLocal(
                   const contacts = workspacePayload?.contacts ?? [];
                   const users = workspacePayload?.users ?? [];
                   const customers = workspacePayload?.customers ?? [];
-                  const policyIssue = requestCollaborationSaveIssue(serviceRequest, previous, { contacts, users, customers }, access);
+                  const policyIssue = requestCollaborationSaveIssue({ ...serviceRequest, internalParticipants: incomingParticipants }, storedPrevious, { contacts, users, customers }, access);
                   if (policyIssue) { reject(new RequestIdentityError(policyIssue)); transaction.abort(); return; }
+                  try { serviceRequest = routeAssessmentOnSave(serviceRequest, previous, referenceRead.result.find((entry: { id: string }) => entry.id === assessmentRoutingId)?.payload, users, undefined, customers); }
+                  catch (error) { reject(error); transaction.abort(); return; }
                   const validationEvents = validationEventsForTransition(serviceRequest, previous);
                   try {
                     const failures = runValidationQueue(serviceRequest, { contacts, users, customers, businessObjects: workspacePayload?.businessObjects ?? [], services: workspacePayload?.services ?? [], currentActor: access?.actor }, validationEvents, referenceRead.result.find((entry: { id: string }) => entry.id === submissionRulesId)?.payload);

@@ -28,59 +28,23 @@ export function requestFieldWidth(config: RequestConfig, id: string) {
 
 export function requestFieldGridColumn(config: RequestConfig, id: string) {
   if (requestFieldWidth(config, id) === 'full') return '1 / -1';
-  if (config.fieldColumns?.[id]) return config.fieldColumns[id] === 'left' ? '1 / span 1' : '2 / span 1';
   return config.fieldRowStarts?.includes(id) ? '1 / span 1' : 'span 1';
 }
 
-export type FieldPlacement = 'left' | 'right' | 'full';
-export function requestFieldPlacements(config: RequestConfig): Record<string, FieldPlacement> {
-  const placements: Record<string, FieldPlacement> = {};
-  let next: 'left' | 'right' = 'left';
-  for (const id of requestFormOrder(config)) {
-    if (requestFieldWidth(config, id) === 'full') {
-      placements[id] = 'full';
-      next = 'left';
-    } else {
-      const column: 'left' | 'right' = config.fieldColumns?.[id] ?? (config.fieldRowStarts?.includes(id) ? 'left' : next);
-      placements[id] = column;
-      next = column === 'left' ? 'right' : 'left';
-    }
-  }
-  return placements;
-}
-
-export function setRequestFieldPlacement(config: RequestConfig, id: string, placement: FieldPlacement): RequestConfig {
-  // Freeze inferred legacy columns before an edit so neighboring fields stay put.
-  const columns = { ...config.fieldColumns };
-  for (const [key, position] of Object.entries(requestFieldPlacements(config)))
-    if (position !== 'full') columns[key] = position;
-  if (placement !== 'full') columns[id] = placement;
-  return {
-    ...config,
-    fieldColumns: columns,
-    fieldWidths: { ...config.fieldWidths, [id]: placement === 'full' ? 'full' : 'half' },
-    fieldRowStarts: config.fieldRowStarts?.filter(key => key !== id),
-  };
-}
-
-export type FormLayoutSection =
-  | { kind: 'full'; key: string; field: string }
-  | { kind: 'columns'; key: string; left: string[]; right: string[]; before?: string };
-
-export function requestFormSections(config: RequestConfig, visibleIds = requestFormOrder(config)): FormLayoutSection[] {
+// Visible fields stay in form order. Legacy left/right assignments are ignored.
+export function requestFormLayoutFields(config: RequestConfig, visibleIds = requestFormOrder(config)) {
   const visible = new Set(visibleIds);
-  const placements = requestFieldPlacements(config);
-  const sections: FormLayoutSection[] = [];
-  let columns: Extract<FormLayoutSection, { kind: 'columns' }> = { kind: 'columns', key: 'start', left: [], right: [] };
-  for (const id of requestFormOrder(config)) {
-    if (!visible.has(id)) continue;
-    const position = placements[id];
-    if (position === 'full') {
-      if (columns.left.length || columns.right.length) sections.push({ ...columns, before: id });
-      sections.push({ kind: 'full', key: `full:${id}`, field: id });
-      columns = { kind: 'columns', key: `after:${id}`, left: [], right: [] };
-    } else columns[position].push(id);
-  }
-  if (columns.left.length || columns.right.length) sections.push(columns);
-  return sections;
+  return requestFormOrder(config).filter(id => visible.has(id)).map(id => ({
+    id, gridColumn: requestFieldGridColumn(config, id),
+  }));
+}
+
+export function moveRequestFormField(order: string[], id: string, targetId?: string): string[] {
+  if (id === targetId) return order;
+  const targetIndex = targetId ? order.indexOf(targetId) : -1;
+  const next = order.filter(field => field !== id);
+  // For existing fields the target's original index gives natural forward/backward
+  // movement, including adjacent cards. New fields insert before the target.
+  next.splice(targetIndex < 0 ? next.length : Math.min(targetIndex, next.length), 0, id);
+  return next;
 }

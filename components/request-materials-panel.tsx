@@ -60,7 +60,7 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
               <span>{file.name}</span>
             </li>)}</ul>}
           </div>
-          <Button variant="ghost" className="app-list-link" disabled={busy}
+          <Button variant="outline" disabled={busy}
             onClick={() => onMaterial({ itemId: member.item.id, requirementId: member.requirement.id })}>
             {readonly || files.length ? '查看材料' : '填写材料'}
           </Button>

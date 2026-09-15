@@ -14,8 +14,12 @@ import {
   allCityNames,
 } from '@/lib/china-province-city';
 import { EntitlementConversions } from '@/components/entitlement-conversions';
+import { RequestFlowDiagram } from '@/components/request-flow-diagram';
+import { RequestFlowSettings } from '@/components/request-flow-settings';
+import { ExecutionFlowSettings } from '@/components/execution-flow-settings';
 import { RequestRuleSettings } from '@/components/request-rule-settings';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
+import { initialApplicationFields, isSystemApplicationField, normalizeApplicationFields } from '@/lib/request-application-fields';
 import { editionFeatureFields, editionFieldRequirement, fieldRequirementLabels, fieldOptionsIssue } from '@/lib/request-field-requirements';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,7 +61,7 @@ export type RequestField = {
   name: string;
   type: RequestFieldType;
   options: FieldOption[];
-  referenceTarget?: 'partners' | 'businessObjects';
+  referenceTarget?: 'partners' | 'businessObjects' | 'customers';
   updatedAt?: string;
   updatedBy?: string;
 };
@@ -85,11 +89,6 @@ const systemFields: Record<
   tibCount: { name: 'TiB 数', type: 'integer' },
   instanceCount: { name: '实例数', type: 'integer' },
   clusterCount: { name: '集群数', type: 'integer' },
-  expectedProvider: {
-    name: '期望服务商',
-    type: 'lookup',
-    referenceTarget: 'partners',
-  },
 };
 export function isSystemField(id: string) {
   return Object.hasOwn(systemFields, id);
@@ -109,7 +108,7 @@ export function normalizeRequestFields(
   >,
 ): RequestField[] {
   return sortRequestFields(
-    fields.map((field) => ({
+    fields.filter(field => field.id !== 'expectedProvider').map((field) => ({
       ...field,
       type: systemFields[field.id]?.type ?? field.type ?? 'single',
       name: requestFieldLabel(field.id, field.name?.trim() || systemFields[field.id]?.name || field.name),
@@ -140,13 +139,6 @@ export const initialRequestFields = normalizeRequestFields([
   },
   { id: 'method', name: '服务方式', type: 'single', options: ['远程', '现场'] },
   {
-    id: 'expectedProvider',
-    name: '期望服务商',
-    type: 'lookup',
-    referenceTarget: 'partners',
-    options: [],
-  },
-  {
     id: 'productForm',
     name: '产品形态',
     type: 'single',
@@ -158,10 +150,13 @@ export const initialRequestFields = normalizeRequestFields([
   { id: 'clusterCount', name: '集群数', type: 'integer', options: [] },
 ]);
 export const RequestFieldsContext = createContext(initialRequestFields);
+export const ApplicationFieldsContext = createContext(initialApplicationFields);
 
 export function RequestFieldSettings({
-  fields,
-  onChange,
+  fields: serviceFields,
+  onChange: onServiceFieldsChange,
+  applicationFields,
+  onApplicationFieldsChange,
   ready,
   actor,
   actorIdentity,
@@ -172,10 +167,16 @@ export function RequestFieldSettings({
   actorIdentity: OperationActor;
   fields: RequestField[];
   onChange: (fields: RequestField[]) => void;
+  applicationFields: RequestField[];
+  onApplicationFieldsChange: (fields: RequestField[]) => void;
   ready: boolean;
 }) {
   const currentSection = backendSettingsSections.find(item => item.key === section)!;
   const [activeTab, setActiveTab] = useState<string>(currentSection.tabs[0].key);
+  const applicationTab = activeTab === 'application-fields';
+  const fields = applicationTab ? applicationFields : serviceFields;
+  const onChange = applicationTab ? onApplicationFieldsChange : onServiceFieldsChange;
+  const systemField = applicationTab ? isSystemApplicationField : isSystemField;
   const [target, setTarget] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<RequestFieldType>('single');
@@ -183,7 +184,7 @@ export function RequestFieldSettings({
   const [newOption, setNewOption] = useState('');
   const [error, setError] = useState('');
   const creating = target === 'new';
-  const locked = target !== null && isSystemField(target);
+  const locked = target !== null && systemField(target);
   const isChoice =
     (type === 'single' || type === 'multiple') && target !== 'businessObjects';
   function open(id: string) {
@@ -270,6 +271,7 @@ export function RequestFieldSettings({
       className="reference-panel backend-settings-panel"
       aria-label={currentSection.label}
     >
+      {section === 'request-flow' && <RequestFlowDiagram />}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
           <TabsList
@@ -278,12 +280,12 @@ export function RequestFieldSettings({
             aria-label={currentSection.label}
           >
             {currentSection.tabs.map(tab => <TabsTrigger key={tab.key} value={tab.key} className="reference-tab">
-              {tab.label}{tab.key === 'request-items' && <span>{fields.length}</span>}
+              {tab.label}{tab.key === 'request-items' && <span>{serviceFields.length}</span>}{tab.key === 'application-fields' && <span>{applicationFields.length}</span>}
             </TabsTrigger>)}
           </TabsList>
           {section === 'forms' && <Button disabled={!ready} onClick={() => open('new')}><Plus size={16} />创建字段</Button>}
         </div>
-        {section === 'forms' && <TabsContent value="request-items">
+        {section === 'forms' && <TabsContent value={activeTab}>
           <div className="table-scroll">
             <table className="reference-table app-list-table">
               <thead>
@@ -297,15 +299,17 @@ export function RequestFieldSettings({
                 </tr>
               </thead>
               <tbody>
-                {normalizeRequestFields(fields).map((field) => (
+                {(applicationTab ? normalizeApplicationFields(fields) : normalizeRequestFields(fields)).map((field) => (
                   <tr key={field.id}>
                     <td>
                       <strong>{field.name}</strong>
-                      {isSystemField(field.id) && <span className="request-system-field">系统预置</span>}
+                      {systemField(field.id) && <span className="request-system-field">系统预置</span>}
                     </td>
                     <td>{fieldTypes[field.type]}</td>
                     <td>
-                      {field.id === 'businessObjects' ? (
+                      {field.referenceTarget === 'customers' ? (
+                        '关联客户对象，单选'
+                      ) : field.id === 'businessObjects' ? (
                         '关联业务对象，可多选'
                       ) : field.referenceTarget === 'partners' ? (
                         '关联合作伙伴对象，单选'
@@ -352,9 +356,17 @@ export function RequestFieldSettings({
           <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
           <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
         </>}
+        {section === 'request-flow' && <>
+          <TabsContent value="assessment-manager"><RequestFlowSettings role="manager" actor={actorIdentity} /></TabsContent>
+          <TabsContent value="assessment-hardware"><RequestFlowSettings role="hardware" actor={actorIdentity} /></TabsContent>
+        </>}
         {section === 'pricing' && <TabsContent value="entitlement-conversions">
           <EntitlementConversions actor={actor} />
         </TabsContent>}
+        {section === 'execution-flow' && <>
+          <TabsContent value="execution-flows"><ExecutionFlowSettings tab="execution-flows" actor={actorIdentity} /></TabsContent>
+          <TabsContent value="execution-assignments"><ExecutionFlowSettings tab="execution-assignments" actor={actorIdentity} /></TabsContent>
+        </>}
       </Tabs>
       <Dialog
         open={target !== null}
@@ -371,7 +383,7 @@ export function RequestFieldSettings({
               {locked
                 ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项，字段类型不可修改。'
                 : creating
-                  ? '创建后可在服务目录的申请表单中添加使用。'
+                  ? applicationTab ? '创建后保存在申请项字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
                   : '可修改名称和选项；字段类型创建后不可修改，以保留历史数据。'}
             </DialogDescription>
           </DialogHeader>

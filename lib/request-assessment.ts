@@ -1,3 +1,5 @@
+import type { HardwareAssessmentRequirement } from './hardware-assessment-trigger';
+import { canPerformAssessmentRole, type AssessmentRouting } from './assessment-routing.ts';
 import { effortEntitlementAllocations, entitlementLockIssue, type EntitlementAllocation } from './request-entitlement-reservations.ts';
 import { isDayQuantity, sumDays } from './day-quantity.ts';
 import { calculateEffortPricing, type EffortPricingLine, type EffortPricingInput, type EntitlementPricingContext } from './request-pricing.ts';
@@ -96,6 +98,8 @@ export type GapApproval = {
   decidedBy?: string;
 };
 export type Assessment = {
+  routing?: AssessmentRouting;
+  hardwareRequirement?: HardwareAssessmentRequirement;
   hardware?: HardwareAssessment;
   needsReview?: boolean; // Legacy field, no longer controls assessment.
   effort?: { days: number; estimatedDays?: number; lines?: EffortPricingLine[]; at: string; author: string; note?: string };
@@ -315,8 +319,7 @@ export function applyAssessmentAction(
   const assessment = structuredClone(assessmentOf(record));
   const manager = () => {
     if (
-      !isProjectManager(actor) ||
-      (assessment.managerId && assessment.managerId !== actor.id)
+      !canPerformAssessmentRole(record, actor, 'manager', users)
     )
       throw new Error('材料评估及人天核定由负责本请求的项目经理执行。');
   };
@@ -342,9 +345,9 @@ export function applyAssessmentAction(
       '额度特批审批中，暂不能修改人天核定或服务依据，请等待审批完成。',
     );
   if (action.type === 'hardware-review') {
-    if (!hardwareItems(record).length) throw new Error('当前请求没有硬件兼容性测试申请项。');
+    if (!hardwareItems(record).length) throw new Error('当前请求未命中本轮硬件评估触发条件。');
     if (assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('材料评估已通过，双方评估结论已锁定。');
-    if (!isHardwareProductManager(actor) || !hardwareReviewers(users).some(user => user.id === actor.id)) throw new Error('仅已启用的硬件产品经理可提交硬件产品经理评估。');
+    if (!canPerformAssessmentRole(record, actor, 'hardware', users) || !isHardwareProductManager(actor) || !hardwareReviewers(users).some(user => user.id === actor.id)) throw new Error('仅已启用的硬件产品经理可提交硬件产品经理评估。');
     text(action.opinion, '评估意见');
     if (!['需补充', '评估通过'].includes(action.outcome)) throw new Error('请选择有效评估结论。');
     const hardware = assessment.hardware = { reviewerId: actor.id, reviewer: actor.name, assignmentId: assessment.hardware?.assignmentId ?? crypto.randomUUID(), rounds: assessment.hardware?.rounds ?? [] };

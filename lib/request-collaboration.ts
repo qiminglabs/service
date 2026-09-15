@@ -12,6 +12,27 @@ export function isRequestApplicant(record: ServiceRequest, actor?: OperationActo
     ? actor.role === '客户'
     : ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师', 'SmartX 硬件产品经理'].includes(actor.role));
 }
+export function hardwareCollaboratorId(record: ServiceRequest): string | undefined {
+  const assessment = record.operations?.assessment;
+  // Routed requests use only the allocated reviewer; retain support for historical reviews.
+  return assessment?.routing ? assessment.routing.hardware?.userId || undefined : assessment?.hardware?.reviewerId || undefined;
+}
+export function withHardwareCollaborators(record: ServiceRequest, users: InternalUser[]): ServiceRequest {
+  const userId = hardwareCollaboratorId(record);
+  const user = users.find(user => user.id === userId && user.status === '启用' && fixedIdentityRoles[user.id] === 'SmartX 硬件产品经理');
+  if (!user || record.internalParticipants?.some(person => person.userId === user.id)) return record;
+  return { ...record, internalParticipants: [...(record.internalParticipants ?? []), { userId: user.id, name: user.name }] };
+}
+export function hardwareCollaboratorRemovalIssue(record: ServiceRequest, previous?: ServiceRequest): string | null {
+  const userId = previous && hardwareCollaboratorId(previous);
+  return userId && previous?.internalParticipants?.some(person => person.userId === userId)
+    && !record.internalParticipants?.some(person => person.userId === userId)
+    ? '硬件产品经理为固定内部协作人，不允许移除。' : null;
+}
+export function fixedInternalCollaboratorLabel(userId: string, applicantId?: string, ownerUserId?: string, hardwareReviewerId?: string): string | undefined {
+  return [userId === ownerUserId && '客户所有人', userId === applicantId && '申请人', userId === hardwareReviewerId && '硬件产品经理']
+    .filter(Boolean).join(' · ') || undefined;
+}
 export function withRequestCollaborators(record: ServiceRequest, contacts: ContactRef[], customers: CustomerRef[] = [], users: InternalUser[] = []): ServiceRequest {
   const audience = record.createdByAudience ?? (users.some(user => user.id === record.createdById) ? 'internal' : requestAudience(record));
   const next = { ...record, createdByAudience: audience, externalCollaborators: [...(record.externalCollaborators ?? [])], internalParticipants: [...(record.internalParticipants ?? [])] };
@@ -26,7 +47,7 @@ export function withRequestCollaborators(record: ServiceRequest, contacts: Conta
   const ownerId = customers.find(c => c.id === record.customerId)?.ownerUserId;
   const owner = users.find(u => u.id === ownerId);
   if (owner && !next.internalParticipants.some(p => p.userId === owner.id)) next.internalParticipants.unshift({ userId: owner.id, name: owner.name });
-  return next;
+  return withHardwareCollaborators(next, users);
 }
 export function applicantRemovalIssue(record: ServiceRequest): string | null {
   if (!record.createdById) return null;

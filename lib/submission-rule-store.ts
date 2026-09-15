@@ -6,6 +6,7 @@ import { parseCompiledRule, parseRuleDefinition, normalizeStoredSubmissionRule, 
 import type { RuleDefinition, SubmissionRule } from './submission-rule-schema';
 import { ruleCompilationKey, RuleConflictError, testSubmissionRule } from './submission-rule-conflicts.ts';
 import type { RuleTestResult } from './submission-rule-conflicts';
+import { builtinSubmissionRules } from './submission-rule-builtins.ts';
 export async function readSubmissionRules(): Promise<SubmissionRule[]> {
   const refs = await readLocal<{ id: string; payload?: unknown }>('references');
   const rules = refs.find(r => r.id === submissionRulesId)?.payload ?? [];
@@ -95,5 +96,15 @@ export async function toggleSubmissionRule(actor: OperationActor, rule: Submissi
     }
     return { ...current, revision: current.revision + 1, updatedAt: new Date().toISOString(), updatedBy: actor.name, active: { ...current.active, enabled: !current.active.enabled } };
     });
+  });
+}
+
+export async function deleteSubmissionRule(actor: OperationActor, rule: Pick<SubmissionRule, 'id' | 'revision'>) {
+  return mutateRules(actor, rules => {
+    if (builtinSubmissionRules.some(builtin => builtin.id === rule.id)) throw new Error('系统预置规则不支持删除。');
+    const current = rules.find(current => current.id === rule.id);
+    if (!current) throw new Error('规则已被移除，请刷新。');
+    if (current.revision !== rule.revision) throw new Error('规则已被其他页面修改，请刷新后重试。');
+    return rules.filter(current => current.id !== rule.id);
   });
 }

@@ -1,3 +1,5 @@
+import { routeAssessmentOnSave } from './assessment-routing.ts';
+import { assessmentRoutingId } from './assessment-routing-schema.ts';
 import { readLocal } from './service-requests.ts';
 import { requestMaterialIssues } from './request-materials.ts';
 import type { ServiceRequest } from './service-requests';
@@ -123,7 +125,10 @@ export async function checkSubmissionQueue(record: ServiceRequest, currentActor:
   const references = await readLocal<{ id: string; payload?: any }>('references');
   const workspace = references.find(r => r.id === 'workspace')?.payload;
   if (!workspace) throw new Error('无法读取校验所需资料，请刷新后重试。');
-  return runValidationQueue(record, { customers: workspace.customers ?? [], contacts: workspace.contacts ?? [], users: workspace.users ?? [], services: workspace.services ?? [], businessObjects: workspace.businessObjects ?? [], currentActor }, events, references.find(r => r.id === submissionRulesId)?.payload);
+  // Preview the same allocation that the transaction will calculate at submission.
+  const evaluated = record.status === '草稿' && events.some(event => event === 'submit' || event === 'resubmit')
+    ? routeAssessmentOnSave({ ...record, status: '待评估' }, record, references.find(r => r.id === assessmentRoutingId)?.payload, workspace.users ?? [], undefined, workspace.customers ?? []) : record;
+  return runValidationQueue(evaluated, { customers: workspace.customers ?? [], contacts: workspace.contacts ?? [], users: workspace.users ?? [], services: workspace.services ?? [], businessObjects: workspace.businessObjects ?? [], currentActor }, events, references.find(r => r.id === submissionRulesId)?.payload);
 }
 export function validationHeading(events: RuleEvent[]) {
   return events.some(e => e === 'submit' || e === 'resubmit') ? '尚未提交，请补充以下内容' : `${events.map(event => ruleEvents[event]).join('、')}未通过校验，请补充以下内容`;

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
+import { fixedInternalCollaboratorLabel } from '@/lib/request-collaboration';
 import { fixedIdentityRoles } from '@/lib/internal-users';
 import {
   Dialog,
@@ -277,6 +278,7 @@ export function RequestExternalCollaborators({
 export function RequestInternalInfo({
   applicantId,
   ownerUserId,
+  hardwareReviewerId,
   users,
   value,
   readonly,
@@ -285,6 +287,7 @@ export function RequestInternalInfo({
 }: {
   applicantId?: string;
   ownerUserId?: string;
+  hardwareReviewerId?: string;
   users: InternalUser[];
   value: InternalParticipant[];
   readonly: boolean;
@@ -308,7 +311,7 @@ export function RequestInternalInfo({
         const user = users.find((entry) => entry.id === person.userId);
         return {
           id: person.userId,
-          fixed: person.userId === ownerUserId ? (person.userId === applicantId ? '客户所有人 · 申请人' : '客户所有人') : person.userId === applicantId ? '申请人' : undefined,
+          fixed: fixedInternalCollaboratorLabel(person.userId, applicantId, ownerUserId, hardwareReviewerId),
           name: person.name,
           details: [
             fixedIdentityRoles[person.userId],
@@ -330,7 +333,7 @@ export function RequestInternalInfo({
         ])
       }
       onRemove={(id) =>
-        id !== ownerUserId && id !== applicantId && onChange(value.filter((person) => person.userId !== id))
+        !fixedInternalCollaboratorLabel(id, applicantId, ownerUserId, hardwareReviewerId) && onChange(value.filter((person) => person.userId !== id))
       }
     />
   );

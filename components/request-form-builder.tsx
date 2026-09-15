@@ -1,5 +1,6 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
+import { startRequestFieldDrag } from '@/lib/request-field-drag';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,7 +20,7 @@ import {
   type CatalogService,
   type RequestConfig,
 } from '@/lib/service-requests';
-import { requestFormOrder, requestFieldPlacements, setRequestFieldPlacement } from '@/lib/request-form-layout';
+import { requestFormOrder, requestFieldWidth, moveRequestFormField } from '@/lib/request-form-layout';
 import { RequestFormLayout } from '@/components/request-form-layout';
 import { editionFieldRequirement, fieldRequirementLabels, isEditionRequirement, withEditionFieldDependency, type FieldRequirement } from '@/lib/request-field-requirements';
 
@@ -46,7 +47,23 @@ export function RequestFormBuilder({
   const [selected, select] = useState('method');
   const templateInput = useRef<HTMLInputElement>(null);
   const [query, search] = useState('');
-  const [hover, setHover] = useState<string | null>(null);
+  const builder = useRef<HTMLDivElement>(null);
+  const cancelDrag = useRef<(() => void) | null>(null);
+  const suppressDragClick = useRef(false);
+  useEffect(() => () => cancelDrag.current?.(), []);
+  useEffect(() => { if (busy) cancelDrag.current?.(); }, [busy]);
+  function beginDrag(event: PointerEvent<HTMLButtonElement>, id: string) {
+    if (busy || event.button !== 0 || !event.isPrimary || !builder.current) return;
+    cancelDrag.current?.();
+    suppressDragClick.current = false;
+    cancelDrag.current = startRequestFieldDrag({
+      source: event.currentTarget, root: builder.current, id, order,
+      pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      onDrag: () => { suppressDragClick.current = true; },
+      onEnd: () => { setTimeout(() => { suppressDragClick.current = false; }, 0); },
+      onDrop: add,
+    });
+  }
   const [materialError, setMaterialError] = useState('');
   const material = config.materials.find(
     (m) => `material:${m.id}` === selected,
@@ -89,7 +106,6 @@ export function RequestFormBuilder({
       })),
   ];
   const order = requestFormOrder(config);
-  const placements = requestFieldPlacements(config);
   const field = all.find((f) => f.id === selected);
   const specialRequirement = field?.type === 'address' ? 'onsite' : editionFieldRequirement(selected);
   const updateWithDependencies = (next: RequestConfig) => update(withEditionFieldDependency(next,
@@ -106,11 +122,9 @@ export function RequestFormBuilder({
       : id === 'businessObjects'
         ? !!config.basicFields?.businessObjects?.required
         : requestFieldIsRequired(config, id, ''));
-  const add = (id: string, before?: string, column?: 'left' | 'right') => {
+  const add = (id: string, before?: string) => {
     if (busy || !all.some((f) => f.id === id)) return;
-    let next = { ...config, fieldColumns: { ...config.fieldColumns } };
-    for (const [key, position] of Object.entries(placements))
-      if (position !== 'full') next.fieldColumns[key] = position;
+    const next: RequestConfig = { ...config, fieldColumns: undefined };
     if (id === 'description' || id === 'businessObjects')
       next.basicFields = {
         ...config.basicFields,
@@ -132,16 +146,12 @@ export function RequestFormBuilder({
           [id]: f.options.filter((o) => o.enabled).map((o) => o.value),
         };
     }
-    const arranged = order.filter((key) => key !== id);
-    const targetBefore = before === id ? order[order.indexOf(id) + 1] : before;
-    const index = targetBefore ? arranged.indexOf(targetBefore) : -1;
-    arranged.splice(index < 0 ? arranged.length : index, 0, id);
+    const arranged = moveRequestFormField(order, id, before);
     next.fieldOrder = arranged;
     next.fields = arranged.filter((key) => next.fields.includes(key));
     const requirement = editionFieldRequirement(id);
     if (requirement && !config.fields.includes(id))
       next.fieldRequiredWhen = { ...config.fieldRequiredWhen, [id]: requirement };
-    if (column) next = { ...setRequestFieldPlacement(next, id, column), fieldColumns: { ...next.fieldColumns, [id]: column } };
     updateWithDependencies(next);
     select(id);
   };
@@ -165,7 +175,16 @@ export function RequestFormBuilder({
     select('method');
   };
   return (
-    <div className="rf-builder">
+    <div className="rf-builder" ref={builder}
+      onDragStart={(event) => event.preventDefault()}
+      onClickCapture={(event) => {
+        if (suppressDragClick.current && event.detail !== 0) {
+          suppressDragClick.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+    >
       <aside className="rf-library">
         <h3>可用字段</h3>
         <p className="sr-help">拖入表单，或点击添加</p>
@@ -183,10 +202,7 @@ export function RequestFormBuilder({
                 type="button"
                 key={f.id}
                 disabled={busy}
-                draggable={!busy}
-                onDragStart={(e) =>
-                  e.dataTransfer.setData('application/x-request-field', f.id)
-                }
+                onPointerDown={(event) => beginDrag(event, f.id)}
                 onClick={() =>
                   order.includes(f.id) ? select(f.id) : add(f.id)
                 }
@@ -211,21 +227,13 @@ export function RequestFormBuilder({
       <main className="rf-center">
         <div className="rf-preview-heading">
           <strong>申请表单预览</strong>
-          <span>左右列独立排列 · 可拖入指定列或在属性中调整</span>
+          <span>按字段顺序自动排列 · 拖动可调整先后顺序</span>
         </div>
         <div className="rf-paper">
           <h3>{service.name}</h3>
           <h3 className="rf-service-section-title">服务需求</h3>
-          <div
-            className="rf-canvas"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              add(e.dataTransfer.getData('application/x-request-field'));
-              setHover(null);
-            }}
-          >
-            <RequestFormLayout config={config} onPlaceField={busy ? undefined : (id, column, before) => add(id, before, column)} renderField={(id) => {
+          <div className="rf-canvas">
+            <RequestFormLayout config={config} renderField={(id) => {
               const f = all.find((f) => f.id === id);
               if (!f) return null;
               return (
@@ -233,31 +241,13 @@ export function RequestFormBuilder({
                   key={id}
                   className="rf-preview-field"
                   data-selected={selected === id}
-                  data-over={hover === id}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setHover(id);
-                  }}
-                  onDragLeave={() => setHover(null)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const dragged = e.dataTransfer.getData(
-                      'application/x-request-field',
-                    );
-                    if (dragged !== id) add(dragged, id, placements[id] === 'full' ? undefined : placements[id] as 'left' | 'right');
-                    setHover(null);
-                  }}
+                  data-field-id={id}
                 >
                   <button
                     type="button"
                     className="rf-select-field"
-                    draggable={!busy}
                     disabled={busy}
-                    onDragStart={(e) =>
-                      e.dataTransfer.setData('application/x-request-field', id)
-                    }
+                    onPointerDown={(event) => beginDrag(event, id)}
                     onClick={() => select(id)}
                     aria-label={`配置${f.name}`}
                   >
@@ -495,21 +485,21 @@ export function RequestFormBuilder({
               <small>{fieldTypes[field.type]}</small>
             </div>
             <fieldset disabled={busy}>
-              <legend>布局位置</legend>
+              <legend>字段宽度</legend>
               <div className="rf-width-options">
-                {(['left', 'right', 'full'] as const).map((position) => (
+                {(['half', 'full'] as const).map((position) => (
                   <label key={position}>
                     <input
                       type="radio"
-                      name="field-position"
-                      checked={placements[selected] === position}
-                      onChange={() => update(setRequestFieldPlacement(config, selected, position))}
+                      name="field-width"
+                      checked={requestFieldWidth(config, selected) === position}
+                      onChange={() => update({ ...config, fieldColumns: undefined, fieldWidths: { ...config.fieldWidths, [selected]: position } })}
                     />
-                    {position === 'full' ? '整行' : position === 'left' ? '左列' : '右列'}
+                    {position === 'full' ? '整行' : '半行'}
                   </label>
                 ))}
               </div>
-              <p className="sr-help">左右列各自向下排列，整行字段排在两列之后。</p>
+              <p className="sr-help">半行字段按顺序从左到右排列，整行字段独占一行。</p>
             </fieldset>
             {specialRequirement ? <fieldset className="rf-address-required" disabled={busy}>
               <legend>特殊填写要求</legend>

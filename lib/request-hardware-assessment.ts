@@ -1,9 +1,10 @@
+import { canPerformAssessmentRole } from './assessment-routing.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
 import type { OperationActor } from './request-operations';
 import { operationIdentities, fixedIdentityRoles } from './internal-users.ts';
 
-// Stable ID from the existing imported catalog; renaming the service does not change this rule.
-export const hardwareCompatibilityServiceId = 'SC-IMP-008';
+import { hardwareItems } from './hardware-assessment-trigger.ts';
+export { hardwareItems, hardwareCompatibilityServiceId } from './hardware-assessment-trigger.ts';
 export type HardwareReview = {
   id: string; assignmentId: string; authorId: string; author: string; at: string;
   outcome: '需补充' | '评估通过'; opinion: string;
@@ -14,8 +15,7 @@ export type HardwareReview = {
 export type HardwareAssessment = {
   reviewerId: string; reviewer: string; assignmentId: string; rounds: HardwareReview[];
 };
-export const hardwareItems = (record: ServiceRequest) => record.items.filter(item => item.serviceId === hardwareCompatibilityServiceId);
-// Interim role-based eligibility; replace here when backend allocation is introduced.
+// Fixed directory roles remain the authority for legacy and routed assessments.
 export const isHardwareProductManager = (actor?: OperationActor) => !!actor?.id && actor.role === 'SmartX 硬件产品经理' && fixedIdentityRoles[actor.id] === actor.role;
 export const hardwareReviewers = (users: InternalUser[]) => operationIdentities(users).filter(user => user.role === 'SmartX 硬件产品经理');
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -35,7 +35,7 @@ export function currentHardwareReview(record: ServiceRequest): HardwareReview | 
 export function hardwarePassIssue(record: ServiceRequest, users: InternalUser[]): string | null {
   if (!hardwareItems(record).length) return null;
   const hardware = record.operations?.assessment?.hardware;
-  if (!hardware || !hardwareReviewers(users).some(user => user.id === hardware.reviewerId)) return '请由已启用的硬件产品经理完成评估。';
+  if (!hardware || (record.operations?.assessment?.routing && !canPerformAssessmentRole(record, { id: hardware.reviewerId, name: hardware.reviewer, role: 'SmartX 硬件产品经理' }, 'hardware', users)) || !hardwareReviewers(users).some(user => user.id === hardware.reviewerId)) return '请由已启用的硬件产品经理完成评估。';
   if (currentHardwareReview(record)?.outcome !== '评估通过') return '硬件产品经理评估尚未通过或材料已变化，请由硬件产品经理重新评估。';
   return null;
 }
