@@ -16,6 +16,7 @@ import {
 import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { RequestFlowDiagram } from '@/components/request-flow-diagram';
 import { RequestFlowSettings } from '@/components/request-flow-settings';
+import { ApprovalFlowSettings } from '@/components/approval-flow-settings';
 import { ExecutionFlowSettings } from '@/components/execution-flow-settings';
 import { RequestRuleSettings } from '@/components/request-rule-settings';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
@@ -359,6 +360,7 @@ export function RequestFieldSettings({
         {section === 'request-flow' && <>
           <TabsContent value="assessment-manager"><RequestFlowSettings role="manager" actor={actorIdentity} /></TabsContent>
           <TabsContent value="assessment-hardware"><RequestFlowSettings role="hardware" actor={actorIdentity} /></TabsContent>
+          <TabsContent value="approval-designer"><ApprovalFlowSettings actor={actorIdentity} /></TabsContent>
         </>}
         {section === 'pricing' && <TabsContent value="entitlement-conversions">
           <EntitlementConversions actor={actor} />

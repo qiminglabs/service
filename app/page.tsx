@@ -30,6 +30,8 @@ import {
   type PartnerUser,
 } from '@/lib/partner-directory';
 import { migrateRoleLabel } from '@/lib/request-operations';
+import { reportingRelationshipIssue } from '@/lib/approval-flows';
+import { canManageRouting } from '@/lib/assessment-routing-store';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch, SetStateAction, ReactNode } from 'react';
@@ -1148,6 +1150,9 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
       const phone = (referenceForm.phone ?? '').trim();
       if (phone && !/^[+\d][\d\s()-]{5,24}$/.test(phone))
         return setReferenceFormError('请填写有效的电话。');
+      const reportsToUserId = referenceForm.reportsToUserId || '';
+      const reportingIssue = reportingRelationshipIssue(users, `USR-${nextNumber(users.length)}`, reportsToUserId);
+      if (reportingIssue) return setReferenceFormError(reportingIssue);
       setUsers((records) => [
         ...records,
         {
@@ -1156,6 +1161,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           email: normalizedEmail,
           phone,
           department: referenceForm.department.trim(),
+          reportsToUserId: reportsToUserId || undefined,
           status: '启用',
         },
       ]);
@@ -1647,6 +1653,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               onCustomerOwnerChange={(id, ownerUserId) => {
                 if (ownerUserId && !users.some(user => user.id === ownerUserId && user.status === '启用')) return;
                 setCustomers(records => records.map(record => record.id === id ? { ...record, ownerUserId: ownerUserId || undefined } : record));
+              }}
+              canEditReporting={canManageRouting(currentActor)}
+              onReportingChange={(id, reportsToUserId) => {
+                if (!canManageRouting(currentActor)) return;
+                const issue = reportingRelationshipIssue(users, id, reportsToUserId);
+                if (issue) { setReferenceStorageError(issue); return; }
+                setUsers(records => records.map(record => record.id === id ? { ...record, reportsToUserId: reportsToUserId || undefined } : record));
               }}
               onDisableCustomer={(id) =>
                 setCustomers((records) =>
@@ -2274,6 +2287,8 @@ type ReferenceDataViewProps = {
   onDisablePartnerUser: (id: string) => void;
   onCreate: () => void;
   onCustomerOwnerChange: (id: string, ownerUserId: string) => void;
+  canEditReporting: boolean;
+  onReportingChange: (id: string, reportsToUserId: string) => void;
   onDisableCustomer: (id: string) => void;
   onDisableContact: (id: string) => void;
   onDisableAsset: (id: string) => void;
@@ -2753,6 +2768,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                 <th>电话</th>
                 <th>邮箱</th>
                 <th>部门</th>
+                <th>汇报人</th>
                 <th>角色</th>
                 <th>状态</th>
                 <th>记录编号</th>
@@ -2768,6 +2784,13 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>{record.phone || '—'}</td>
                   <td>{record.email}</td>
                   <td>{record.department}</td>
+                  <td>
+                    {props.canEditReporting ? <select className="reference-reporting-select" aria-label={`${record.name}的汇报人`} value={record.reportsToUserId ?? ''} onChange={event => props.onReportingChange(record.id, event.target.value)}>
+                      <option value="">未设置</option>
+                      {record.reportsToUserId && !props.users.some(user => user.id === record.reportsToUserId) && <option value={record.reportsToUserId} disabled>原汇报人已不存在</option>}
+                      {props.users.filter(user => user.id !== record.id && (user.status === '启用' || user.id === record.reportsToUserId)).map(user => <option key={user.id} value={user.id} disabled={!!reportingRelationshipIssue(props.users, record.id, user.id)}>{user.name} · {user.department}{user.status !== '启用' ? '（已停用）' : ''}</option>)}
+                    </select> : props.users.find(user => user.id === record.reportsToUserId)?.name || '—'}
+                  </td>
                   <td>{fixedIdentityRoles[record.id] ?? '—'}</td>
                   <td>
                     <span
@@ -3177,6 +3200,14 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   onChange={(event) => update('department', event.target.value)}
                   placeholder="例如：技术服务部"
                 />
+              </label>
+              <label htmlFor="user-reports-to">
+                <span>汇报人</span>
+                <select id="user-reports-to" value={props.form.reportsToUserId ?? ''} onChange={event => update('reportsToUserId', event.target.value)}>
+                  <option value="">未设置</option>
+                  {props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{user.name} · {user.department}</option>)}
+                </select>
+                <span className="sr-help">关联其他内部用户，用于直属主管和逐级审批。</span>
               </label>
             </>
           ) : null}

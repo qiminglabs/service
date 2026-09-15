@@ -326,6 +326,7 @@ export type InternalUser = {
   email: string;
   phone?: string;
   department: string;
+  reportsToUserId?: string;
   status: string;
 };
 export type InternalParticipant = {
