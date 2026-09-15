@@ -38,8 +38,8 @@ export function workspaceDayQuantityIssue(next: DayWorkspace, previous?: DayWork
     const old = previous?.services?.find(item => item.id === service.id);
     if (service.priceUnit === '巡检权益' || service.priceUnit === '升级权益') continue;
     if (service.defaultQuantity !== old?.defaultQuantity && service.defaultQuantity !== undefined
-      && (!isDayQuantity(service.defaultQuantity) || service.defaultQuantity <= 0))
-      return '最小人天数量须大于 0，最多一位小数。';
+      && !isDayQuantity(service.defaultQuantity))
+      return '最小人天数量须大于等于 0，最多一位小数。';
   }
   return null;
 }

@@ -17,6 +17,7 @@ import { assessmentRoutingId } from './assessment-routing-schema.ts';
 import { routeAssessmentOnSave } from './assessment-routing.ts';
 import { approvalRulesId, readApprovalRulesPayload } from './approval-rules.ts';
 import { addSharedMaterialSample, fillSharedSampleMaterials } from './demo-shared-materials.ts';
+import { hardwareItems } from './hardware-assessment-trigger.ts';
 
 type Sources = {
   services: CatalogService[];
@@ -29,10 +30,11 @@ type Sources = {
 };
 type Reference = { id: string; payload?: unknown };
 export const requestSamplesMarker = 'service-request-samples-v1';
+export const presalesRequestSamplesMarker = 'request-samples-presales-2026-09-16-v1';
 
 // Build actual workflow snapshots, not status-only placeholders. Existing records
 // participate in reservation calculations but are never changed by initialization.
-export function buildRequestSamples(sources: Sources, existing: ServiceRequest[], configs: RequestConfig[] = [], references: Reference[] = [], now = new Date(), includeRoutingSamples = false) {
+export function buildRequestSamples(sources: Sources, existing: ServiceRequest[], configs: RequestConfig[] = [], references: Reference[] = [], now = new Date(), includeRoutingSamples = false, scope: 'all' | 'presales' = 'all') {
   const identities = operationIdentities(sources.users);
   const manager = identities.find(person => person.role === 'SmartX 项目经理');
   const sales = identities.find(person => person.role === 'SmartX 销售经理'
@@ -47,7 +49,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
   const selections = [[days], [days, inspection], [days, upgrade, inspection], [days, upgrade], [inspection]];
   const titles = ['平台建设服务准备', '集群维护与巡检申请', '集群升级及综合巡检', '平台建设与升级交付', '季度巡检计划调整'];
   const states: ServiceRequest['status'][] = ['草稿', '待评估', '待确认', '待受理', '已取消'];
-  if (includeRoutingSamples) {
+  if (includeRoutingSamples || scope === 'presales') {
     const hardware = catalogs.find(service => service.name === '硬件兼容性测试');
     selections.push([hardware ?? days], [hardware ?? days], [days], [days], [days, upgrade]);
     titles.push('硬件兼容性远程评估', '硬件兼容性现场评估', '现场服务逐级审批', '默认审批人分配演示', '缺少汇报人兜底演示');
@@ -55,12 +57,16 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     selections.push([days, upgrade], [days, upgrade, inspection], [days, inspection]);
     titles.push('共用环境材料－双服务项草稿', '共用环境材料－三服务项评估', '共用环境材料－巡检组合确认');
     states.push('草稿', '待评估', '待确认');
+    selections.push([days], [days, inspection], [days, upgrade]);
+    titles.push('售前评估－方案评估中', '售前评估－评估已完成', '售前评估转交付－待关联服务依据');
+    states.push('待评估', '评估完成', '待评估');
   }
   const routing = references.find(reference => reference.id === assessmentRoutingId)?.payload;
   const storedApprovalRules = references.find(reference => reference.id === approvalRulesId)?.payload;
   const approvalRules = storedApprovalRules !== undefined || includeRoutingSamples ? readApprovalRulesPayload(storedApprovalRules) : undefined;
   const result: ServiceRequest[] = [];
   for (let index = 0; index < selections.length; index++) {
+    if (scope === 'presales' && index < 13) continue;
     const id = `SR-DEMO-${String(index + 1).padStart(3, '0')}`;
     if (existing.some(record => record.id === id)) continue;
     const selected = selections[index];
@@ -79,6 +85,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     const applicant = index === 9 ? identities.find(person => person.role === 'SmartX 系统管理员') ?? sales : sales;
     let record = newRequest(`【示例】${titles[index]}`, customer.id, applicant.name, contact.id, applicant.id, applicant.role);
     record = { ...record, id, createdAt: at, updatedAt: at, expectedServiceDate: expected,
+      requestType: index >= 13 ? '售前评估' : '服务交付',
       description: '演示数据：用于展示服务申请、材料评估及客户确认流程，不代表真实交付承诺。',
       internalParticipants: [...new Map([applicant, sales, manager,
         identities.find(person => person.id === customer.ownerUserId)].filter(Boolean)
@@ -118,7 +125,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
         return item;
       }),
     };
-    if (index >= 10) record = addSharedMaterialSample(record, applicant);
+    if (index >= 10 && index <= 12) record = addSharedMaterialSample(record, applicant);
     record = fillSharedSampleMaterials(record, applicant);
     record.externalCollaborators = [{ contactId: contact.id, name: contact.name, phone: contact.phone ?? '', email: contact.email ?? '' }];
     const presales = identities.find(person => person.role === 'SmartX 售前工程师');
@@ -156,6 +163,27 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
       record = applyRequestAction(record, { type: 'worklog-add', date: at.slice(0,10), startTime: '14:00', endTime: '15:00', category: '客户沟通', description: '【演示】与客户确认维护窗口及服务依据。' }, sales, sources.assets, eventAt(51));
       if (index === 1) record = applyRequestAction(record, { type: 'meeting-schedule', title: '【演示】实施窗口确认会', scheduledDate: expected, scheduledTime: '14:00', durationMinutes: 30 }, manager, sources.assets, eventAt(52));
     }
+    if (index >= 14) {
+      const records = [...existing, ...result];
+      const assignedManager = identities.find(person => person.id === record.operations?.assessment?.managerId) ?? manager;
+      const pricing = entitlementPricingContext(references, records);
+      pricing.businessObjects = sources.businessObjects;
+      let step = 0;
+      const act = (action: AssessmentAction, actor: OperationActor = assignedManager) => {
+        record = applyAssessmentAction(record, action, actor, sources.assets, sources.users, records,
+          new Date(Date.parse(at) + ++step * 3600000).toISOString(), sources.services, sources.customers, pricing);
+      };
+      if (hardwareItems(record).length) {
+        const hardwareManager = identities.find(person => person.id === record.operations?.assessment?.hardware?.reviewerId);
+        if (!hardwareManager) throw new Error('售前样例缺少有效的硬件评估负责人。');
+        act({ type: 'hardware-review', outcome: '评估通过', opinion: '【演示】已核对硬件兼容性及环境配置，符合售前方案要求。' }, hardwareManager);
+      }
+      act({ type: 'review', outcome: '评估通过', opinion: '【演示】售前方案与环境材料已核对，服务范围可实施。' });
+      act({ type: 'effort', items: record.items.map(item => ({ itemId: item.id,
+        estimatedDays: Math.max(2, sources.services.find(service => service.id === item.serviceId)?.defaultQuantity ?? 1) })),
+        note: '【演示】售前评估已完成，核定人天作为后续交付依据。' });
+      if (index === 15) act({ type: 'convert-to-delivery' });
+    }
     if (states[index] === '待确认' || states[index] === '待受理') {
       const records = [...existing, ...result];
       const pricing = entitlementPricingContext(references, records);
@@ -169,7 +197,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
         record = applyAssessmentAction(record, action, actor, sources.assets, sources.users, records,
           new Date(Date.parse(at) + ++step * 3600000).toISOString(), sources.services, historicalCustomers, pricing, approvalRules);
       };
-      act({ type: 'review', outcome: '评估通过', scope: record.items.map(item => item.serviceName).join('、'), opinion: '示例环境清单与需求材料已核对，可以进入服务评估。', risks: '正式执行前再次确认维护窗口和备份情况。' });
+      act({ type: 'review', outcome: '评估通过', opinion: '示例环境清单与需求材料已核对，可以进入服务评估。' });
       act({ type: 'effort', items: record.items.map(item => ({ itemId: item.id,
         estimatedDays: Math.max(2, sources.services.find(service => service.id === item.serviceId)?.defaultQuantity ?? 1) })), note: '演示估算，以实际服务评估为准。' });
       act({ type: 'plan', allocations: [], salesId: owner.id }, applicant);

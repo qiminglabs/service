@@ -5,9 +5,10 @@ export const backendSettingsSections = [
     { key: 'submission', label: '提交校验' },
     { key: 'assessment-manager', label: '项目经理分配' },
     { key: 'assessment-hardware', label: '硬件产品经理分配' },
-    { key: 'approval-designer', label: '特殊审批流程' },
+    { key: 'approval-designer', label: '特殊审批' },
   ] },
   { key: 'pricing', label: '计价与权益', tabs: [{ key: 'entitlement-conversions', label: '权益换算' }] },
+  { key: 'execution-flow', label: '服务执行流程', tabs: [] },
 ] as const;
 
 export type BackendSettingsSection = typeof backendSettingsSections[number]['key'];

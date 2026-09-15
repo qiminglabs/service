@@ -7,11 +7,13 @@ export const ruleEvents = {
 } as const;
 export const ruleScopes = { all: '全部', internal: '内部申请', customer: '客户申请' } as const;
 export type RuleEvent = keyof typeof ruleEvents;
+export const submissionCheckEvents: readonly RuleEvent[] = ['submit', 'resubmit'];
 export type RuleScope = keyof typeof ruleScopes;
 export const factCatalog = {
   title: { type: 'string', label: '申请主题' },
   description: { type: 'string', label: '申请说明' },
   expectedServiceDate: { type: 'string', label: '期望服务日期（YYYY-MM-DD）' },
+  expectedServiceDateUncertain: { type: 'boolean', label: '已明确选择期望服务日期暂不确定，且未指定具体日期' },
   expectedLeadDays: { type: 'number', label: '期望服务日期距检查当天的自然天数；未填或无效时不通过数值比较' },
   customerName: { type: 'string', label: '客户名称' },
   itemCount: { type: 'number', label: '申请项数量' },
@@ -28,8 +30,8 @@ export const factCatalog = {
   hasOnsiteItem: { type: 'boolean', label: '是否包含现场服务申请项' },
   hasRemoteItem: { type: 'boolean', label: '是否包含远程服务申请项' },
   hasBusinessObjects: { type: 'boolean', label: '每个申请项都关联了业务对象（无申请项为否）' },
-  requiredMaterialsComplete: { type: 'boolean', label: '每个申请项的必填材料已上传；遵循该申请的材料可见范围' },
-  completeness: { type: 'boolean', label: '基本信息、申请项字段、必填材料、客户及引用资料通过齐套检查' },
+  requiredMaterialsComplete: { type: 'boolean', label: '按当前申请类型（售前评估或服务交付）检查必传材料已上传；遵循该申请的材料可见范围，共用材料只需上传一次' },
+  completeness: { type: 'boolean', label: '基本信息、申请项字段、当前申请类型的必传材料、客户及引用资料通过齐套检查' },
   managerAssigned: { type: 'boolean', label: '当前评估项目经理已分配且为启用的项目经理' },
   assessedDays: { type: 'number', label: '已核定计价总人天；未核定时不通过数值比较' },
 } as const;
@@ -61,10 +63,15 @@ export function parseRuleDefinition(value: unknown): RuleDefinition {
   if (typeof data.promptText !== 'string' || !data.promptText.trim() || data.promptText.length > 4000) throw new Error('请输入 1–4000 字的提示文本。');
   return { scope: data.scope as RuleScope, events: [...new Set(data.events)] as RuleEvent[], requirement: data.requirement.trim(), promptText: data.promptText.trim() };
 }
-// Upgrade saved rules only. New writes must explicitly provide the required prompt.
+export function parseSubmissionRuleDefinition(value: unknown): RuleDefinition {
+  return parseRuleDefinition({ ...object(value), events: [...submissionCheckEvents] });
+}
+// Upgrade saved custom rules only. Built-in workflow checks retain their events.
+// New writes must explicitly provide the required prompt.
 export function normalizeStoredSubmissionRule(value: unknown): SubmissionRule {
   const rule = object(value);
   const upgrade = (data: Record<string, unknown>, compiled?: unknown) => {
+    data = { ...data, events: [...submissionCheckEvents] };
     if (Object.hasOwn(data, 'promptText')) return data;
     const checks = compiled && typeof compiled === 'object' ? (compiled as CompiledRule).checks : undefined;
     const messages = Array.isArray(checks) ? checks.map(check => check?.message).filter((message): message is string => typeof message === 'string' && !!message.trim()) : [];

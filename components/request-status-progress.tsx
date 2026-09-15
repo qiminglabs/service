@@ -26,7 +26,7 @@ export function RequestStatusProgress(props: { status: RequestStatus } | { recor
                 {step.label === '已取消' ? (
                   <Square size={13} />
                 ) : step.state === 'complete' ||
-                  (step.state === 'current' && step.label === '已转服务项目') ? (
+                  (step.state === 'current' && ['已转服务项目', '评估完成'].includes(step.label)) ? (
                   <Check size={16} />
                 ) : (
                   index + 1

@@ -14,12 +14,13 @@ import { ApprovalFlowSettings } from '@/components/approval-flow-settings';
 import { canManageRouting } from '@/lib/assessment-routing-store';
 import { readApprovalRules, saveApprovalRule, deleteApprovalRule, saveDefaultApprovalUser } from '@/lib/approval-flow-store';
 import { approvalRuleIssue, approvalRuleConditionLabel, newApprovalRule, sortApprovalRules, resolveApprovalRule, type ApprovalRule } from '@/lib/approval-rules';
-import { describeRoute, matchesRoute, parseRoutePredicate, routesOverlap } from '@/lib/assessment-routing-schema';
+import { describeRoute, matchesRoute, parseRoutePredicate, routesOverlap, type RoutingDictionary } from '@/lib/assessment-routing-schema';
 import { readRoutingData } from '@/lib/assessment-routing-store';
 import type { OperationActor } from '@/lib/request-operations';
 
 export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
   const [users, setUsers] = useState<InternalUser[]>([]);
+  const [routingDictionary, setRoutingDictionary] = useState<RoutingDictionary>({ customers: [], services: [] });
   const [defaultUserId, setDefaultUserId] = useState(''), [savedDefaultUserId, setSavedDefaultUserId] = useState(''), [defaultRevision, setDefaultRevision] = useState(0);
   const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
@@ -33,6 +34,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
   const allowed = canManageRouting(actor);
   const duplicate = !!draft && rules.some(rule => rule.id !== draft.id && rule.priority === draft.priority);
   function applyData(data: Awaited<ReturnType<typeof readApprovalRules>>) {
+    setRoutingDictionary(data.dictionary);
     setRules(data.collection.rules); setUsers(data.users); setDefaultUserId(data.collection.defaultUserId ?? ''); setSavedDefaultUserId(data.collection.defaultUserId ?? ''); setDefaultRevision(data.collection.defaultRevision ?? 0); setReady(true);
   }
   async function saveDefault() {
@@ -66,6 +68,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     try {
       const [latest, latestRules] = await Promise.all([readRoutingData(), readApprovalRules()]);
       setRules(latestRules.collection.rules);
+      setRoutingDictionary(latestRules.dictionary);
       if (latestRules.collection.rules.some(rule => rule.id !== draft.id && rule.priority === draft.priority)) throw new Error('优先级重复，请选择其他数字。');
       const dictionary = {
         customers: latest.workspace.customers.map(({ id, name, team }) => ({ id, name, team })),
@@ -117,10 +120,10 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     {!allowed && <p className="sr-help">仅系统管理员可维护特殊审批规则。</p>}
     <section className="routing-default" aria-label="默认审批人">
       <div><strong>默认审批人</strong></div>
-      <div className="routing-inline">
+      <div className="routing-inline routing-default-controls">
         <UserSearchSelect label="默认审批人" users={users} value={defaultUserId} onChange={setDefaultUserId}
           disabled={!allowed || busy || !ready} emptyHint="未设置时，无法匹配的请求将待分配。" />
-        {allowed && <Button variant="outline" disabled={!ready || busy || defaultUserId === savedDefaultUserId} onClick={() => void saveDefault()}>保存默认分配</Button>}
+        {allowed && <Button variant="outline" disabled={!ready || busy || defaultUserId === savedDefaultUserId} onClick={() => void saveDefault()}>保存</Button>}
       </div>
     </section>
     <section className="routing-rules" aria-label="条件审批规则">
@@ -128,7 +131,17 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     <div className="table-scroll"><table className="reference-table app-list-table approval-rules-table">
       <thead><tr><th>优先级</th><th>规则名称</th><th>自然语言描述</th><th>审批节点数量</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
       <tbody>{sortApprovalRules(rules).map(rule => <tr key={rule.id}>
-        <td>{rule.priority}</td><td><strong>{rule.name}</strong></td><td>{approvalRuleConditionLabel(rule.conditions)}</td>
+        <td>{rule.priority}</td><td><strong>{rule.name}</strong></td><td>
+          <div className="submission-rule-requirement">
+            {approvalRuleConditionLabel(rule.conditions)}
+            <details>
+              <summary>查看执行条件</summary>
+              <p>{rule.conditions.compiled && rule.conditions.testedRequirement === rule.conditions.requirement.trim()
+                ? describeRoute(rule.conditions.compiled, routingDictionary)
+                : '尚未生成有效执行条件，请编辑条件并转译测试。'}</p>
+            </details>
+          </div>
+        </td>
         <td>{rule.flow.nodes.length}</td>
         <td>{rule.updatedAt ? new Date(rule.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td><td>{rule.updatedBy ?? '—'}</td>
         <td><div className="rule-table-actions">{allowed && <Button variant="ghost" disabled={busy} onClick={() => edit(rule)}>编辑条件</Button>}<Button variant="ghost" disabled={busy} onClick={() => setFlowRuleId(rule.id)}>{allowed ? '配置审批流程' : '查看审批流程'}</Button>{allowed && <Button variant="ghost" disabled={busy} onClick={() => { setDeleteTarget(rule); setDeleteError(''); }}>删除</Button>}</div></td>

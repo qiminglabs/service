@@ -7,7 +7,7 @@ import { applicantRemovalIssue, customerCollaboratorsIssue, isRequestApplicant, 
 import { fixedIdentityRoles } from './internal-users.ts';
 import { assessedEffort } from './request-assessment.ts';
 import { requestCompletenessIssues } from './request-validation-builtins.ts';
-import { factCatalog, parseCompiledRule, parseRuleDefinition, normalizeStoredSubmissionRule, ruleEvents, submissionRulesId } from './submission-rule-schema.ts';
+import { factCatalog, parseCompiledRule, parseRuleDefinition, normalizeStoredSubmissionRule, ruleEvents, submissionCheckEvents, submissionRulesId } from './submission-rule-schema.ts';
 import type { RuleDefinition, RuleEvent, RuleFact, SubmissionRule, RuleCondition } from './submission-rule-schema';
 export type ValidationContext = Parameters<typeof requestCompletenessIssues>[1];
 export type ValidationFailure = { ruleId: string; requirement: string; message: string };
@@ -46,6 +46,7 @@ export function ruleFacts(record: ServiceRequest, refs: ValidationContext, now =
   const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   return {
     title: record.title, description: record.description,
+    expectedServiceDateUncertain: record.expectedServiceDateUncertain === true && !date,
     expectedServiceDate: date ?? '', expectedLeadDays: validDate ? (Date.parse(date) - today) / 86400000 : null,
     customerName: refs.customers.find(c => c.id === record.customerId)?.name ?? '', itemCount: record.items.length,
     internalCount: new Set(people.map(p => p.id)).size,
@@ -79,11 +80,11 @@ export function evaluateCondition(condition: RuleCondition, facts: ReturnType<ty
   }
 }
 export function runValidationQueue(record: ServiceRequest, refs: ValidationContext, events: RuleEvent[], stored: unknown = []): ValidationFailure[] {
+  events = events.filter(event => submissionCheckEvents.includes(event));
   if (!events.length) return [];
   const failures: ValidationFailure[] = [];
   const audience = requestAudience(record);
-  // Material completeness follows the submitting applicant even when a later
-  // checkpoint is performed by a manager; catalog scope still follows origin.
+  // Material completeness follows the submitting applicant; catalog scope follows origin.
   const context = { ...refs, audience, materialActorId: audience === 'customer' ? record.createdById : refs.currentActor?.id };
   const applies = (rule: RuleDefinition) => (rule.scope === 'all' || rule.scope === audience) && rule.events.some(event => events.includes(event));
   const facts = ruleFacts(record, context);

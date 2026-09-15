@@ -1,4 +1,7 @@
 import { specialApprovalSaveIssue } from './approval-execution.ts';
+import { requestTypeOf, requestTypes, type RequestType } from './request-types.ts';
+import { requestTypeSaveIssue, isDeliveryConversion, deliveryConversionItemsIssue, canSupplementDeliveryMaterials } from './request-type-workflow.ts';
+import { materialRequiredFor } from './material-requirements.ts';
 import { approvalRulesId, readApprovalRulesPayload } from './approval-rules.ts';
 import { canPerformAssessmentRole, routeAssessmentOnSave, routingSaveIssue } from './assessment-routing.ts';
 import { assessmentRoutingId } from './assessment-routing-schema.ts';
@@ -152,6 +155,7 @@ export type MaterialRequirement = {
   id: string;
   name: string;
   required: boolean;
+  requiredByType?: Partial<Record<RequestType, boolean>>;
   instructions: string;
   template?: StoredFile;
   templateUrl?: string;
@@ -185,13 +189,14 @@ export function customerMaterialSaveIssue(record: ServiceRequest, previous: Serv
 }
 export function attributeRequestMaterials(record: ServiceRequest, previous: ServiceRequest | undefined, actor?: OperationActor): ServiceRequest {
   if (!actor?.id) return record;
+  const preserveAssessedFiles = isDeliveryConversion(record, previous) || !!previous && canSupplementDeliveryMaterials(previous, actor);
   const originals = new Map((previous?.items ?? []).flatMap(item => item.materials.flatMap(material => materialFiles(material).map(file => [file.id, file] as const))));
   return { ...record, items: record.items.map(item => ({ ...item, materials: item.materials.map(material => {
     const old = previous?.items.find(entry => entry.id === item.id)?.materials.find(entry => entry.requirementId === material.requirementId);
     return withMaterialFiles(material, materialFiles(material).map(file => {
       const before = materialFiles(old).find(entry => entry.id === file.id) ?? originals.get(file.id);
       // Preserve unseen originals, including their bytes, when a customer saves the request.
-      if (before && actor.role === '客户' && !(before.uploaderAudience === 'customer' && before.uploadedById === actor.id)) return before;
+      if (before && (preserveAssessedFiles || (actor.role === '客户' && !(before.uploaderAudience === 'customer' && before.uploadedById === actor.id)))) return before;
       return before && JSON.stringify(before) === JSON.stringify(file) ? before : attributeMaterialFile(file, actor);
     }));
   }) })) };
@@ -400,6 +405,7 @@ export function requestContactRemovalIssue(record: ServiceRequest, previous?: Se
 export const requestStatuses = [
   '草稿',
   '待评估',
+  '评估完成',
   '待确认',
   '待受理',
   '已转服务项目',
@@ -411,11 +417,12 @@ export type RequestStage = Exclude<RequestStatus, '已取消'>;
 export function normalizeStoredRequest(
   record: ServiceRequest | (Omit<ServiceRequest, 'status'> & { status: '已转工单' }),
 ): ServiceRequest {
-  return record.status === '已转工单' ? { ...record, status: '已转服务项目' } : record;
+  const normalized = record.status === '已转工单' ? { ...record, status: '已转服务项目' as const } : record;
+  return normalized.requestType === undefined ? { ...normalized, requestType: '服务交付' } : normalized;
 }
 export function requestStatusTone(status: RequestStatus) {
   if (status === '已取消') return 'cancelled';
-  if (status === '已转服务项目') return 'green';
+  if (status === '已转服务项目' || status === '评估完成') return 'green';
   return status === '草稿' ? 'muted' : 'blue';
 }
 export function requestCancellationStage(record: ServiceRequest): RequestStage {
@@ -449,9 +456,10 @@ export function requestCancellationStage(record: ServiceRequest): RequestStage {
 export function requestProgressSteps(request: RequestStatus | ServiceRequest) {
   const status = typeof request === 'string' ? request : request.status;
   const stage = status === '已取消' ? (typeof request === 'string' ? '草稿' : requestCancellationStage(request)) : status;
-  const current = requestStatuses.indexOf(stage);
-  return requestStatuses
-    .filter((step) => step !== '已取消')
+  const presales = typeof request === 'string' ? request === '评估完成' : requestTypeOf(request) === '售前评估';
+  const stages = requestStatuses.filter(step => step !== '已取消' && (presales ? !['待确认', '待受理', '已转服务项目'].includes(step) : step !== '评估完成'));
+  const current = stages.indexOf(stage);
+  return stages
     .map((label, index) => ({
       label: status === '已取消' && index === current ? '已取消' : label,
       state:
@@ -464,11 +472,13 @@ export function requestProgressSteps(request: RequestStatus | ServiceRequest) {
 }
 export type ServiceRequest = {
   id: string;
+  requestType?: RequestType | '';
   title: string;
   customerId: string;
   contactId: string;
   description: string;
   expectedServiceDate?: string;
+  expectedServiceDateUncertain?: boolean;
   expectedProvider?: string;
   /** Retained only for compatibility with historical records; no longer collected or validated. */
   businessImpact?: string;
@@ -532,6 +542,7 @@ export function newRequest(
   const now = new Date().toISOString();
   return {
     id: `SR-${Date.now().toString(36).toUpperCase()}-${crypto.randomUUID().slice(0, 4).toUpperCase()}`,
+    requestType: '服务交付',
     title: title.trim(),
     customerId,
     contactId: '',
@@ -568,7 +579,11 @@ export function requestIdentityIssue(
   existing?: ServiceRequest,
   actor?: OperationActor,
 ): string | null {
+  if (!requestTypes.includes(requestTypeOf(record) as RequestType)) return '请选择申请类型。';
   if (existing) {
+    if (existing.status !== '草稿' && requestTypeOf(existing) !== requestTypeOf(record)
+      && !(requestTypeOf(existing) === '售前评估' && existing.status === '评估完成' && requestTypeOf(record) === '服务交付' && record.status === '待评估'))
+      return '提交后申请类型不可直接修改，请通过“转为交付”操作变更。';
     if (existing.status === '草稿' && !['草稿', '已取消'].includes(record.status) && (record.status !== '待评估' || !isRequestApplicant(existing, actor))) return '仅创建人可以提交服务请求。';
     if (existing.customerId !== record.customerId)
       return '服务请求创建后不支持修改客户。';
@@ -581,7 +596,7 @@ export function requestIdentityIssue(
     )
       return '创建人和创建时间不支持修改。';
     if (existing.status === '草稿' && actor?.role === '客户' && !canCheckRequestCompleteness(existing, actor)) {
-      const fields = ['title', 'contactId', 'description', 'expectedServiceDate', 'expectedProvider', 'items', 'status', 'submittedAt'] as const;
+      const fields = ['title', 'requestType', 'contactId', 'description', 'expectedServiceDate', 'expectedServiceDateUncertain', 'expectedProvider', 'items', 'status', 'submittedAt'] as const;
       if (fields.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '非本人发起的服务申请仅支持只读查看，不允许修改或提交。';
     }
@@ -601,10 +616,13 @@ export function requestIdentityIssue(
           && !currentPlan(record) && record.operations?.assessment?.rounds.length === 0;
         if (!validReturn) return '仅待评估阶段的负责项目经理可以退回草稿。';
       }
-      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'expectedProvider'] as const;
+      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'expectedServiceDateUncertain', 'expectedProvider'] as const;
       if (frozen.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '提交后基本信息只读，不支持修改。';
       if (JSON.stringify(existing.items) !== JSON.stringify(record.items)
+        && !((isDeliveryConversion(record, existing)
+          || canSupplementDeliveryMaterials(existing, actor) && canSupplementDeliveryMaterials(record, actor))
+          && !deliveryConversionItemsIssue(record, existing))
         && (!canEditRequestItems(existing, actor) || !canEditRequestItems(record, actor)
           || existing.status !== record.status
           || JSON.stringify(existing.operations?.assessment) !== JSON.stringify(record.operations?.assessment)))
@@ -938,9 +956,9 @@ export function normalizeRequestConfig(
     ),
   };
 }
-export function itemIssues(item: RequestItem): string[] {
+export function itemIssues(item: RequestItem, requestType: RequestType | '' = '服务交付'): string[] {
   const issues = itemBasicIssues(item);
-  for (const requirement of item.config.materials.filter((m) => m.required)) {
+  for (const requirement of item.config.materials.filter(m => materialRequiredFor(m, requestType))) {
     const material = item.materials.find(
       (m) => m.requirementId === requirement.id,
     );
@@ -1079,7 +1097,8 @@ export async function saveLocal(
             const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
             const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? []);
             const projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor);
-            const issue = routingSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? []) ?? customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? projectIssue ?? supplementIssue ?? decisionIssue
+            const issue = requestTypeSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
+              ?? routingSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? []) ?? customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? projectIssue ?? supplementIssue ?? decisionIssue
               ?? requestIdentityIssue(serviceRequest, previous, access?.actor)
               ?? hardwareAssessmentSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
               ?? assessmentBasisSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []);

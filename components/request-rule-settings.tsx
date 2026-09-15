@@ -6,7 +6,11 @@ import type { OperationActor } from '@/lib/request-operations';
 export function RequestRuleSettings({ tab, actor }: { tab: 'collaborators' | 'submission'; actor: OperationActor }) {
   const collaborators = tab === 'collaborators';
   if (!collaborators) return <SubmissionRuleSettings actor={actor} />;
-  return <>
+  return <div className="request-flow-settings">
+    <section className="routing-rules" aria-label="协作人分配规则">
+    <div className="submission-rules-toolbar">
+      <div><strong>协作人分配规则</strong></div>
+    </div>
     <div className="table-scroll">
       {collaborators ? <table className="reference-table app-list-table">
         <thead><tr><th>适用申请</th><th>添加时机</th><th>自动添加人员</th><th>加入位置</th><th>身份标记</th><th>允许移除</th></tr></thead>
@@ -19,5 +23,6 @@ export function RequestRuleSettings({ tab, actor }: { tab: 'collaborators' | 'su
         </tbody>
       </table> : null}
     </div>
-  </>;
+    </section>
+  </div>;
 }

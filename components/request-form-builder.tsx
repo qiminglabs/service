@@ -1,6 +1,8 @@
 'use client';
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { startRequestFieldDrag } from '@/lib/request-field-drag';
+import { requestTypes } from '@/lib/request-types';
+import { materialRequiredFor, materialRequiredTypes, materialRequirementLabel } from '@/lib/material-requirements';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -332,7 +334,7 @@ export function RequestFormBuilder({
               >
                 <span className="rf-material-title">
                   {m.name || '未命名材料'}
-                  <small>{m.required ? '必须上传' : '选填'}</small>
+                  <small>{materialRequirementLabel(m)}</small>
                 </span>
                 <span className="rf-material-instructions">
                   {m.instructions || '暂无填写说明'}
@@ -376,15 +378,15 @@ export function RequestFormBuilder({
                 }
               />
             </label>
-            <label className="sr-check-line">
+            {requestTypes.map(type => <label className="sr-check-line" key={type}>
               <input
                 type="checkbox"
                 disabled={busy}
-                checked={material.required}
-                onChange={(e) => patchMaterial({ required: e.target.checked })}
+                checked={materialRequiredFor(material, type)}
+                onChange={(e) => patchMaterial({ requiredByType: { ...materialRequiredTypes(material), [type]: e.target.checked } })}
               />
-              必须上传
-            </label>
+              {type}类型必须上传
+            </label>)}
             <label className="sr-check-line">
               <input type="checkbox" disabled={busy} checked={material.deduplicate ?? false} onChange={event => patchMaterial({ deduplicate: event.target.checked })} />
               去重

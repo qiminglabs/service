@@ -15,6 +15,7 @@ import {
 } from '@/lib/china-province-city';
 import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { RequestFlowDiagram } from '@/components/request-flow-diagram';
+import { ExecutionFlowDiagram } from '@/components/execution-flow-diagram';
 import { RequestFlowSettings } from '@/components/request-flow-settings';
 import { ApprovalRuleSettings } from '@/components/approval-rule-settings';
 import { RequestRuleSettings } from '@/components/request-rule-settings';
@@ -172,16 +173,11 @@ export function RequestFieldSettings({
   ready: boolean;
 }) {
   const currentSection = backendSettingsSections.find(item => item.key === section)!;
-  const [activeTab, setActiveTab] = useState<string>(currentSection.tabs[0].key);
+  const [activeTab, setActiveTab] = useState<string>(currentSection.tabs[0]?.key ?? '');
   const settingsTabsId = useId();
   const tabId = (key: string) => `${settingsTabsId}-settings-tab-${key}`;
   function selectFlowTab(key: RequestFlowTab) {
     setActiveTab(key);
-    requestAnimationFrame(() => {
-      const tab = document.getElementById(tabId(key));
-      tab?.focus({ preventScroll: true });
-      tab?.scrollIntoView({ block: 'start', inline: 'nearest' });
-    });
   }
   const applicationTab = activeTab === 'application-fields';
   const fields = applicationTab ? applicationFields : serviceFields;
@@ -195,6 +191,7 @@ export function RequestFieldSettings({
   const [error, setError] = useState('');
   const creating = target === 'new';
   const locked = target !== null && systemField(target);
+  const fixedTypeOptions = applicationTab && target === 'requestType';
   const isChoice =
     (type === 'single' || type === 'multiple') && target !== 'businessObjects';
   function open(id: string) {
@@ -275,6 +272,11 @@ export function RequestFieldSettings({
       onChange(creating ? [...fields, field] : fields.map(item => item.id === target ? field : item));
     }
     setTarget(null);
+  }
+  if (section === 'execution-flow') {
+    return <section className="reference-panel backend-settings-panel" aria-label={currentSection.label}>
+      <ExecutionFlowDiagram />
+    </section>;
   }
   return (
     <section
@@ -385,7 +387,7 @@ export function RequestFieldSettings({
               {creating ? '创建字段' : '编辑字段'}
             </DialogTitle>
             <DialogDescription>
-              {locked
+              {fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为售前评估和服务交付；可修改字段名称。' : locked
                 ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项，字段类型不可修改。'
                 : creating
                   ? applicationTab ? '创建后保存在申请项字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
@@ -434,7 +436,8 @@ export function RequestFieldSettings({
                 <p className="sr-help">{fieldRequirementLabels[editionFieldRequirement(target)!]}。添加到服务表单时默认启用，可在字段属性中调整。</p>
               </div>
             )}
-            {isChoice && (
+            {fixedTypeOptions && <div className="sr-span"><strong>可选类型</strong><div className="request-field-options">{options.map(option => <span key={option.value}>{option.value}</span>)}</div></div>}
+            {isChoice && !fixedTypeOptions && (
               <section
                 className="sr-span request-field-editor"
                 aria-label="选项管理"

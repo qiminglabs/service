@@ -3,6 +3,7 @@ import { requestMaterialIssues } from './request-materials.ts';
 import type { ServiceRequest, CustomerRef, ContactRef, ObjectRef, CatalogService, RequestAudience, InternalUser } from './service-requests';
 import type { OperationActor } from './request-operations';
 import { submissionCollaboratorsIssue } from './request-collaboration.ts';
+import { requestTypeOf, requestTypes, type RequestType } from './request-types.ts';
 export function requestCompletenessIssues(
   request: ServiceRequest,
   refs: {
@@ -17,6 +18,11 @@ export function requestCompletenessIssues(
   },
 ): string[] {
   const issues: string[] = [];
+  if (!requestTypes.includes(requestTypeOf(request) as RequestType)) issues.push('选择申请类型');
+  if (!request.expectedServiceDate && request.expectedServiceDateUncertain !== true)
+    issues.push('请选择期望服务日期，或点击“暂不确定”');
+  if (request.expectedServiceDate && request.expectedServiceDateUncertain === true)
+    issues.push('期望服务日期不能同时指定具体日期和暂不确定，请重新选择');
   if (!request.title.trim()) issues.push('填写申请主题');
   if (
     !refs.customers.some(

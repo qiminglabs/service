@@ -1,5 +1,5 @@
 import { demoSubmissionRuleReferences } from './demo-submission-rules.ts';
-import { buildRequestSamples, requestSamplesMarker } from './demo-service-requests.ts';
+import { buildRequestSamples, requestSamplesMarker, presalesRequestSamplesMarker } from './demo-service-requests.ts';
 import { openDatabase, defaultConfig, resolveRequestConfig, customerRequestConfigId } from './service-requests.ts';
 import type { CustomerRef, InternalUser } from './service-requests';
 import { ensureConversionHistory } from './entitlement-conversions.ts';
@@ -59,6 +59,7 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
     { id: requestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
     ...demoWorkflowRuleReferences(workspace),
     { id: ruleBasedRequestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
+    { id: presalesRequestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
   ].map(reference => [reference.id, reference])).values()];
   const samples = buildRequestSamples(workspace, [], configs, references, new Date(), true);
   const db = await openDatabase();

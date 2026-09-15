@@ -10,11 +10,12 @@ import { isInternal } from '@/lib/request-operations';
 import type { ServiceRequest } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
 
-export function RequestMaterialsPanel({ record, actor, readonly, busy, onMaterial }: {
+export function RequestMaterialsPanel({ record, actor, readonly, busy, onMaterial, description }: {
   record: ServiceRequest;
   actor: OperationActor;
   readonly: boolean;
   busy: boolean;
+  description?: string;
   onMaterial: (target: { itemId: string; requirementId: string }) => void;
 }) {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -35,6 +36,7 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
       <h3>申请材料</h3>
       {customerVisible && <CustomerVisibleBadge />}
     </div></div>
+    {description && <p className="sr-request-material-description">{description}</p>}
     {!groups.length ? <div className="sr-materials-empty">{record.items.length ? '当前服务项没有材料要求。' : '添加服务项后，将在此显示材料要求。'}</div> : <div className="sr-request-material-list">
       {groups.map(({ group, files }) => {
         const member = group.members[0];
@@ -42,8 +44,8 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
         return <article className="sr-request-material-row" key={group.key}>
           <FileText className="sr-request-material-icon" size={22} aria-hidden="true" />
           <div className="sr-request-material-copy">
-            <div className="sr-request-material-title"><h4>{group.requirement.name}</h4>
-              <span className="sr-badge" data-tone={files.length ? 'green' : 'amber'}>{files.length ? '已提供' : '待提供'}</span>
+            <div className="sr-request-material-title"><h4>{group.requirement.name}{group.requirement.required && <sup className="sr-material-required" aria-label="必填">*</sup>}</h4>
+              <span className="sr-badge" data-tone={files.length ? 'green' : group.requirement.required ? 'amber' : 'muted'}>{files.length ? '已提供' : group.requirement.required ? '待提供' : '选填'}</span>
             </div>
             <div className="sr-material-relations">
               <span className="sr-material-relations-label"><Link2 size={14} aria-hidden="true" />关联服务项</span>

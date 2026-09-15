@@ -101,7 +101,7 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <div className="sr-ops-heading"><div><h3>补充信息</h3><p>提交补充文件和说明。</p></div></div>
+    <div className="sr-ops-heading"><div><h3>补充信息</h3></div></div>
     <div className="sr-supplements-body">
       {editable ? <div className="sr-supplement-composer">
         <div className="sr-mention-composer">

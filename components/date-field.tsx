@@ -22,6 +22,8 @@ export function DateField({
   disabled = false,
   required = false,
   hideLabel = false,
+  uncertain = false,
+  onUncertain,
 }: {
   id?: string;
   label?: string;
@@ -31,6 +33,8 @@ export function DateField({
   disabled?: boolean;
   required?: boolean;
   hideLabel?: boolean;
+  uncertain?: boolean;
+  onUncertain?: () => void;
 }) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
@@ -57,7 +61,7 @@ export function DateField({
         </span>
       </label>
       {readonly ? (
-        <Input id={fieldId} value={value || '未填写'} readOnly />
+        <Input id={fieldId} value={uncertain ? '暂不确定' : value || '未填写'} readOnly />
       ) : (
         <Popover open={open && !disabled} onOpenChange={setOpen}>
           <PopoverTrigger
@@ -65,9 +69,9 @@ export function DateField({
             disabled={disabled}
             render={<Button type="button" variant="outline" />}
             className="sr-service-date-trigger"
-            data-empty={!value || undefined}
+            data-empty={(!value && !uncertain) || undefined}
           >
-            <span>{value || '请选择日期'}</span>
+            <span>{uncertain ? '暂不确定' : value || '请选择日期'}</span>
             <CalendarDays size={16} aria-hidden="true" />
           </PopoverTrigger>
           <PopoverContent
@@ -94,11 +98,20 @@ export function DateField({
               <Button
                 type="button"
                 variant="ghost"
-                disabled={!value}
+                disabled={!value && !uncertain}
                 onClick={() => choose()}
               >
                 清空
               </Button>
+              {onUncertain && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => { onUncertain(); setOpen(false); }}
+                >
+                  暂不确定
+                </Button>
+              )}
             </div>
           </PopoverContent>
         </Popover>

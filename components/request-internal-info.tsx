@@ -14,7 +14,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
@@ -32,7 +31,6 @@ type CollaboratorOption = { id: string; name: string; details: string; disabled?
 
 function CollaboratorCard({
   title,
-  description,
   placeholder,
   options,
   selected,
@@ -44,7 +42,6 @@ function CollaboratorCard({
   showCustomerVisibility = false,
 }: {
   title: string;
-  description: string;
   placeholder: string;
   options: CollaboratorOption[];
   selected: CollaboratorOption[];
@@ -101,7 +98,6 @@ function CollaboratorCard({
             >
               <DialogHeader>
                 <DialogTitle>添加{title}</DialogTitle>
-                <DialogDescription>{description}</DialogDescription>
               </DialogHeader>
               <div className="sr-collaborator-search">
                 <Search size={16} aria-hidden="true" />
@@ -223,11 +219,9 @@ export function RequestExternalCollaborators({
   onChange,
   allowRemove = true,
   showCustomerVisibility = false,
-  description = '搜索当前客户联系人，勾选后确认添加。',
 }: {
   applicantId?: string;
   contacts: ContactRef[];
-  description?: string;
   value: ExternalCollaborator[];
   readonly: boolean;
   allowRemove?: boolean;
@@ -240,7 +234,6 @@ export function RequestExternalCollaborators({
     <CollaboratorCard
       title="客户协作人"
       showCustomerVisibility={showCustomerVisibility}
-      description={description}
       placeholder="搜索姓名、手机号或邮箱"
       options={contacts.map((contact) => ({
         disabled: contact.status !== '启用',
@@ -300,7 +293,6 @@ export function RequestInternalInfo({
   return (
     <CollaboratorCard
       title="内部协作人"
-      description="搜索主数据中的内部用户，勾选后确认添加。"
       placeholder="搜索姓名或邮箱"
       options={available.map((user) => ({
         id: user.id,

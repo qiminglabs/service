@@ -2,7 +2,7 @@ import { openDatabase, readLocal } from './service-requests.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
 import type { OperationActor } from './request-operations';
 import type { InternalUser } from './service-requests';
-import { parseCompiledRule, parseRuleDefinition, normalizeStoredSubmissionRule, submissionRulesId } from './submission-rule-schema.ts';
+import { parseCompiledRule, parseSubmissionRuleDefinition, normalizeStoredSubmissionRule, submissionRulesId } from './submission-rule-schema.ts';
 import type { RuleDefinition, SubmissionRule } from './submission-rule-schema';
 import { ruleCompilationKey, RuleConflictError, testSubmissionRule } from './submission-rule-conflicts.ts';
 import type { RuleTestResult } from './submission-rule-conflicts';
@@ -41,7 +41,7 @@ async function mutateRules(actor: OperationActor, change: (rules: SubmissionRule
   } finally { db.close(); }
 }
 export async function saveRuleDraft(actor: OperationActor, definition: RuleDefinition, existing?: Pick<SubmissionRule, 'id' | 'revision'>) {
-  const parsed = parseRuleDefinition(definition), id = existing?.id ?? crypto.randomUUID();
+  const parsed = parseSubmissionRuleDefinition(definition), id = existing?.id ?? crypto.randomUUID();
   const rules = await mutateRules(actor, rules => {
     const previous = rules.find(r => r.id === id);
     if (existing && (!previous || previous.revision !== existing.revision)) throw new Error('规则已被其他页面修改，请刷新后重试。');
@@ -61,15 +61,15 @@ export async function finishRuleCompilation(actor: OperationActor, draft: Submis
     if (!result.summary?.trim()) throw new Error('缺少转译说明。');
     const tested = testSubmissionRule(rule, compiled, result.summary, rules, rule.id);
     if (tested.conflicts.length) throw new RuleConflictError(tested.conflicts);
-    return { ...rule, status: 'ready', error: undefined, updatedAt: new Date().toISOString(), active: { ...parseRuleDefinition(rule), compiled, summary: result.summary, enabled: true } };
+    return { ...rule, status: 'ready', error: undefined, updatedAt: new Date().toISOString(), active: { ...parseSubmissionRuleDefinition(rule), compiled, summary: result.summary, enabled: true } };
     });
   });
 }
 // Persist only the tested compilation. Recheck the latest rules inside the same
 // transaction so a new conflicting rule cannot slip in between test and save.
 export async function saveTestedSubmissionRule(actor: OperationActor, definition: RuleDefinition, tested: RuleTestResult, existing?: Pick<SubmissionRule, 'id' | 'revision'>) {
-  const parsed = parseRuleDefinition(definition);
-  if (!tested || tested.key !== ruleCompilationKey(parsed)) throw new Error('检验要求、适用申请或检查时机已变化，请重新转译并测试。');
+  const parsed = parseSubmissionRuleDefinition(definition);
+  if (!tested || tested.key !== ruleCompilationKey(parsed)) throw new Error('检验要求、适用申请或固定检查时机已变化，请重新转译并测试。');
   if (tested.conflicts.length) throw new RuleConflictError(tested.conflicts);
   return mutateRules(actor, rules => {
     const previous = existing ? rules.find(r => r.id === existing.id) : undefined;
@@ -84,21 +84,6 @@ export async function saveTestedSubmissionRule(actor: OperationActor, definition
     return previous ? rules.map(r => r.id === previous.id ? next : r) : [...rules, next];
   });
 }
-export async function toggleSubmissionRule(actor: OperationActor, rule: SubmissionRule) {
-  return mutateRules(actor, rules => {
-    if (!rules.some(current => current.id === rule.id)) throw new Error('规则已被移除，请刷新。');
-    return rules.map(current => {
-    if (current.id !== rule.id) return current;
-    if (current.revision !== rule.revision || !current.active) throw new Error('规则已变化，请刷新后重试。');
-    if (!current.active.enabled) {
-      const tested = testSubmissionRule(current.active, current.active.compiled, current.active.summary, rules, current.id);
-      if (tested.conflicts.length) throw new RuleConflictError(tested.conflicts);
-    }
-    return { ...current, revision: current.revision + 1, updatedAt: new Date().toISOString(), updatedBy: actor.name, active: { ...current.active, enabled: !current.active.enabled } };
-    });
-  });
-}
-
 export async function deleteSubmissionRule(actor: OperationActor, rule: Pick<SubmissionRule, 'id' | 'revision'>) {
   return mutateRules(actor, rules => {
     if (builtinSubmissionRules.some(builtin => builtin.id === rule.id)) throw new Error('系统预置规则不支持删除。');

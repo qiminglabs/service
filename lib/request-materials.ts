@@ -1,6 +1,8 @@
 import { materialFiles, requestMaterialFiles, requestMaterialsCustomerVisible, withMaterialFiles } from './service-requests.ts';
 import type { ItemMaterial, MaterialRequirement, RequestConfig, RequestItem, ServiceRequest, StoredFile, RequestAudience } from './service-requests';
 import type { OperationActor } from './request-operations';
+import { materialRequiredFor } from './material-requirements.ts';
+import { requestTypeOf } from './request-types.ts';
 
 export async function prepareMaterialDeduplication(config: RequestConfig): Promise<RequestConfig> {
   const materials = await Promise.all(config.materials.map(async requirement => {
@@ -37,7 +39,7 @@ export function materialTemplateKeys(requirement: MaterialRequirement): string[]
 export type RequestMaterialMember = { item: RequestItem; index: number; requirement: MaterialRequirement };
 export type RequestMaterialGroup = { key: string; members: RequestMaterialMember[]; requirement: MaterialRequirement; material: ItemMaterial; shared: boolean };
 
-export function requestMaterialGroups(record: Pick<ServiceRequest, 'items'>): RequestMaterialGroup[] {
+export function requestMaterialGroups(record: Pick<ServiceRequest, 'items' | 'requestType'>): RequestMaterialGroup[] {
   const entries = record.items.flatMap((item, index) => item.config.materials.map(requirement => ({ item, index, requirement })));
   const parents = entries.map((_, index) => index);
   const find = (index: number): number => parents[index] === index ? index : (parents[index] = find(parents[index]));
@@ -57,12 +59,17 @@ export function requestMaterialGroups(record: Pick<ServiceRequest, 'items'>): Re
       if (!old || old.uploadedAt < file.uploadedAt) files.set(file.id, file);
     }
     return { key: `${first.item.id}:${first.requirement.id}`, members, shared: members.length > 1,
-      requirement: { ...first.requirement, required: members.some(member => member.requirement.required) },
+      requirement: { ...first.requirement,
+        required: members.some(member => materialRequiredFor(member.requirement, requestTypeOf(record))),
+        requiredByType: {
+          '售前评估': members.some(member => materialRequiredFor(member.requirement, '售前评估')),
+          '服务交付': members.some(member => materialRequiredFor(member.requirement, '服务交付')),
+        } },
       material: { requirementId: first.requirement.id, files: [...files.values()] } };
   }).sort((a, b) => Number(b.shared) - Number(a.shared));
 }
 
-export function requestMaterialGroup(record: Pick<ServiceRequest, 'items'>, itemId: string, requirementId: string) {
+export function requestMaterialGroup(record: Pick<ServiceRequest, 'items' | 'requestType'>, itemId: string, requirementId: string) {
   return requestMaterialGroups(record).find(group => group.members.some(member => member.item.id === itemId && member.requirement.id === requirementId));
 }
 

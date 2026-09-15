@@ -1,4 +1,6 @@
 import type { HardwareAssessmentRequirement } from './hardware-assessment-trigger';
+import { requestTypeOf } from './request-types.ts';
+import { convertAssessmentToDelivery } from './request-type-workflow.ts';
 import { canPerformAssessmentRole, type AssessmentRouting } from './assessment-routing.ts';
 import { effortEntitlementAllocations, entitlementLockIssue, type EntitlementAllocation } from './request-entitlement-reservations.ts';
 import { isDayQuantity, sumDays } from './day-quantity.ts';
@@ -127,6 +129,7 @@ export type Assessment = {
   };
 };
 export type AssessmentAction =
+  | { type: 'convert-to-delivery' }
   | { type: 'hardware-review'; outcome: AssessmentRound['outcome']; opinion: string }
   | { type: 'return-draft'; reason: string }
   | { type: 'effort'; items: EffortPricingInput[]; note?: string }
@@ -325,10 +328,13 @@ export function applyAssessmentAction(
   pricingContext?: EntitlementPricingContext,
   approvalRules?: ApprovalRules,
 ): ServiceRequest {
+  if (action.type === 'convert-to-delivery') return convertAssessmentToDelivery(record, actor, users, now);
   if (!actor.id || !isInternal(actor.role))
     throw new Error('仅内部人员可处理评估工作。');
   if (record.status !== '待评估')
     throw new Error('仅待评估阶段可处理评估工作。');
+  if (requestTypeOf(record) === '售前评估' && ['plan', 'gap-submit', 'gap-decide', 'confirm'].includes(action.type))
+    throw new Error('售前评估须先完成评估并转为交付，再进入后续交付流程。');
   const assessment = structuredClone(assessmentOf(record));
   const manager = () => {
     if (
@@ -449,6 +455,7 @@ export function applyAssessmentAction(
       });
     }
     title = '人天核定';
+    if (requestTypeOf(record) === '售前评估') { status = '评估完成'; title = '人天核定 · 评估完成'; }
     detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.kind === 'entitlement' ? `差额权益 ${line.deficitEntitlements}` : line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
   } else if (action.type === 'plan') {
     if (!canManageAssessmentBasis(record, actor, customers, users)) throw new Error(assessmentBasisPermissionMessage(record));

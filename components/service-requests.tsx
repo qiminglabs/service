@@ -1,6 +1,9 @@
 'use client';
+import { requestTypeOf, requestTypes, type RequestType } from '@/lib/request-types';
 
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
+import { deliveryConversionIssue, deliveryConversionMaterialIssues, convertAssessmentToDelivery } from '@/lib/request-type-workflow';
+import { RequestDeliveryConversion } from '@/components/request-delivery-conversion';
 
 import { checkSubmissionQueue, SubmissionValidationError, submissionEvent, validationHeading } from '@/lib/submission-validation';
 import type { ValidationFailure } from '@/lib/submission-validation';
@@ -33,8 +36,10 @@ import type { RequestField } from '@/components/request-field-settings';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { RequestMaterialDialog } from '@/components/request-material-dialog';
 import { RequestMaterialsPanel } from '@/components/request-materials-panel';
+import { materialFiles } from '@/lib/service-requests';
 import { prepareMaterialDeduplication, requestMaterialGroup, materialDialogItem, synchronizeRequestMaterials, saveRequestMaterialGroup } from '@/lib/request-materials';
 import { RequestStatusProgress } from '@/components/request-status-progress';
+import { RequestNextStepBanner } from '@/components/request-next-step';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { DateField } from '@/components/date-field';
 import {
@@ -257,7 +262,6 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
           <h3>服务项</h3>
           {internal && <CustomerVisibleBadge />}
         </div>
-        {readonly && <p>服务项内容只读，可查看详细信息。</p>}
       </div>
       {!readonly && <Button variant="outline" disabled={busy || !canAdd} onClick={onAdd}><Plus size={15} />添加服务项</Button>}
     </div>
@@ -321,6 +325,7 @@ export function RequestWorkspace(props: Props) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('全部状态');
   const [draft, setDraft] = useState<ServiceRequest | null>(null);
+  const [conversion, setConversion] = useState<ServiceRequest | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creation, setCreation] = useState<ServiceRequest | null>(null);
   const [createMaterialTarget, setCreateMaterialTarget] = useState<{ itemId: string; requirementId: string } | null>(null);
@@ -348,7 +353,7 @@ export function RequestWorkspace(props: Props) {
     ServiceRequest[]
   >([]);
   const [showIssues, setShowIssues] = useState(false);
-  const [validationResult, setValidationResult] = useState<{ requestId: string; failures: ValidationFailure[]; events: RuleEvent[] } | null>(null);
+  const [validationResult, setValidationResult] = useState<{ requestId: string; failures: ValidationFailure[]; events: RuleEvent[]; heading?: string } | null>(null);
   const validationAlert = useRef<HTMLElement>(null);
   const validationLock = useRef(false);
   useEffect(() => {
@@ -376,7 +381,7 @@ export function RequestWorkspace(props: Props) {
 
   function beginCreate() {
     const customerId = customerPortal ? props.currentCustomerId ?? '' : '';
-    setCreation(withRequestContact(newRequest('', customerId, props.currentActor.name || props.currentRole, '', props.currentActor.id, props.currentActor.role), props.contacts, props.customers, props.users));
+    setCreation(withRequestContact({ ...newRequest('', customerId, props.currentActor.name || props.currentRole, '', props.currentActor.id, props.currentActor.role), requestType: '' }, props.contacts, props.customers, props.users));
     setAddOpen(false); setPendingItem(null); setCreateMaterialTarget(null);
     setCatalogQuery(''); setError(''); setCreateOpen(true);
   }
@@ -424,7 +429,7 @@ export function RequestWorkspace(props: Props) {
           if (!current) return current;
           const latest = visible.find((record) => record.id === current.id);
           if (!latest) return null;
-          return current.status === '待评估' ? latest : current;
+          return ['待评估', '评估完成'].includes(current.status) ? latest : current;
         });
         setReady(true);
         setError('');
@@ -456,7 +461,7 @@ export function RequestWorkspace(props: Props) {
     }
   }, [props.createToken]);
 
-  async function persist(record: ServiceRequest, message = '草稿已保存到本机') {
+  async function persist(record: ServiceRequest, message = '草稿已保存到本机', failureHeading?: string) {
     if (saveLock.current) return false;
     saveLock.current = true;
     setBusy(true);
@@ -485,13 +490,40 @@ export function RequestWorkspace(props: Props) {
     } catch (error) {
       if (error instanceof SubmissionValidationError) {
         setSubmitOpen(false);
-        setValidationResult({ requestId: record.id, failures: error.failures, events: error.events });
+        setValidationResult({ requestId: record.id, failures: error.failures, events: error.events, heading: failureHeading });
+        setShowIssues(true);
+      } else if (failureHeading) {
+        setValidationResult({ requestId: record.id, events: [], heading: failureHeading,
+          failures: [{ ruleId: 'delivery-conversion', requirement: '转为交付', message: error instanceof RequestIdentityError ? error.message : localError }] });
         setShowIssues(true);
       } else setError(error instanceof RequestIdentityError ? error.message : localError);
       return false;
     } finally {
       saveLock.current = false;
       setBusy(false);
+    }
+  }
+  function checkBeforeDeliveryConversion(record: ServiceRequest) {
+    const issue = deliveryConversionIssue(record, props.currentActor, props.users);
+    const missing = issue ? [issue] : deliveryConversionMaterialIssues(record);
+    setValidationResult({ requestId: record.id, events: [], heading: '尚未转为交付，请补充以下内容',
+      failures: missing.map(message => ({ ruleId: 'delivery-conversion', requirement: '服务交付齐套要求', message })) });
+    setShowIssues(missing.length > 0);
+    return missing.length === 0;
+  }
+  async function confirmDeliveryConversion() {
+    if (!conversion || busy || saveLock.current) return;
+    const record = draft?.id === conversion.id ? draft : conversion;
+    setConversion(null);
+    setError('');
+    const heading = '尚未转为交付，请补充以下内容';
+    try {
+      if (!checkBeforeDeliveryConversion(record)) return;
+      await persist(convertAssessmentToDelivery(record, props.currentActor, props.users), '已转为服务交付，请继续关联服务依据。', heading);
+    } catch (issue) {
+      setValidationResult({ requestId: record.id, events: [], heading,
+        failures: [{ ruleId: 'delivery-conversion', requirement: '转为交付', message: issue instanceof Error ? issue.message : '转换失败，请重试。' }] });
+      setShowIssues(true);
     }
   }
   async function duplicateItem(record: ServiceRequest, id: string, creating: boolean) {
@@ -647,7 +679,7 @@ export function RequestWorkspace(props: Props) {
     return persist(next, message);
   }
   async function saveItemMaterials(id: string, material: ItemMaterial) {
-    if (!draft || !canEditRequestItems(draft, props.currentActor)) return false;
+    if (!draft || (!canEditRequestItems(draft, props.currentActor) && deliveryConversionIssue(draft, props.currentActor, props.users))) return false;
     const ok = await persistItemChanges(
       saveRequestMaterialGroup(draft, id, material.requirementId, material, props.currentActor),
       '申请材料已保存到本机',
@@ -659,6 +691,11 @@ export function RequestWorkspace(props: Props) {
   const readonly = draft?.status !== '草稿' || !showCompleteness;
   const itemsReadonly =
     !draft || !canEditRequestItems(draft, props.currentActor);
+  const preparingDeliveryMaterials = !!draft && !deliveryConversionIssue(draft, props.currentActor, props.users);
+  const materialsReadonly = itemsReadonly && !preparingDeliveryMaterials;
+  const materialsRecord = draft && preparingDeliveryMaterials ? { ...draft, requestType: '服务交付' as const } : draft;
+  const lockedMaterialFileIds = preparingDeliveryMaterials && draft
+    ? draft.items.flatMap(item => item.materials.flatMap(material => materialFiles(material).map(file => file.id))) : [];
   const returnNotice = draft ? requestReturnNotice(draft) : null;
   const customerSalesManager = props.users.find(
     (user) => user.id === props.customers.find(
@@ -675,7 +712,7 @@ export function RequestWorkspace(props: Props) {
   const customerSmartxContacts = [customerSalesManager, customerProjectManager, customerInternalApplicant]
     .filter((user): user is InternalUser => !!user)
     .filter((user, index, contacts) => contacts.findIndex(contact => contact.id === user.id) === index);
-  const selectedMaterialGroup = draft && materialTarget ? requestMaterialGroup(draft, materialTarget.itemId, materialTarget.requirementId) : undefined;
+  const selectedMaterialGroup = materialsRecord && materialTarget ? requestMaterialGroup(materialsRecord, materialTarget.itemId, materialTarget.requirementId) : undefined;
   const materialItem = selectedMaterialGroup ? materialDialogItem(selectedMaterialGroup) : undefined;
   const materialRequirement = selectedMaterialGroup?.requirement;
   const filtered = requests.filter((record) => {
@@ -694,8 +731,10 @@ export function RequestWorkspace(props: Props) {
       Pick<
         ServiceRequest,
         | 'title'
+        | 'requestType'
         | 'description'
         | 'expectedServiceDate'
+        | 'expectedServiceDateUncertain'
         | 'expectedProvider'
         | 'externalCollaborators'
         | 'internalParticipants'
@@ -848,6 +887,7 @@ export function RequestWorkspace(props: Props) {
                   <tr>
                     <th>{applicationLabel('title', '申请主题')} / 编号</th>
                     <th>客户</th>
+                    <th>申请类型</th>
                     <th>申请项</th>
                     <th>{applicationLabel('expectedServiceDate', '期望服务日期')}</th>
                     <th>状态</th>
@@ -876,8 +916,9 @@ export function RequestWorkspace(props: Props) {
                         {props.customers.find((c) => c.id === record.customerId)
                           ?.name ?? '待选择'}
                       </td>
+                      <td>{requestTypeOf(record) || '未选择类型'}</td>
                       <td>{record.items.length} 项</td>
-                      <td>{record.expectedServiceDate || '—'}</td>
+                      <td>{record.expectedServiceDateUncertain ? '暂不确定' : record.expectedServiceDate || '—'}</td>
                       <td>
                         <span
                           className="sr-badge"
@@ -962,6 +1003,10 @@ export function RequestWorkspace(props: Props) {
               </p>
             </div>
             <div className="detail-actions">
+              {draft.status === '评估完成' && requestTypeOf(draft) === '售前评估'
+                && !deliveryConversionIssue(draft, props.currentActor, props.users) && (
+                <Button disabled={busy} onClick={() => { if (busy || saveLock.current) return; setError(''); if (checkBeforeDeliveryConversion(draft)) setConversion(structuredClone(draft)); }}>转为交付</Button>
+              )}
               {isProjectCreationEligible(draft, props.currentActor) && (
                 <Button
                   className="ct-button ct-button--primary"
@@ -1014,10 +1059,11 @@ export function RequestWorkspace(props: Props) {
             </div>
           </header>
           <RequestStatusProgress record={draft} />
+          <RequestNextStepBanner key={draft.id} record={draft} users={props.users} customers={props.customers} contacts={props.contacts} />
           {feedback}
           {showIssues && validationResult?.requestId === draft.id && validationResult.failures.length > 0 && (
             <section className="sr-error sr-validation-alert" role="alert" ref={validationAlert} tabIndex={-1}>
-              <strong>{validationHeading(validationResult.events)}</strong>
+              <strong>{validationResult.heading ?? validationHeading(validationResult.events)}</strong>
               <ul>
                 {validationResult.failures.map((failure, index) => (
                   <li key={`${index}-${failure.ruleId}`} title={failure.requirement}>{failure.message}</li>
@@ -1068,7 +1114,6 @@ export function RequestWorkspace(props: Props) {
                   contacts={props.contacts.filter(
                     (contact) => contact.customerId === draft.customerId,
                   )}
-                  description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。"
                   value={draft.externalCollaborators ?? []}
                   readonly={!canAddExternalCollaborators(draft, access)}
                   allowRemove={true}
@@ -1133,6 +1178,13 @@ export function RequestWorkspace(props: Props) {
                     placeholder="例如：生产环境新装与巡检"
                   />
                 </label>
+                <label htmlFor="sr-request-type">
+                  {applicationLabel('requestType', '申请类型')} <em>*</em>
+                  <select id="sr-request-type" required value={requestTypeOf(draft)} onChange={event => updateDraft({ requestType: event.target.value as RequestType })}>
+                    <option value="" disabled>请选择申请类型</option>
+                    {requestTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
                 <label htmlFor="sr-customer-readonly">
                   <RequestCustomerLabel hint={draft.customerId ? '创建后不可修改客户。' : '此历史草稿未关联客户，请重新创建请求。'} />
                   <Input
@@ -1148,12 +1200,14 @@ export function RequestWorkspace(props: Props) {
                 </label>
                 <DateField
                   id="sr-expected-service-date"
-                  label={applicationLabel('expectedServiceDate', '期望服务日期')}
+                  label={applicationLabel('expectedServiceDate', '期望服务日期')} required
                   value={draft.expectedServiceDate ?? ''}
+                  uncertain={draft.expectedServiceDateUncertain === true}
+                  onUncertain={() => updateDraft({ expectedServiceDate: '', expectedServiceDateUncertain: true })}
                   readonly={readonly}
                   disabled={busy}
                   onChange={(expectedServiceDate) =>
-                    updateDraft({ expectedServiceDate })
+                    updateDraft({ expectedServiceDate, expectedServiceDateUncertain: false })
                   }
                 />
                 <label className="sr-span">
@@ -1177,7 +1231,7 @@ export function RequestWorkspace(props: Props) {
               onRemove={setRemoveId}
               onCopy={id => { void duplicateItem(draft, id, false); }}
             />
-            <RequestMaterialsPanel record={draft} actor={props.currentActor} readonly={itemsReadonly} busy={busy} onMaterial={setMaterialTarget} />
+            <RequestMaterialsPanel record={materialsRecord!} description={preparingDeliveryMaterials ? '按服务交付要求补齐材料，已评估材料仅可查看。' : undefined} actor={props.currentActor} readonly={materialsReadonly} busy={busy} onMaterial={setMaterialTarget} />
             <section
               className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}
               aria-labelledby="sr-system-heading"
@@ -1221,16 +1275,18 @@ export function RequestWorkspace(props: Props) {
         </>
       ))}
 
+      {conversion && <RequestDeliveryConversion busy={busy} onConfirm={() => void confirmDeliveryConversion()} onClose={() => setConversion(null)} />}
       {draft && materialItem &&
         materialRequirement &&
         (isInternal(props.currentRole) || requestMaterialsCustomerVisible(draft)) && (
           <RequestMaterialDialog
             key={materialItem.id + ':' + materialRequirement.id}
-            record={draft}
+            record={materialsRecord!}
             item={materialItem}
             requirement={materialRequirement}
             actor={props.currentActor}
-            readonly={itemsReadonly}
+            readonly={materialsReadonly}
+            lockedFileIds={lockedMaterialFileIds}
             busy={busy}
             error={error}
             onClose={() => setMaterialTarget(null)}
@@ -1260,7 +1316,7 @@ export function RequestWorkspace(props: Props) {
             </Button>
           </>}
         >
-          <RequestStatusProgress status="草稿" />
+          <RequestStatusProgress record={creation} />
           {error && <p className="sr-error" role="alert">{error}</p>}
           <div className="sr-detail-layout">
           <div className="sr-detail-main">
@@ -1281,6 +1337,13 @@ export function RequestWorkspace(props: Props) {
                 }}
                 placeholder="例如：生产环境新装与巡检"
               />
+            </label>
+            <label htmlFor="sr-create-request-type">
+              {applicationLabel('requestType', '申请类型')} <em>*</em>
+              <select id="sr-create-request-type" required value={creation.requestType ?? ''} onChange={event => updateCreation({ requestType: event.target.value as RequestType })}>
+                <option value="" disabled>请选择申请类型</option>
+                {requestTypes.map(type => <option key={type} value={type}>{type}</option>)}
+              </select>
             </label>
             {customerPortal ? <label htmlFor="sr-create-customer-readonly">
               <RequestCustomerLabel />
@@ -1307,7 +1370,7 @@ export function RequestWorkspace(props: Props) {
                 </select>
               </label>
             )}
-            <DateField id="sr-create-expected-date" label={applicationLabel('expectedServiceDate', '期望服务日期')} value={creation.expectedServiceDate ?? ''} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate })} />
+            <DateField id="sr-create-expected-date" label={applicationLabel('expectedServiceDate', '期望服务日期')} required value={creation.expectedServiceDate ?? ''} uncertain={creation.expectedServiceDateUncertain === true} onUncertain={() => updateCreation({ expectedServiceDate: '', expectedServiceDateUncertain: true })} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate, expectedServiceDateUncertain: false })} />
             <label className="sr-span">{applicationLabel('description', '申请说明')}（选填）
               <textarea rows={3} value={creation.description} onChange={event => updateCreation({ description: event.target.value })} placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。" />
             </label>
@@ -1324,7 +1387,7 @@ export function RequestWorkspace(props: Props) {
           <RequestMaterialsPanel record={creation} actor={props.currentActor} readonly={false} busy={busy} onMaterial={setCreateMaterialTarget} />
           </div>
           <aside className="sr-collaboration-column" aria-label="协作人">
-            <RequestExternalCollaborators showCustomerVisibility={!customerPortal} applicantId={customerPortal ? creation.createdById : undefined} contacts={props.contacts.filter(contact => contact.customerId === createCustomer)} description="搜索当前客户联系人，勾选后确认添加。已停用联系人不可添加。" value={creation.externalCollaborators ?? []} readonly={!createCustomer} allowRemove={true} busy={busy} onChange={externalCollaborators => updateCreation({ externalCollaborators })} />
+            <RequestExternalCollaborators showCustomerVisibility={!customerPortal} applicantId={customerPortal ? creation.createdById : undefined} contacts={props.contacts.filter(contact => contact.customerId === createCustomer)} value={creation.externalCollaborators ?? []} readonly={!createCustomer} allowRemove={true} busy={busy} onChange={externalCollaborators => updateCreation({ externalCollaborators })} />
             {!customerPortal && <RequestInternalInfo applicantId={creation.createdById} ownerUserId={props.customers.find(customer => customer.id === createCustomer)?.ownerUserId} users={props.users} value={creation.internalParticipants ?? []} readonly={!createCustomer} busy={busy} onChange={internalParticipants => updateCreation({ internalParticipants })} />}
           </aside>
           </div>

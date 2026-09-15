@@ -1,4 +1,5 @@
 'use client';
+import { requestTypeOf } from '@/lib/request-types';
 
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
 import { readApprovalRules } from '@/lib/approval-flow-store';
@@ -141,6 +142,7 @@ export function RequestAssessment({
     plan = currentPlan(record),
     effort = assessedEffort(record);
   const effortTotals = effortTotalsByMethod(record, a.effort?.lines ?? []);
+  const presales = requestTypeOf(record) === '售前评估';
   const entitlementAllocations = activeEntitlementAllocations(record);
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
   const needsHardware = hardwareItems(record).length > 0;
@@ -277,9 +279,6 @@ export function RequestAssessment({
       <div className="sr-ops-heading">
         <div>
           <h3>评估</h3>
-          <p>{requestAudience(record) === 'internal'
-            ? '由项目经理完成材料评估、人天核定；由内部申请人关联服务依据并发起客户确认。'
-            : '由项目经理完成材料评估、人天核定；由客户所有人关联服务依据并发起客户确认。'}</p>
         </div>
         <div className="sr-assessment-manager">
           <span>项目经理</span>
@@ -300,13 +299,7 @@ export function RequestAssessment({
               <StepTitle index={0} stage={stage} complete={!!a.confirmation}>
                 材料评估
               </StepTitle>
-              {!needsHardware && a.rounds.at(-1) && (
-                <RecordMeta author={a.rounds.at(-1)!.author} at={a.rounds.at(-1)!.at} />
-              )}
             </div>
-            {!needsHardware && manager && editable && !passed && (
-              <Button disabled={disabled} onClick={() => open('round')}>材料评估</Button>
-            )}
             {passed && <Badge>已通过 · 评估结论已锁定</Badge>}
           </div>
           {needsHardware && <section className="sr-assessment-role" aria-label="硬件产品经理评估">
@@ -320,11 +313,11 @@ export function RequestAssessment({
               <p>{hardwareRound.opinion}</p>
             </article></div> : <p className="sr-help">{passed && !a.hardware ? '历史已通过请求，保留原评估结果。' : a.hardware?.rounds.length ? '材料已变化，请重新评估。' : '等待硬件产品经理记录评估结论。'}</p>}
           </section>}
-          <section className={needsHardware ? 'sr-assessment-role' : undefined} aria-label="项目经理评估">
-            {needsHardware && <div className="sr-assessment-section-title">
+          <section className="sr-assessment-role" aria-label="项目经理评估">
+            <div className="sr-assessment-section-title">
               <div><strong>项目经理评估</strong> <Badge>{a.rounds.at(-1)?.outcome ?? '待评估'}</Badge></div>
               {manager && editable && !passed && <Button disabled={disabled} onClick={() => open('round')}>填写评估</Button>}
-            </div>}
+            </div>
             {a.routing?.manager && <p className="sr-help" title={a.routing.manager.reason}>负责人：{a.routing.manager.userName || '待分配 · 请联系管理员'}</p>}
             {!a.rounds.length ? (
               <p className="sr-help">等待项目经理查看申请材料并记录评估结论。</p>
@@ -332,17 +325,8 @@ export function RequestAssessment({
               <div className="sr-assessment-rounds">
                 {a.rounds.slice(-1).map((r) => (
                   <article key={r.id}>
-                    {needsHardware ? <RecordMeta author={r.author} at={r.at} /> : <div className="sr-assessment-round-title">
-                      <strong>材料评估记录</strong>
-                      <Badge>{r.outcome}</Badge>
-                    </div>}
+                    <RecordMeta author={r.author} at={r.at} />
                     <p>{r.opinion}</p>
-                    {(r.scope || r.risks) && (
-                      <dl>
-                        {r.scope && <><dt>服务范围</dt><dd>{r.scope}</dd></>}
-                        {r.risks && <><dt>风险与前置条件</dt><dd>{r.risks}</dd></>}
-                      </dl>
-                    )}
                   </article>
                 ))}
               </div>
@@ -352,7 +336,7 @@ export function RequestAssessment({
         <section className="sr-assessment-plan">
           <div className="sr-assessment-section-title">
             <div className="sr-assessment-step-heading">
-              <StepTitle index={1} stage={stage} complete={!!a.confirmation}>
+              <StepTitle index={1} stage={stage} complete={!!a.confirmation || record.status === '评估完成'}>
                 人天核定
               </StepTitle>
               {(a.effort || plan) && (
@@ -410,7 +394,7 @@ export function RequestAssessment({
             </div>
           )}
         </section>
-        <section className="sr-assessment-plan">
+        {!presales && <><section className="sr-assessment-plan">
           <div className="sr-assessment-section-title">
             <div className="sr-assessment-step-heading">
               <StepTitle index={2} stage={stage} complete={!!a.confirmation}>
@@ -562,7 +546,11 @@ export function RequestAssessment({
                 ? '等待额度特批通过后，可发起客户确认。'
                 : '服务依据已足额覆盖，请核对请求概览与预计消耗资产后发起客户确认。'}
           </p>
-        </section>
+        </section></>}
+        {presales && <section className="sr-assessment-plan">
+          <div className="sr-assessment-section-title"><strong>评估完成</strong>{record.status === '评估完成' && <Badge>已完成</Badge>}</div>
+          <p className="sr-help">{record.status === '评估完成' ? '售前评估已完成。如需继续交付，由负责项目经理点击页面上方“转为交付”。' : '完成人天核定后结束售前评估。'}</p>
+        </section>}
       </div>
       <Dialog
         open={!!dialog}

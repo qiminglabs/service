@@ -352,7 +352,7 @@ export function applyRequestAction(
     throw new Error('请选择内部操作人。');
   if (record.status === '草稿' && !['meeting-attachments-add', 'meeting-attachment-delete'].includes(action.type))
     throw new Error('提交申请后才能使用内部工作模块。');
-  if (['已取消', '已转服务项目'].includes(record.status))
+  if (['已取消', '已转服务项目', '评估完成'].includes(record.status))
     throw new Error('当前请求已结束，仅可查看历史记录。');
   const ops = structuredClone(operationsOf(record));
   let status = record.status;
@@ -844,6 +844,6 @@ export function requestReturnNotice(record: ServiceRequest): { title: string; re
 
 export function canRecordWorklog(record: ServiceRequest, actor: OperationActor): boolean {
   return Boolean(actor.id) && isInternal(actor.role)
-    && !['草稿', '已取消', '已转服务项目'].includes(record.status)
+    && !['草稿', '已取消', '已转服务项目', '评估完成'].includes(record.status)
     && (actor.role === 'SmartX 项目经理' || Boolean(record.internalParticipants?.some(person => person.userId === actor.id)));
 }

@@ -1,4 +1,5 @@
 'use client';
+import { requestTypeOf } from '@/lib/request-types';
 import { RequestSupplements } from '@/components/request-supplements';
 import { visibleSupplements } from '@/lib/request-supplements';
 import type { ValidationFailure } from '@/lib/submission-validation';
@@ -158,7 +159,7 @@ export function RequestOperationsTabs({
   const [voidWorklog, setVoidWorklog] = useState(false);
   const role = actor.role;
   const ops = operationsOf(record);
-  const closed = ['已取消', '已转服务项目'].includes(record.status);
+  const closed = ['已取消', '已转服务项目', '评估完成'].includes(record.status);
   const editable = !closed && !busy && Boolean(actor.id);
   const canLog = editable && canRecordWorklog(record, actor);
   const activeLogs = ops.worklogs.filter((w) => !w.voidedAt);
@@ -241,7 +242,7 @@ export function RequestOperationsTabs({
         <div className="sr-detail-layout">
           <div className="sr-detail-main">
             <TabsContent value="overview">
-              {!isInternal(role) && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
+              {!isInternal(role) && requestTypeOf(record) !== '售前评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
               {children}
             </TabsContent>
             <TabsContent value="supplements">
@@ -353,7 +354,7 @@ export function RequestOperationsTabs({
                 <div className="sr-ops-heading">
                   <div>
                     <h3>工时</h3>
-                    <p>项目经理和内部协作人记录自己的实际投入，不等于客户计费人天。</p>
+                    <p>记录内部协作人的实际投入，不等于客户计费人天。</p>
                   </div>
                   <Button
                     disabled={!canLog}
@@ -497,7 +498,6 @@ export function RequestOperationsTabs({
                 <div className="sr-ops-heading">
                   <div>
                     <h3>活动</h3>
-                    <p>审批历史、协作变更及内部工作记录，按时间集中留痕。</p>
                   </div>
                   <NativeSelect
                     aria-label="活动类型"

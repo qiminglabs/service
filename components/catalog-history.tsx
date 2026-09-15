@@ -1,4 +1,5 @@
 'use client';
+import { materialRequirementLabel } from '@/lib/material-requirements';
 
 import { requestFieldLabel } from '@/lib/request-field-labels';
 import { fieldRequirementLabels } from '@/lib/request-field-requirements';
@@ -82,7 +83,7 @@ function ConfigSnapshot({
       {config.materials.map((material) => (
         <div key={material.id}>
           <strong>
-            {material.name}（{material.required ? '必填' : '选填'}）
+            {material.name}（{materialRequirementLabel(material)}）
           </strong>
           <p>{material.instructions}</p>
           {material.template ? (

@@ -1368,10 +1368,10 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
       parseDayQuantity(catalogForm.defaultQuantity) !== null &&
       Number(catalogForm.defaultQuantity) <= 999.9 &&
       Number(catalogForm.priceCoefficient) > 0 &&
-      Number(catalogForm.defaultQuantity) > 0);
+      Number(catalogForm.defaultQuantity) >= 0);
     if (!allFieldsComplete || !validNumbers) {
       setFormError(
-        '请填写全部字段；计价系数须大于 0、最多两位小数；最小人天数量须大于 0、不超过 999.9，最多一位小数。',
+        '请填写全部字段；计价系数须大于 0、最多两位小数；最小人天数量须大于等于 0、不超过 999.9，最多一位小数。',
       );
       return;
     }

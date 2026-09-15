@@ -1,6 +1,8 @@
 'use client';
 
 import { lazy, Suspense, useRef, useState } from 'react';
+import { materialRequiredFor } from '@/lib/material-requirements';
+import { requestTypeOf } from '@/lib/request-types';
 import {
   Download,
   FilePenLine,
@@ -73,6 +75,7 @@ export function RequestMaterialDialog({
   error,
   onSave,
   onClose,
+  lockedFileIds = [],
 }: {
   actor: OperationActor;
   record: ServiceRequest;
@@ -83,6 +86,7 @@ export function RequestMaterialDialog({
   error: string;
   onSave: (material: ItemMaterial) => Promise<boolean>;
   onClose: () => void;
+  lockedFileIds?: string[];
 }) {
   const [material, setMaterial] = useState<ItemMaterial>(() =>
     structuredClone(
@@ -108,7 +112,8 @@ export function RequestMaterialDialog({
   const internal = actor.role !== '客户';
   const customerVisible = requestMaterialsCustomerVisible(record);
   const files = requestMaterialFiles(record, material, internal ? 'internal' : 'customer');
-  const canEditFile = (file: StoredFile) => !readonly && (internal || (file.uploaderAudience === 'customer' && file.uploadedById === actor.id));
+  const required = materialRequiredFor(requirement, requestTypeOf(record));
+  const canEditFile = (file: StoredFile) => !readonly && !lockedFileIds.includes(file.id) && (internal || (file.uploaderAudience === 'customer' && file.uploadedById === actor.id));
   const editingReadonly = readonly || (!!editingFileId && !files.some(file => file.id === editingFileId && canEditFile(file)));
   const blocked = busy || loading || saving;
   const templateName =
@@ -210,10 +215,10 @@ export function RequestMaterialDialog({
         }
       >
         <DialogHeader className={editing ? 'sr-only' : undefined}>
-          <DialogTitle>{requirement.name}</DialogTitle>
+          <DialogTitle>{requirement.name}{required && <sup className="sr-material-required" aria-label="必填">*</sup>}</DialogTitle>
           <DialogDescription>
             {item.serviceName} ·{' '}
-            {requirement.required ? '必填材料' : '选填材料'}
+            {required ? '必填材料' : '选填材料'}
           </DialogDescription>
         </DialogHeader>
         <div className="sr-document-body">
@@ -520,7 +525,7 @@ export function RequestMaterialDialog({
                   ? '及其未保存的正文'
                   : ''}
                 ，保存材料后生效；取消材料修改可保留文件。
-                {requirement.required && files.length === 1
+                {required && files.length === 1
                   ? '删除后需补充至少一个文件，才能提交申请。'
                   : ''}
               </AlertDialogDescription>

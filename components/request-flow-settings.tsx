@@ -307,7 +307,7 @@ export function RequestFlowSettings({
         <div>
           <strong>默认负责人</strong>
         </div>
-        <div className="routing-inline">
+        <div className="routing-inline routing-default-controls">
           {selector(defaultUserId, setDefaultUserId, '默认负责人', true)}
           {canManage && (
             <Button
@@ -319,7 +319,7 @@ export function RequestFlowSettings({
                 void run(() => persistPolicy({ ...policy, defaultUserId }))
               }
             >
-              保存默认分配
+              保存
             </Button>
           )}
         </div>
