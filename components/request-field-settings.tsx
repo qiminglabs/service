@@ -16,8 +16,7 @@ import {
 import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { RequestFlowDiagram } from '@/components/request-flow-diagram';
 import { RequestFlowSettings } from '@/components/request-flow-settings';
-import { ApprovalFlowSettings } from '@/components/approval-flow-settings';
-import { ExecutionFlowSettings } from '@/components/execution-flow-settings';
+import { ApprovalRuleSettings } from '@/components/approval-rule-settings';
 import { RequestRuleSettings } from '@/components/request-rule-settings';
 import { backendSettingsSections, type BackendSettingsSection, type RequestFlowTab } from '@/lib/backend-settings';
 import { initialApplicationFields, isSystemApplicationField, normalizeApplicationFields } from '@/lib/request-application-fields';
@@ -363,22 +362,16 @@ export function RequestFieldSettings({
             </table>
           </div>
         </TabsContent>}
-        {section === 'request-rules' && <>
-          <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
-          <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
-        </>}
         {section === 'request-flow' && <>
           <TabsContent value="assessment-manager"><RequestFlowSettings role="manager" actor={actorIdentity} /></TabsContent>
           <TabsContent value="assessment-hardware"><RequestFlowSettings role="hardware" actor={actorIdentity} /></TabsContent>
-          <TabsContent value="approval-designer"><ApprovalFlowSettings actor={actorIdentity} /></TabsContent>
+          <TabsContent value="approval-designer"><ApprovalRuleSettings actor={actorIdentity} /></TabsContent>
+          <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
+          <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
         </>}
         {section === 'pricing' && <TabsContent value="entitlement-conversions">
           <EntitlementConversions actor={actor} />
         </TabsContent>}
-        {section === 'execution-flow' && <>
-          <TabsContent value="execution-flows"><ExecutionFlowSettings tab="execution-flows" actor={actorIdentity} /></TabsContent>
-          <TabsContent value="execution-assignments"><ExecutionFlowSettings tab="execution-assignments" actor={actorIdentity} /></TabsContent>
-        </>}
       </Tabs>
       <Dialog
         open={target !== null}

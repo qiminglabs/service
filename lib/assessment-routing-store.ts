@@ -126,6 +126,10 @@ export async function saveRoutingPolicy(
               routingTestKey(previous) !== routingTestKey(rule) ||
               JSON.stringify(previous.compiled) !==
                 JSON.stringify(rule.compiled);
+            if ((!previous && !rule.enabled) || (previous && rule.enabled !== previous.enabled))
+              throw new Error('不再支持启用或停用规则，请通过删除移除规则。');
+            if (previous && !previous.enabled && changed)
+              throw new Error('历史停用规则仅支持删除。');
             if (
               changed &&
               (!tested ||
@@ -142,6 +146,16 @@ export async function saveRoutingPolicy(
                 throw new Error('匹配条件互相矛盾或不适用于当前评估角色。');
             }
           }
+          result[role].rules = result[role].rules.map(rule => {
+            const previous = config[role].rules.find(item => item.id === rule.id);
+            const changed = !previous || routingTestKey(previous) !== routingTestKey(rule) || JSON.stringify(previous.compiled) !== JSON.stringify(rule.compiled);
+            // Metadata comes from this save, never from a client-supplied timestamp or name.
+            const { updatedAt: _at, updatedBy: _by, ...definition } = rule;
+            return { ...definition,
+              ...(changed ? { updatedAt: result.updatedAt, updatedBy: actor.name }
+                : { ...(previous.updatedAt ? { updatedAt: previous.updatedAt } : {}), ...(previous.updatedBy ? { updatedBy: previous.updatedBy } : {}) }),
+            };
+          });
           store.put({ id: assessmentRoutingId, payload: result });
         } catch (error) {
           reject(error);

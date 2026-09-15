@@ -12,13 +12,13 @@ import { Button } from '@/components/ui/button';
 import { RuleDeleteDialog } from '@/components/rule-delete-dialog';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
+import { UserSearchSelect } from '@/components/user-search-select';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
@@ -37,13 +37,9 @@ import {
   readRoutingData,
   saveRoutingPolicy,
   routingTestKey,
-  reassignRoutingRequest,
   type TestedRouting,
 } from '@/lib/assessment-routing-store';
-import {
-  resolveAssessmentRoute,
-  materialAssessmentPassed,
-} from '@/lib/assessment-routing';
+import { resolveAssessmentRoute } from '@/lib/assessment-routing';
 import type { OperationActor } from '@/lib/request-operations';
 
 type Data = Awaited<ReturnType<typeof readRoutingData>>;
@@ -72,9 +68,7 @@ export function RequestFlowSettings({
     [userId, setUserId] = useState('');
   const [tested, setTested] = useState<TestedRouting>(),
     [formError, setFormError] = useState('');
-  const [sampleId, setSampleId] = useState(''),
-    [reassignOpen, setReassignOpen] = useState(false),
-    [reason, setReason] = useState('');
+  const [sampleId, setSampleId] = useState('');
   const editorRevision = useRef(0);
   const dialogActive = useRef(false);
   const lock = useRef(false),
@@ -275,28 +269,17 @@ export function RequestFlowSettings({
     label: string,
     optional: boolean,
   ) => (
-    <NativeSelect
+    <UserSearchSelect
       id={`${role}-${optional ? 'default' : 'assignee'}`}
-      aria-label={label}
-      aria-required={!optional}
+      label={label}
+      required={!optional}
+      users={data.workspace.users}
+      eligibleIds={eligible.map(user => user.id)}
       value={value}
-      onChange={(e) => onChange(e.target.value)}
+      onChange={onChange}
       disabled={!canManage || busy || !ready}
-    >
-      <option value="">
-        {optional ? '未设置（无法匹配时待分配）' : '请选择负责人'}
-      </option>
-      {value && !eligible.some((u) => u.id === value) && (
-        <option value={value} disabled>
-          {personName(value)}（不可用）
-        </option>
-      )}
-      {eligible.map((user) => (
-        <option key={user.id} value={user.id}>
-          {user.name}
-        </option>
-      ))}
-    </NativeSelect>
+      emptyHint={optional ? '未设置时，无法匹配的请求将待分配。' : undefined}
+    />
   );
   return (
     <div className="request-flow-settings">
@@ -323,9 +306,6 @@ export function RequestFlowSettings({
       <section className="routing-default" aria-label="默认负责人">
         <div>
           <strong>默认负责人</strong>
-          <p className="sr-help">
-            按优先级从小到大匹配，首条命中即分配；没有命中时使用默认负责人。
-          </p>
         </div>
         <div className="routing-inline">
           {selector(defaultUserId, setDefaultUserId, '默认负责人', true)}
@@ -361,9 +341,10 @@ export function RequestFlowSettings({
             <thead>
               <tr>
                 <th>优先级</th>
-                <th>匹配条件</th>
+                <th>自然语言描述</th>
                 <th>分配给</th>
-                <th>状态</th>
+                <th>修改时间</th>
+                <th>修改人</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -374,6 +355,7 @@ export function RequestFlowSettings({
                   <td>
                     <div className="submission-rule-requirement">
                       {rule.requirement}
+                      {!rule.enabled && <small className="submission-rule-status-note">历史停用规则，仅可删除</small>}
                       <details>
                         <summary>查看执行条件</summary>
                         <p>{describeRoute(rule.compiled, data.workspace)}</p>
@@ -386,42 +368,18 @@ export function RequestFlowSettings({
                       <small className="sr-error">（不可用）</small>
                     )}
                   </td>
-                  <td>
-                    <span
-                      className="submission-rule-state"
-                      data-status={rule.enabled ? 'active' : 'disabled'}
-                    >
-                      {rule.enabled ? '已启用' : '已停用'}
-                    </span>
-                  </td>
+                  <td>{rule.updatedAt ? new Date(rule.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td>
+                  <td>{rule.updatedBy ?? '—'}</td>
                   <td>
                     {canManage ? (
                       <div className="rule-table-actions">
-                        <Button
+                        {rule.enabled && <Button
                           variant="ghost"
                           disabled={busy}
                           onClick={() => edit(rule)}
                         >
                           编辑
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          disabled={busy}
-                          onClick={() =>
-                            void run(() =>
-                              persistPolicy({
-                                ...policy,
-                                rules: policy.rules.map((r) =>
-                                  r.id === rule.id
-                                    ? { ...r, enabled: !r.enabled }
-                                    : r,
-                                ),
-                              }),
-                            )
-                          }
-                        >
-                          {rule.enabled ? '停用' : '启用'}
-                        </Button>
+                        </Button>}
                         <Button variant="ghost" disabled={busy} onClick={() => {
                           setDeleteTarget({ rule, revision: data.config.revision });
                           setFormError(''); dialogActive.current = true;
@@ -435,7 +393,7 @@ export function RequestFlowSettings({
               ))}
               {!policy.rules.length && (
                 <tr>
-                  <td colSpan={5} className="routing-empty">
+                  <td colSpan={6} className="routing-empty">
                     {ready
                       ? '尚无条件规则，将使用默认负责人。'
                       : '正在读取配置…'}
@@ -458,9 +416,6 @@ export function RequestFlowSettings({
         }, true)} />
       <section className="routing-preview" aria-label="分配预览">
         <strong>分配预览</strong>
-        <p className="sr-help">
-          选择已有请求，查看按当前已保存规则的匹配结果。预览不会修改负责人。
-        </p>
         <NativeSelect
           aria-label="预览服务请求"
           value={sampleId}
@@ -481,7 +436,10 @@ export function RequestFlowSettings({
         </NativeSelect>
         {sample && (preview || role === 'hardware') && (
           <div className="routing-preview-result">
-            <p>
+            {preview?.matchedBy === 'default' ? <>
+              <p>未命中分配规则。{preview.userId ? <>默认负责人：<strong>{preview.userName}</strong></> : !policy.defaultUserId && '未设置默认负责人，待分配。'}</p>
+              {!preview.userId && policy.defaultUserId && <p className="sr-error">默认负责人不存在、已停用或角色不符，待分配。</p>}
+            </> : <p>
               按当前规则：
               <strong>
                 {preview
@@ -489,7 +447,7 @@ export function RequestFlowSettings({
                   : '无需硬件产品经理评估'}
               </strong>{' '}
               · {preview?.reason ?? '未命中当前硬件评估触发条件。'}
-            </p>
+            </p>}
             <p className="sr-help">
               当前负责人：
               {current
@@ -501,22 +459,6 @@ export function RequestFlowSettings({
               {current &&
                 ` · 分配于 ${new Date(current.at).toLocaleString('zh-CN', { hour12: false })}`}
             </p>
-            {canManage &&
-              sample.status === '待评估' &&
-              !materialAssessmentPassed(sample) && (
-                <Button
-                  variant="outline"
-                  disabled={busy || (role === 'manager' && !preview?.userId)}
-                  onClick={() => {
-                    setReason('');
-                    setFormError('');
-                    setReassignOpen(true);
-                    dialogActive.current = true;
-                  }}
-                >
-                  按当前规则重新分配
-                </Button>
-              )}
             {!!sample.operations?.assessment?.routing?.history?.filter(
               (h) => h.role === role,
             ).length && (
@@ -566,7 +508,7 @@ export function RequestFlowSettings({
                   ...definition,
                   id: target?.id ?? crypto.randomUUID(),
                   compiled: tested.compiled,
-                  enabled: target?.enabled ?? true,
+                  enabled: true,
                 };
                 await persistPolicy(
                   {
@@ -588,7 +530,7 @@ export function RequestFlowSettings({
                 className="submission-rule-field"
               >
                 <span className="routing-field-heading">
-                  <span>匹配条件</span>
+                  <span>自然语言描述</span>
                   <em aria-hidden="true">*</em>
                 </span>
                 <Textarea
@@ -758,95 +700,6 @@ export function RequestFlowSettings({
               </Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={reassignOpen}
-        onOpenChange={(value) => {
-          if (!busy) {
-            setReassignOpen(value);
-            dialogActive.current = value;
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              重新分配{role === 'manager' ? '项目经理' : '硬件产品经理'}
-            </DialogTitle>
-            <DialogDescription>
-              请求 {sample?.id} 将按当前配置
-              {preview
-                ? `分配给 ${preview.userName || '待分配负责人'}`
-                : '取消硬件产品经理评估'}
-              。
-              {role === 'hardware'
-                ? preview
-                  ? '已有硬件结论将失效，需要重新评估。'
-                  : '原硬件结论保留在历史中，项目经理可继续整体材料评估。'
-                : '已有评估记录保留。'}
-            </DialogDescription>
-          </DialogHeader>
-          <label htmlFor={`${role}-reason`} className="submission-rule-field">
-            调整原因{' '}
-            <Textarea
-              id={`${role}-reason`}
-              value={reason}
-              maxLength={500}
-              disabled={busy}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
-          {formError && (
-            <p className="sr-error" role="alert">
-              {formError}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => {
-                setReassignOpen(false);
-                dialogActive.current = false;
-              }}
-            >
-              取消
-            </Button>
-            <Button
-              disabled={
-                busy ||
-                !reason.trim() ||
-                !sample ||
-                (role === 'manager' && !preview?.userId)
-              }
-              onClick={() =>
-                void run(async () => {
-                  if (!sample) return;
-                  const result = await reassignRoutingRequest(
-                    actor,
-                    sample.id,
-                    role,
-                    reason,
-                    sample.updatedAt,
-                    data.config.revision,
-                  );
-                  setData((previous) => ({
-                    ...previous,
-                    requests: previous.requests.map((r) =>
-                      r.id === result.id ? result : r,
-                    ),
-                  }));
-                  setReassignOpen(false);
-                  dialogActive.current = false;
-                  setNotice('已按当前规则重新分配。');
-                  window.dispatchEvent(new Event('assessment-routing-updated'));
-                }, true)
-              }
-            >
-              确认分配
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,4 +1,4 @@
-import { withHardwareCollaborators } from './request-collaboration.ts';
+import { withAssessmentCollaborators } from './request-collaboration.ts';
 import {
   hardwareItems,
   hardwareRequirement,
@@ -309,7 +309,7 @@ export function routeAssessmentOnSave(
       '系统',
       '申请项不再命中硬件评估触发条件',
     );
-  return withHardwareCollaborators(record, users);
+  return withAssessmentCollaborators(record, users);
 }
 export function reassignAssessment(
   record: ServiceRequest,
@@ -396,5 +396,5 @@ export function reassignAssessment(
     reason.trim(),
   );
   result.updatedAt = now;
-  return withHardwareCollaborators(result, users);
+  return withAssessmentCollaborators(result, users);
 }

@@ -5,7 +5,7 @@ import { canPerformAssessmentRole } from '@/lib/assessment-routing';
 import { checkSubmissionQueue, SubmissionValidationError, submissionEvent, validationHeading } from '@/lib/submission-validation';
 import type { ValidationFailure } from '@/lib/submission-validation';
 import type { RuleEvent } from '@/lib/submission-rule-schema';
-import { isRequestApplicant, requestAudience, hardwareCollaboratorId, hardwareCollaboratorRemovalIssue } from '@/lib/request-collaboration';
+import { isRequestApplicant, requestAudience, managerCollaboratorId, hardwareCollaboratorId, assessmentCollaboratorRemovalIssue } from '@/lib/request-collaboration';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { RequestFormBuilder } from '@/components/request-form-builder';
 import { requestFormOrder } from '@/lib/request-form-layout';
@@ -49,7 +49,7 @@ import {
   isProjectManager,
   repairCustomerRequestApprover,
 } from '@/lib/request-assessment';
-import { operationIdentities } from '@/lib/internal-users';
+import { fixedIdentityRoles, operationIdentities } from '@/lib/internal-users';
 import {
   requestReturnNotice,
   appendActivity,
@@ -665,6 +665,16 @@ export function RequestWorkspace(props: Props) {
       (customer) => customer.id === draft?.customerId,
     )?.ownerUserId,
   );
+  const customerProjectManager = props.users.find(
+    (user) => fixedIdentityRoles[user.id] === 'SmartX 项目经理'
+      && draft?.internalParticipants?.some(person => person.userId === user.id),
+  );
+  const customerInternalApplicant = draft && requestAudience(draft) === 'internal'
+    ? props.users.find(user => user.id === draft.createdById)
+    : undefined;
+  const customerSmartxContacts = [customerSalesManager, customerProjectManager, customerInternalApplicant]
+    .filter((user): user is InternalUser => !!user)
+    .filter((user, index, contacts) => contacts.findIndex(contact => contact.id === user.id) === index);
   const selectedMaterialGroup = draft && materialTarget ? requestMaterialGroup(draft, materialTarget.itemId, materialTarget.requirementId) : undefined;
   const materialItem = selectedMaterialGroup ? materialDialogItem(selectedMaterialGroup) : undefined;
   const materialRequirement = selectedMaterialGroup?.requirement;
@@ -709,7 +719,7 @@ export function RequestWorkspace(props: Props) {
     const removalIssue =
       requestContactRemovalIssue({ ...draft, ...patch }, draft) ??
       customerOwnerRemovalIssue({ ...draft, ...patch }, draft, props.customers) ??
-      hardwareCollaboratorRemovalIssue({ ...draft, ...patch }, draft);
+      assessmentCollaboratorRemovalIssue({ ...draft, ...patch }, draft);
     if (removalIssue) {
       setError(removalIssue);
       return;
@@ -1029,24 +1039,26 @@ export function RequestWorkspace(props: Props) {
             save={persist}
             sidebar={
               <aside className="sr-collaboration-column" aria-label="协作人">
-                {customerPortal && (
+                {customerPortal && customerSmartxContacts.length > 0 && (
                   <section className="sr-panel sr-collaboration-card" aria-label="SmartX 联系人">
                     <div className="sr-panel-heading"><h3>SmartX 联系人</h3></div>
                     <div className="sr-internal-body sr-smartx-contact">
-                      {customerSalesManager ? (
-                        <ul className="sr-participants"><li>
+                        <ul className="sr-participants">{customerSmartxContacts.map(contact => <li key={contact.id}>
                         <span className="sr-collaborator-copy">
-                            <span className="sr-participant-name">{customerSalesManager.name}</span>
+                            <span className="sr-participant-name">{contact.name}</span>
 
-                          <small title={`${customerSalesManager.phone?.trim() || '未填写电话'} · ${customerSalesManager.email?.trim() || '未填写邮箱'}`}>
-                            {customerSalesManager.phone?.trim() ? <a href={`tel:${customerSalesManager.phone.replace(/\s/g, '')}`}>{customerSalesManager.phone.trim()}</a> : '未填写电话'}
+                          <small title={`${contact.phone?.trim() || '未填写电话'} · ${contact.email?.trim() || '未填写邮箱'}`}>
+                            {contact.phone?.trim() ? <a href={`tel:${contact.phone.replace(/\s/g, '')}`}>{contact.phone.trim()}</a> : '未填写电话'}
                             {' · '}
-                            {customerSalesManager.email?.trim() || '未填写邮箱'}
+                            {contact.email?.trim() || '未填写邮箱'}
                           </small>
                         </span>
-                        <span className="sr-help">客户经理</span>
-                        </li></ul>
-                      ) : <span>暂未配置客户所属销售经理</span>}
+                        <span className="sr-help">{[
+                          contact.id === customerSalesManager?.id && '客户经理',
+                          contact.id === customerProjectManager?.id && '项目经理',
+                          contact.id === customerInternalApplicant?.id && '申请人',
+                        ].filter(Boolean).join(' · ')}</span>
+                        </li>)}</ul>
                     </div>
                   </section>
                 )}
@@ -1068,6 +1080,7 @@ export function RequestWorkspace(props: Props) {
                 {isInternal(props.currentRole) && (
                   <RequestInternalInfo
                     hardwareReviewerId={hardwareCollaboratorId(draft)}
+                    projectManagerId={managerCollaboratorId(draft)}
                     applicantId={requestAudience(draft) === 'internal' ? draft.createdById : undefined}
                     ownerUserId={
                       props.customers.find(

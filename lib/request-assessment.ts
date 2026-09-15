@@ -22,6 +22,8 @@ import {
   isInternal,
 } from './request-operations.ts';
 import type { OperationActor, RequestAsset } from './request-operations.ts';
+import { createApprovalExecution, decideApprovalExecution, type ApprovalExecution } from './approval-execution.ts';
+import type { ApprovalRules } from './approval-rules';
 
 export function canManageAssessmentBasis(record: ServiceRequest, actor?: OperationActor, customers: CustomerRef[] = [], users: InternalUser[] = []): boolean {
   if (!actor?.id || !isInternal(actor.role)) return false;
@@ -82,6 +84,7 @@ export type AssessmentPlan = {
   author: string;
 };
 export type GapApproval = {
+  workflow?: ApprovalExecution;
   id: string;
   planId: string;
   days: number;
@@ -139,7 +142,7 @@ export type AssessmentAction =
       allocations: { assetId: string; days: number }[];
       salesId: string;
     }
-  | { type: 'gap-submit'; reason: string; approverId: string }
+  | { type: 'gap-submit'; reason: string; approverId?: string }
   | { type: 'gap-decide'; id: string; approve: boolean; note: string }
   | { type: 'confirm'; externalNote?: string };
 export const emptyAssessment = (): Assessment => ({
@@ -227,6 +230,15 @@ export const isProjectManager = (actor: OperationActor) =>
   actor.role === 'SmartX 项目经理';
 export const isSalesUser = (user: InternalUser | undefined) =>
   !!user && user.status === '启用' && /销售/.test(user.department ?? '');
+export function canSubmitGapApproval(record: ServiceRequest, actor: OperationActor | undefined, users: InternalUser[]): boolean {
+  const plan = currentPlan(record);
+  if (!plan || !actor?.id || !isInternal(actor.role)) return false;
+  const user = users.find(user => user.id === actor.id && user.status === '启用');
+  if (!user) return false;
+  const applicant = requestAudience(record) === 'internal' && isRequestApplicant(record, actor);
+  const responsibleSales = actor.id === plan.salesId && actor.role === 'SmartX 销售经理' && isSalesUser(user);
+  return applicant || responsibleSales;
+}
 export function customerOwner(record: ServiceRequest, customers: CustomerRef[], users: InternalUser[]) {
   const ownerId = customers.find(customer => customer.id === record.customerId)?.ownerUserId;
   return users.find(user => user.id === ownerId && user.status === '启用');
@@ -311,6 +323,7 @@ export function applyAssessmentAction(
   services: CatalogService[] = [],
   customers: CustomerRef[] = [],
   pricingContext?: EntitlementPricingContext,
+  approvalRules?: ApprovalRules,
 ): ServiceRequest {
   if (!actor.id || !isInternal(actor.role))
     throw new Error('仅内部人员可处理评估工作。');
@@ -484,14 +497,8 @@ export function applyAssessmentAction(
     title = plan ? '调整服务依据' : '服务依据关联';
     detail = `计价总人天 ${effort} · 锁定 ${planAssetDays(assessment.plans.at(-1))} 人天`;
   } else if (action.type === 'gap-submit') {
-    const sales = users.find((u) => u.id === actor.id && isSalesUser(u));
-    if (
-      !plan ||
-      actor.id !== plan.salesId ||
-      !sales ||
-      actor.role !== 'SmartX 销售经理'
-    )
-      throw new Error('仅方案指定的销售可发起额度特批。');
+    if (!plan || !canSubmitGapApproval(record, actor, users))
+      throw new Error('仅本请求的内部申请人或方案指定的销售可发起额度特批。');
     const methodIssue = allocationMethodIssue(record, plan.allocations, assets);
     if (methodIssue) throw new Error(methodIssue);
     const gap = planGap(plan);
@@ -503,20 +510,22 @@ export function applyAssessmentAction(
       )
     )
       throw new Error('该方案已发起特批，请勿重复提交。');
-    const approver = gapApproverOptions(
+    const workflow = approvalRules ? createApprovalExecution(record, approvalRules, users, customers, now) : undefined;
+    const first = workflow?.steps[0];
+    const approver = first ? users.find(user => user.id === first.approverId && user.status === '启用') : gapApproverOptions(
       users,
       actor.id,
       assessment.managerId,
     ).find((user) => user.id === action.approverId);
     if (
       !approver ||
-      approver.id === actor.id ||
-      approver.id === assessment.managerId
+      (!workflow && (approver.id === actor.id || approver.id === assessment.managerId))
     )
       throw new Error(
-        '请选择右上角可切换身份中的上级审批人，不能由销售本人或评估项目经理审批。',
+        '请选择右上角可切换身份中的上级审批人，不能由发起人本人或评估项目经理审批。',
       );
     assessment.approvals.push({
+      ...(workflow ? { workflow } : {}),
       id: crypto.randomUUID(),
       planId: plan.id,
       days: gap,
@@ -530,8 +539,8 @@ export function applyAssessmentAction(
       state: '待审批',
     });
     category = '审批';
-    title = '销售发起额度特批';
-    detail = `缺口 ${formatDayRequirements(planDayGaps(plan)) || `${gap} 人天`} · ${action.reason}`;
+    title = workflow ? '发起特殊审批' : '发起额度特批';
+    detail = `缺口 ${formatDayRequirements(planDayGaps(plan)) || `${gap} 人天`} · ${action.reason}${workflow ? ` · ${workflow.ruleName} · ${workflow.steps.map(step => step.approver).join(' → ')}` : ''}`;
   } else if (action.type === 'gap-decide') {
     const approval = assessment.approvals.find((a) => a.id === action.id);
     if (
@@ -540,21 +549,27 @@ export function applyAssessmentAction(
       approval.planId !== plan?.id
     )
       throw new Error('审批已处理或资产方案已变更。');
-    if (
+    if (!approval.workflow && (
       !['SmartX 销售经理', 'SmartX 系统管理员'].includes(actor.role) ||
       actor.id !== approval.approverId ||
       actor.id === approval.authorId ||
       actor.id === assessment.managerId
-    )
+    ))
       throw new Error('仅指定上级可审批，不能自行审批。');
     text(action.note, '审批意见');
-    approval.state = action.approve ? '已通过' : '已拒绝';
-    approval.note = action.note.trim();
-    approval.decidedAt = now;
-    approval.decidedBy = actor.name;
-    category = '审批';
-    title = `额度特批${action.approve ? '通过' : '拒绝'}`;
-    detail = action.note;
+    if (approval.workflow) {
+      detail = decideApprovalExecution(approval, actor, users, action.approve, action.note, now);
+      category = '审批';
+      title = action.approve ? (approval.workflow.steps.every(step => step.state === '已通过') ? '特殊审批全部通过' : '特殊审批环节通过') : '特殊审批驳回，退回申请人';
+    } else {
+      approval.state = action.approve ? '已通过' : '已拒绝';
+      approval.note = action.note.trim();
+      approval.decidedAt = now;
+      approval.decidedBy = actor.name;
+      category = '审批';
+      title = `额度特批${action.approve ? '通过' : '拒绝'}`;
+      detail = action.note;
+    }
   } else if (action.type === 'confirm') {
     if (!canManageAssessmentBasis(record, actor, customers, users)) throw new Error(assessmentBasisPermissionMessage(record));
     if (!plan || assessedEffort(record) === undefined || !assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('请先完成材料评估、人天核定和服务依据关联。');
@@ -563,7 +578,7 @@ export function applyAssessmentAction(
       (a) => a.planId === plan.id && a.state === '已通过' && a.days >= gap,
     );
     if (gap > 1e-8 && !approval)
-      throw new Error('资产不足，请由销售发起特批并经上级审批通过。');
+      throw new Error('资产不足，请由内部申请人或负责销售发起特批并经上级审批通过。');
     const round = assessment.rounds.find((r) => r.id === plan.roundId)!;
     assessment.confirmation = {
       at: now,

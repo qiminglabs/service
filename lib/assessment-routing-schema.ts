@@ -39,6 +39,8 @@ export type RoutingRule = {
   userId: string;
   enabled: boolean;
   compiled: RoutePredicate;
+  updatedAt?: string;
+  updatedBy?: string;
 };
 export type RoutingPolicy = {
   defaultUserId: string;
@@ -222,6 +224,8 @@ export function parseRoutingConfig(value: unknown): RoutingConfig {
         userId: r.userId,
         enabled: r.enabled,
         compiled: parseRoutePredicate(r.compiled),
+        ...(typeof r.updatedAt === 'string' ? { updatedAt: r.updatedAt } : {}),
+        ...(typeof r.updatedBy === 'string' ? { updatedBy: r.updatedBy } : {}),
       };
     });
     if (new Set(rules.map((r) => r.id)).size !== rules.length)

@@ -9,6 +9,8 @@ import { isEntitlementService } from '@/lib/service-requests';
 import { CatalogHistory } from '@/components/catalog-history';
 import { InitializeDataButton } from '@/components/initialize-data-button';
 import { initializeCustomerOwners, resetLocalDemoData } from '@/lib/initialize-demo-data';
+import { removeSelectedDemoRules } from '@/lib/remove-demo-rules';
+import { reinitializeRuleBasedRequestSamples } from '@/lib/reinitialize-request-samples';
 import {
   resolveOperationActor,
   operationIdentities,
@@ -809,10 +811,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     : field), [requestFields, partners]);
   const [referencesReady, setReferencesReady] = useState(false);
   const [referenceStorageError, setReferenceStorageError] = useState('');
+  const [requestResetError, setRequestResetError] = useState('');
 
   useEffect(() => {
     let active = true;
-    initializeCatalogFormsFromBackupV2().then(() => readLocal<{
+    removeSelectedDemoRules().then(() => initializeCatalogFormsFromBackupV2()).then(() => reinitializeRuleBasedRequestSamples().catch(error => {
+      if (active) setRequestResetError(`服务请求重新初始化未完成，原数据已保留：${error instanceof Error ? error.message : '请刷新重试。'}`);
+    })).then(() => readLocal<{
       id: string;
       payload: {
         customerOwnersInitialized?: boolean;
@@ -1459,6 +1464,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           initializationDisabled={!referencesReady}
         />
         <main className="content-area" data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
+          {requestResetError && <p role="alert" className="sr-error">{requestResetError}</p>}
           {referenceStorageError && (
             <p role="alert" className="sr-error">
               {referenceStorageError}

@@ -279,6 +279,7 @@ export function RequestInternalInfo({
   applicantId,
   ownerUserId,
   hardwareReviewerId,
+  projectManagerId,
   users,
   value,
   readonly,
@@ -288,6 +289,7 @@ export function RequestInternalInfo({
   applicantId?: string;
   ownerUserId?: string;
   hardwareReviewerId?: string;
+  projectManagerId?: string;
   users: InternalUser[];
   value: InternalParticipant[];
   readonly: boolean;
@@ -299,11 +301,11 @@ export function RequestInternalInfo({
     <CollaboratorCard
       title="内部协作人"
       description="搜索主数据中的内部用户，勾选后确认添加。"
-      placeholder="搜索姓名、邮箱或部门"
+      placeholder="搜索姓名或邮箱"
       options={available.map((user) => ({
         id: user.id,
         name: user.name,
-        details: [fixedIdentityRoles[user.id], user.department, user.email]
+        details: [fixedIdentityRoles[user.id], user.email]
           .filter(Boolean)
           .join(' · '),
       }))}
@@ -311,15 +313,9 @@ export function RequestInternalInfo({
         const user = users.find((entry) => entry.id === person.userId);
         return {
           id: person.userId,
-          fixed: fixedInternalCollaboratorLabel(person.userId, applicantId, ownerUserId, hardwareReviewerId),
+          fixed: fixedInternalCollaboratorLabel(person.userId, applicantId, ownerUserId, hardwareReviewerId, projectManagerId),
           name: person.name,
-          details: [
-            fixedIdentityRoles[person.userId],
-            user?.department,
-            user?.email,
-          ]
-            .filter(Boolean)
-            .join(' · '),
+          details: user?.email ?? '',
         };
       })}
       readonly={readonly}
@@ -333,7 +329,7 @@ export function RequestInternalInfo({
         ])
       }
       onRemove={(id) =>
-        !fixedInternalCollaboratorLabel(id, applicantId, ownerUserId, hardwareReviewerId) && onChange(value.filter((person) => person.userId !== id))
+        !fixedInternalCollaboratorLabel(id, applicantId, ownerUserId, hardwareReviewerId, projectManagerId) && onChange(value.filter((person) => person.userId !== id))
       }
     />
   );

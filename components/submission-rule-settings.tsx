@@ -51,7 +51,7 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
   async function translateAndTest() {
     if (lock.current || !canManage || !ready) return;
     if (!events.length) { setTestError('请至少选择一个检查时机。'); return; }
-    if (!requirement.trim()) { setTestError('请输入自然语言描述检验要求。'); return; }
+    if (!requirement.trim()) { setTestError('请输入自然语言描述。'); return; }
     lock.current = true; setBusy(true); setTesting(true); setTested(undefined); setTestError(''); setFormError('');
     try {
       const response = await fetch('/api/submission-rules/compile', {
@@ -98,14 +98,13 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
     finally { lock.current = false; setBusy(false); }
   }
   return <>
-    <div className="submission-rules-toolbar">
-      <p>到达检查时机后，按适用申请逐条校验；全部通过后继续操作。</p>
-      {canManage && <Button disabled={!ready || busy} onClick={() => edit()}><Plus size={16} />新建规则</Button>}
-    </div>
+    {canManage && <div className="submission-rules-toolbar">
+      <Button className="ml-auto" disabled={!ready || busy} onClick={() => edit()}><Plus size={16} />新建规则</Button>
+    </div>}
     {error && <p className="sr-error" role="alert">{error}</p>}
     {notice && <p className="submission-rule-notice" role="status">{notice}</p>}
     <div className="table-scroll"><table className="reference-table app-list-table submission-rules-table">
-      <thead><tr><th>适用申请</th><th>检查时机</th><th>检验要求</th><th>提示文本</th><th>状态</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
+      <thead><tr><th>适用申请</th><th>检查时机</th><th>自然语言描述</th><th>提示文本</th><th>状态</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
       <tbody>
         {builtinSubmissionRules.map(rule => <tr key={rule.id}>
           <td>{ruleScopes[rule.scope]}</td><td><div className="submission-rule-events">{rule.events.map(event => <span key={event}>{ruleEvents[event]}</span>)}</div></td>
@@ -140,7 +139,7 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
             {Object.entries(ruleEvents).map(([value, label]) => <label key={value}><Checkbox disabled={busy} checked={events.includes(value as RuleEvent)} onCheckedChange={checked => { setEvents(previous => checked ? [...previous, value as RuleEvent] : previous.filter(event => event !== value)); invalidateTest(); }} />{label}</label>)}
           </fieldset>
           <div className="submission-rule-field">
-            <label htmlFor="rule-requirement">自然语言描述检验要求 <em aria-hidden="true">*</em></label>
+            <label htmlFor="rule-requirement">自然语言描述 <em aria-hidden="true">*</em></label>
             <Textarea id="rule-requirement" aria-describedby="rule-requirement-help" rows={3} maxLength={2000} required disabled={busy} value={requirement} onChange={event => { setRequirement(event.target.value); invalidateTest(); }} placeholder="例如：必须填写申请说明；期望服务日期至少提前 3 天；内部协作人至少包含一位服务工程师。" />
             <p id="rule-requirement-help" className="submission-rule-field-help">支持字段必填、人数和数量比较、协作人角色、必填材料齐套等检查。请先转译并测试，通过后保存。</p>
 

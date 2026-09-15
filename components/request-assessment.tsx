@@ -1,6 +1,8 @@
 'use client';
 
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
+import { readApprovalRules } from '@/lib/approval-flow-store';
+import { createApprovalExecution, type ApprovalExecution } from '@/lib/approval-execution';
 
 import type { ValidationFailure } from '@/lib/submission-validation';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -22,14 +24,13 @@ import {
 import {
   assessmentOf,
   canManageAssessmentBasis,
+  canSubmitGapApproval,
   customerOwner,
-  gapApproverOptions,
   assessedEffort,
   currentPlan,
   planAssetDays,
   planGap,
   assetAvailable,
-  isSalesUser,
   applyAssessmentAction,
 } from '@/lib/request-assessment';
 import { activeEntitlementAllocations, effortEntitlementAllocations, entitlementLabel } from '@/lib/request-entitlement-reservations';
@@ -230,6 +231,7 @@ export function RequestAssessment({
       const pricingData = ['effort', 'plan', 'confirm'].includes(action.type) ? await readCurrentPricingData() : { services, context: livePricingContext };
       const pricingServices = pricingData.services;
       if (action.type === 'effort') { setLiveServices(pricingServices); setLivePricingContext(pricingData.context); }
+      const approvalData = action.type === 'gap-submit' || action.type === 'gap-decide' ? await readApprovalRules() : undefined;
       const checkBasisOwner = action.type === 'plan' || action.type === 'confirm';
       const references = checkBasisOwner ? await readLocal<{ id: string; payload?: { customers?: CustomerRef[]; users?: InternalUser[] } }>('references') : [];
       const workspace = references.find(reference => reference.id === 'workspace')?.payload;
@@ -238,12 +240,13 @@ export function RequestAssessment({
         action,
         actor,
         assets,
-        checkBasisOwner ? (workspace?.users ?? []) : users,
+        approvalData?.users ?? (checkBasisOwner ? (workspace?.users ?? []) : users),
         fresh,
         undefined,
         pricingServices,
         checkBasisOwner ? (workspace?.customers ?? []) : customers,
         pricingData.context,
+        approvalData?.collection,
       );
       const ok = await save(
         next,
@@ -466,13 +469,14 @@ export function RequestAssessment({
                       {approved
                         ? '额度特批已通过，可发起客户确认。'
                         : waiting
-                          ? '销售已发起特批，等待指定上级审批。'
-                          : `由 ${plan.salesName} 发起额度特批，再交上级审批。`}
+                          ? '已发起额度特批，等待指定上级审批。'
+                          : requestAudience(record) === 'internal'
+                            ? `由内部申请人或负责销售 ${plan.salesName} 发起额度特批，再交上级审批。`
+                            : `由 ${plan.salesName} 发起额度特批，再交上级审批。`}
                     </p>
                   </div>
                   {editable &&
-                    actor.id === plan.salesId &&
-                    isSalesUser(users.find((u) => u.id === actor.id)) &&
+                    canSubmitGapApproval(record, actor, users) &&
                     !waiting &&
                     !approved && (
                       <Button disabled={disabled} onClick={() => open('gap')}>
@@ -487,7 +491,9 @@ export function RequestAssessment({
             <p className="sr-help">
               {effort === undefined
                 ? '完成人天核定后，关联客户资产或额外服务额度。'
-                : '请选择客户资产并填写锁定人天；不足部分由销售发起额度特批。'}
+                : requestAudience(record) === 'internal'
+                  ? '请选择客户资产并填写锁定人天；不足部分由内部申请人或负责销售发起额度特批。'
+                  : '请选择客户资产并填写锁定人天；不足部分由负责销售发起额度特批。'}
             </p>
           )}
           {currentApprovals.length > 0 && (
@@ -499,8 +505,13 @@ export function RequestAssessment({
                     <Badge>{v.state}</Badge>
                     <p>{v.reason}</p>
                     <small>
-                      {v.author} 发起 · 上级审批人：{v.approver} · {stamp(v.at)}
+                      {v.author} 发起 · {v.workflow ? v.workflow.ruleName : '上级审批人：' + v.approver} · {stamp(v.at)}
                     </small>
+                    {v.workflow && <ol className="sr-approval-step-history">{v.workflow.steps.map(step => <li key={step.id}>
+                      <strong>{step.nodeName} · {step.approver}</strong> <Badge>{step.state}</Badge>
+                      {step.cutoff && <small>审批截止人</small>}{step.fallback && <small>默认审批人兜底：{step.fallbackReason}</small>}
+                      {step.note && <p>{step.note} · {stamp(step.decidedAt!)}</p>}
+                    </li>)}</ol>}
                     {v.note && (
                       <p className="sr-ops-decision">
                         {v.decidedBy}：{v.note}
@@ -707,8 +718,18 @@ function AssessmentForm({
   );
   const sales = customerOwner(record, customers, users);
   const salesId = sales?.id ?? '';
-  const [approverId, setApproverId] = useState('');
-  const approvers = gapApproverOptions(users, actor.id, a.managerId);
+  const [approvalRoute, setApprovalRoute] = useState<ApprovalExecution | null>(null);
+  const [approvalRouteError, setApprovalRouteError] = useState('');
+  useEffect(() => {
+    if (mode !== 'gap') return;
+    let active = true;
+    setApprovalRoute(null); setApprovalRouteError('');
+    readApprovalRules().then(data => {
+      const route = createApprovalExecution(record, data.collection, data.users, data.dictionary.customers, new Date().toISOString());
+      if (active) setApprovalRoute(route);
+    }).catch(error => { if (active) setApprovalRouteError(error instanceof Error ? error.message : '审批规则读取失败。'); });
+    return () => { active = false; };
+  }, [mode, record]);
   const customerAssets = assets.filter(
     (v) =>
       v.customerId === record.customerId &&
@@ -723,7 +744,7 @@ function AssessmentForm({
     round: '材料评估',
     effort: '人天核定',
     plan: '服务依据关联',
-    gap: '销售发起额度特批',
+    gap: '发起额度特批',
     decide: '上级审批额度特批',
   };
   async function submit() {
@@ -740,7 +761,7 @@ function AssessmentForm({
           .map(([assetId, v]) => ({ assetId, days: Number(v) })),
       });
     if (mode === 'gap')
-      return run({ type: 'gap-submit', reason: opinion, approverId });
+      return run({ type: 'gap-submit', reason: opinion });
   }
   return (
     <>
@@ -894,25 +915,12 @@ function AssessmentForm({
             />
           </Field>
         )}
-        {mode === 'gap' && (
-          <Field title="上级审批人 *">
-            <NativeSelect
-              disabled={disabled}
-              value={approverId}
-              onChange={(e) => setApproverId(e.target.value)}
-            >
-              <option value="">请选择上级审批人</option>
-              {approvers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field>
-        )}
+        {mode === 'gap' && <Field title="审批流程">
+          {approvalRoute ? <><strong>{approvalRoute.ruleName}</strong><ol>{approvalRoute.steps.map(step => <li key={step.id}>{step.nodeName}：{step.approver}{step.cutoff ? '（审批截止人）' : step.fallback ? '（默认审批人）' : ''}</li>)}</ol></> : <p className={approvalRouteError ? 'sr-error' : 'sr-help'}>{approvalRouteError || '正在匹配审批流程…'}</p>}
+        </Field>}
         {mode === 'decide' && (
           <p className="sr-help">
-            销售 {approval?.author} 发起：{approval?.reason}
+            {approval?.author} 发起：{approval?.reason}
           </p>
         )}
         {error && !(mode === 'effort' && isMinimumDaysIssue(error)) && (
@@ -956,14 +964,14 @@ function AssessmentForm({
             </Button>
           </>
         ) : (
-          <Button disabled={disabled || (mode === 'hardware-review' && !opinion.trim()) || (mode === 'round' && outcome === '评估通过' && !!hardwareIssue) || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!pricingReady || !sales || !!allocationIssue))} onClick={() => void submit()}>
+          <Button disabled={disabled || (mode === 'gap' && (!approvalRoute || !opinion.trim())) || (mode === 'hardware-review' && !opinion.trim()) || (mode === 'round' && outcome === '评估通过' && !!hardwareIssue) || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!pricingReady || !sales || !!allocationIssue))} onClick={() => void submit()}>
             {mode === 'hardware-review' ? '保存评估结论' : mode === 'round'
               ? '保存评估结论'
               : mode === 'effort'
                 ? '保存人天核定'
                 : mode === 'plan'
                   ? '保存服务依据'
-                  : '提交上级审批'}
+                  : '提交审批'}
           </Button>
         )}
       </DialogFooter>

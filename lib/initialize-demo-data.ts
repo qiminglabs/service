@@ -4,6 +4,8 @@ import { openDatabase, defaultConfig, resolveRequestConfig, customerRequestConfi
 import type { CustomerRef, InternalUser } from './service-requests';
 import { ensureConversionHistory } from './entitlement-conversions.ts';
 import { requestFormOrder } from './request-form-layout.ts';
+import { demoReportingUsers, demoWorkflowRuleReferences } from './demo-workflow-rules.ts';
+import { ruleBasedRequestSamplesMarker } from './reinitialize-request-samples.ts';
 
 export function initializeCustomerOwners<T extends CustomerRef>(customers: T[], users: InternalUser[]): T[] {
   const sales = users.find(user => user.status === '启用' && /销售/.test(user.department));
@@ -19,6 +21,7 @@ type InitialWorkspace = Parameters<typeof buildRequestSamples>[0] & {
 // then replace this application's three stores in a single rollback-safe commit.
 export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T) {
   const workspace = structuredClone(initial);
+  workspace.users = demoReportingUsers(workspace.users);
   workspace.customers = initializeCustomerOwners(workspace.customers, workspace.users);
   if (workspace.customers.some(customer => !customer.ownerUserId))
     throw new Error('初始化失败：客户缺少可分配的销售经理。');
@@ -48,14 +51,16 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
     resolved.fieldRowStarts = ['description'];
     return resolved;
   });
-  const references = [
+  const references = [...new Map([
     ...demoSubmissionRuleReferences([]),
     { id: 'workspace', payload: { ...workspace, customerOwnersInitialized: true } },
     ...configs.map(config => ({ id: customerRequestConfigId(config.serviceId), payload: structuredClone(config) })),
     ...(['inspection', 'upgrade'] as const).map(kind => ({ id: `entitlement-conversion-${kind}`, payload: ensureConversionHistory(undefined) })),
     { id: requestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
-  ];
-  const samples = buildRequestSamples(workspace, [], configs, references);
+    ...demoWorkflowRuleReferences(workspace),
+    { id: ruleBasedRequestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
+  ].map(reference => [reference.id, reference])).values()];
+  const samples = buildRequestSamples(workspace, [], configs, references, new Date(), true);
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {

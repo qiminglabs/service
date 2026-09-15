@@ -29,8 +29,25 @@ export function hardwareCollaboratorRemovalIssue(record: ServiceRequest, previou
     && !record.internalParticipants?.some(person => person.userId === userId)
     ? '硬件产品经理为固定内部协作人，不允许移除。' : null;
 }
-export function fixedInternalCollaboratorLabel(userId: string, applicantId?: string, ownerUserId?: string, hardwareReviewerId?: string): string | undefined {
-  return [userId === ownerUserId && '客户所有人', userId === applicantId && '申请人', userId === hardwareReviewerId && '硬件产品经理']
+export function managerCollaboratorId(record: ServiceRequest): string | undefined {
+  const assessment = record.operations?.assessment;
+  return assessment?.routing ? assessment.routing.manager?.userId || undefined : assessment?.managerId || undefined;
+}
+export function withAssessmentCollaborators(record: ServiceRequest, users: InternalUser[]): ServiceRequest {
+  const userId = managerCollaboratorId(record);
+  const user = users.find(user => user.id === userId && user.status === '启用' && fixedIdentityRoles[user.id] === 'SmartX 项目经理');
+  const next = user && !record.internalParticipants?.some(person => person.userId === user.id)
+    ? { ...record, internalParticipants: [...(record.internalParticipants ?? []), { userId: user.id, name: user.name }] } : record;
+  return withHardwareCollaborators(next, users);
+}
+export function assessmentCollaboratorRemovalIssue(record: ServiceRequest, previous?: ServiceRequest): string | null {
+  const userId = previous && managerCollaboratorId(previous);
+  if (userId && previous?.internalParticipants?.some(person => person.userId === userId)
+    && !record.internalParticipants?.some(person => person.userId === userId)) return '项目经理为固定内部协作人，不允许移除。';
+  return hardwareCollaboratorRemovalIssue(record, previous);
+}
+export function fixedInternalCollaboratorLabel(userId: string, applicantId?: string, ownerUserId?: string, hardwareReviewerId?: string, projectManagerId?: string): string | undefined {
+  return [userId === ownerUserId && '客户所有人', userId === applicantId && '申请人', userId === hardwareReviewerId && '硬件产品经理', userId === projectManagerId && '项目经理']
     .filter(Boolean).join(' · ') || undefined;
 }
 export function withRequestCollaborators(record: ServiceRequest, contacts: ContactRef[], customers: CustomerRef[] = [], users: InternalUser[] = []): ServiceRequest {
@@ -47,7 +64,7 @@ export function withRequestCollaborators(record: ServiceRequest, contacts: Conta
   const ownerId = customers.find(c => c.id === record.customerId)?.ownerUserId;
   const owner = users.find(u => u.id === ownerId);
   if (owner && !next.internalParticipants.some(p => p.userId === owner.id)) next.internalParticipants.unshift({ userId: owner.id, name: owner.name });
-  return withHardwareCollaborators(next, users);
+  return withAssessmentCollaborators(next, users);
 }
 export function applicantRemovalIssue(record: ServiceRequest): string | null {
   if (!record.createdById) return null;

@@ -1,3 +1,5 @@
+import { specialApprovalSaveIssue } from './approval-execution.ts';
+import { approvalRulesId, readApprovalRulesPayload } from './approval-rules.ts';
 import { canPerformAssessmentRole, routeAssessmentOnSave, routingSaveIssue } from './assessment-routing.ts';
 import { assessmentRoutingId } from './assessment-routing-schema.ts';
 import { runValidationQueue, validationEventsForTransition, SubmissionValidationError } from './submission-validation.ts';
@@ -6,7 +8,7 @@ import { withoutServiceExpectedProvider } from './request-application-fields.ts'
 import { submissionRulesId } from './submission-rule-schema.ts';
 export { requestIssues } from './request-validation-builtins.ts';
 import { addressLabel, isAddressValue, addressComplete } from './request-address.ts';
-import { withRequestCollaborators, withHardwareCollaborators, hardwareCollaboratorRemovalIssue, requestAudience, isRequestApplicant, applicantRemovalIssue } from './request-collaboration.ts';
+import { withRequestCollaborators, withAssessmentCollaborators, assessmentCollaboratorRemovalIssue, requestAudience, isRequestApplicant, applicantRemovalIssue } from './request-collaboration.ts';
 import { entitlementAvailable } from './request-entitlement-reservations.ts';
 import { workspaceDayQuantityIssue } from './day-quantity.ts';
 import { effortPricingSaveIssue, entitlementPricingContext } from './request-pricing.ts';
@@ -650,7 +652,7 @@ export function canAccessRequest(record: ServiceRequest, { actor, directory, cus
   if (['SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师', 'SmartX 硬件产品经理'].includes(actor.role)) {
     const assessment = record.operations?.assessment;
     if (assessment?.plans.some(plan => plan.salesId === actor.id)
-      || assessment?.approvals.some(approval => approval.approverId === actor.id)) return true;
+      || assessment?.approvals.some(approval => approval.approverId === actor.id || approval.workflow?.steps.some(step => step.approverId === actor.id))) return true;
   }
   if (record.status === '待评估' && hardwareItems(record).length && canPerformAssessmentRole(record, actor, 'hardware') && isHardwareProductManager(actor) && directory.some(person => person.id === actor.id)) return true;
   if (isInternal(actor.role) && record.internalParticipants?.some(person => person.userId === actor.id)) return true;
@@ -684,8 +686,8 @@ export function requestCollaborationSaveIssue(
   access?: RequestAccessContext,
 ): string | null {
   const { contacts, customers, users } = refs;
-  const hardwareRemovalIssue = hardwareCollaboratorRemovalIssue(record, previous);
-  record = withHardwareCollaborators(record, users);
+  const assessmentRemovalIssue = assessmentCollaboratorRemovalIssue(record, previous);
+  record = withAssessmentCollaborators(record, users);
   const old = previous ? withRequestCollaborators(previous, contacts, customers, users) : undefined;
   if (access && !canAccessRequest(old ?? record, { ...access, contacts }))
     return '无权访问此服务请求，当前身份可能已停用。';
@@ -705,7 +707,7 @@ export function requestCollaborationSaveIssue(
     !users.some(user => user.id === person.userId && user.status === '启用')
     && !old?.internalParticipants?.some(previousPerson => previousPerson.userId === person.userId)))
     return '只能添加已启用的内部用户。';
-  return hardwareRemovalIssue;
+  return assessmentRemovalIssue;
 }
 export function requestCreationIssue(
   record: ServiceRequest,
@@ -1059,7 +1061,7 @@ export async function saveLocal(
           referenceRead.onsuccess = () => {
             const savedWorkspace = referenceRead.result.find((entry: { id: string }) => entry.id === 'workspace')?.payload;
             // Apply system additions symmetrically before immutable-field comparisons.
-            serviceRequest = withHardwareCollaborators(serviceRequest, savedWorkspace?.users ?? []);
+            serviceRequest = withAssessmentCollaborators(serviceRequest, savedWorkspace?.users ?? []);
             const storedPrevious = current.result ? normalizeStoredRequest(current.result) : undefined;
             const previous = storedPrevious ? withRequestCollaborators(storedPrevious, savedWorkspace?.contacts ?? [], savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []) : undefined;
             const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, access) : null;
@@ -1109,6 +1111,10 @@ export async function saveLocal(
                   if (policyIssue) { reject(new RequestIdentityError(policyIssue)); transaction.abort(); return; }
                   try { serviceRequest = routeAssessmentOnSave(serviceRequest, previous, referenceRead.result.find((entry: { id: string }) => entry.id === assessmentRoutingId)?.payload, users, undefined, customers); }
                   catch (error) { reject(error); transaction.abort(); return; }
+                  try {
+                    const approvalIssue = specialApprovalSaveIssue(serviceRequest, previous, access?.actor, users, customers, readApprovalRulesPayload(referenceRead.result.find((entry: { id: string }) => entry.id === approvalRulesId)?.payload));
+                    if (approvalIssue) { reject(new RequestIdentityError(approvalIssue)); transaction.abort(); return; }
+                  } catch (error) { reject(error); transaction.abort(); return; }
                   const validationEvents = validationEventsForTransition(serviceRequest, previous);
                   try {
                     const failures = runValidationQueue(serviceRequest, { contacts, users, customers, businessObjects: workspacePayload?.businessObjects ?? [], services: workspacePayload?.services ?? [], currentActor: access?.actor }, validationEvents, referenceRead.result.find((entry: { id: string }) => entry.id === submissionRulesId)?.payload);

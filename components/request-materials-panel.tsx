@@ -43,7 +43,6 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
           <FileText className="sr-request-material-icon" size={22} aria-hidden="true" />
           <div className="sr-request-material-copy">
             <div className="sr-request-material-title"><h4>{group.requirement.name}</h4>
-              {group.shared && <span className="sr-badge" data-tone="blue">共用材料</span>}
               <span className="sr-badge" data-tone={files.length ? 'green' : 'amber'}>{files.length ? '已提供' : '待提供'}</span>
             </div>
             <div className="sr-material-relations">
