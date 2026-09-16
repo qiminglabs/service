@@ -6047,6 +6047,31 @@ body:has(.request-field-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .sr-asset-method-group .sr-assessment-asset-editor > div:last-child { border-bottom: 0; }
 .sr-asset-method-group .sr-assessment-asset-editor > div > span { min-width: 0; overflow-wrap: anywhere; }
 .sr-asset-method-group .sr-assessment-asset-editor input { flex-shrink: 0; }
+.sr-basis-plan-layout { display: grid; gap: 24px; }
+.sr-basis-approval-warning { display: flex; align-items: flex-start; gap: 8px; padding: 12px 14px; border: 1px solid #ffe49a; border-radius: 8px; background: #fff8dc; color: #795b19; font-size: 14px; line-height: 22px; }
+.sr-basis-approval-warning > svg { flex-shrink: 0; margin-top: 2px; }
+.sr-basis-section-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 14px; }
+.sr-basis-section-heading h4 { margin: 0; color: #142e4a; font-size: 16px; font-weight: 600; }
+.sr-basis-section-heading > span { color: #66788f; font-size: 14px; }
+.sr-basis-section-heading strong { color: #142e4a; font-variant-numeric: tabular-nums; }
+.sr-basis-card { padding: 18px 20px; border-radius: 8px; background: #f5f8fc; }
+.sr-basis-pricing-values { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px 24px; margin: 0; }
+.sr-basis-pricing-values > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.sr-basis-pricing-values dt { color: #66788f; font-size: 14px; }
+.sr-basis-pricing-values dd { display: flex; align-items: baseline; gap: 6px; margin: 0; color: #66788f; white-space: nowrap; font-size: 14px; }
+.sr-basis-pricing-values dd strong { color: #142e4a; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sr-basis-freezing > .sr-asset-method-group { margin-bottom: 16px; }
+.sr-basis-freezing .sr-asset-method-group { padding: 0; border: 0; border-radius: 0; }
+.sr-basis-freezing .sr-asset-method-group .sr-assessment-asset-editor > div:first-child { padding-top: 0; }
+.sr-basis-freezing .sr-asset-method-summary { border-color: #dfe7f0; }
+.sr-basis-freezing .sr-asset-method-heading h5 { margin: 0; color: #142e4a; font-size: 14px; font-weight: 600; }
+.sr-basis-freeze-input { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; color: #66788f; font-size: 14px; }
+.sr-basis-freeze-input input { text-align: right; font-variant-numeric: tabular-nums; }
+.sr-basis-freezing .sr-asset-method-summary .sr-assessment-gap-preview { font-size: 14px; }
+@media (max-width: 540px) {
+  .sr-basis-freezing .sr-assessment-asset-editor > div { flex-wrap: wrap; gap: 10px; }
+  .sr-basis-freeze-input { margin-left: auto; }
+}
 
 
 /* Shared list toolbar: request, catalog, and reference-data pages. */

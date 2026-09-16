@@ -44,16 +44,16 @@ export function allocationMethodIssue(record: ServiceRequest, allocations: Asset
   if (requirements.some(row => !isDayQuantity(row.days))) return '计价人天须最多一位小数，请重新核定。';
   const resolved: AssetAllocation[] = [];
   for (const allocation of allocations) {
-    if (!isDayQuantity(allocation.days) || allocation.days <= 0) return '锁定人天必须为有效正数，最多一位小数。';
+    if (!isDayQuantity(allocation.days) || allocation.days <= 0) return '冻结人天必须为有效正数，最多一位小数。';
     const asset = assets.find(asset => asset.id === allocation.assetId);
     const method = asset && assetDayMethod(asset);
     if (!asset || !method) return `${allocation.name} 无法识别人天类别，请选择远程或现场人天资产。`;
     if (allocation.method && allocation.method !== method) return `${asset.name} 人天类别已变更，请重新关联。`;
-    if (!requirements.some(row => row.method === method)) return `本次没有${method}计价人天，不能锁定${method}资产。`;
+    if (!requirements.some(row => row.method === method)) return `本次没有${method}计价人天，不能冻结${method}资产。`;
     resolved.push({ ...allocation, method });
   }
   for (const row of coverageByMethod(requirements, resolved)) {
-    if (row.lockedDays > row.days + 1e-8) return `${row.method}锁定人天不能超过${row.method}计价总人天 ${row.days} 人天。`;
+    if (row.lockedDays > row.days + 1e-8) return `${row.method}冻结人天不能超过${row.method}计价总人天 ${row.days} 人天。`;
   }
   return null;
 }

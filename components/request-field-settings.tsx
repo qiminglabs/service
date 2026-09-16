@@ -390,7 +390,7 @@ export function RequestFieldSettings({
               {fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为售前评估和服务交付；可修改字段名称。' : locked
                 ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项，字段类型不可修改。'
                 : creating
-                  ? applicationTab ? '创建后保存在申请项字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
+                  ? applicationTab ? '创建后保存在服务申请字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
                   : '可修改名称和选项；字段类型创建后不可修改，以保留历史数据。'}
             </DialogDescription>
           </DialogHeader>

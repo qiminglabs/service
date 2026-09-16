@@ -2484,7 +2484,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
               <tr>
                 <th>所属客户</th>
                 <th>资产名称</th>
-                <th>余额人天（含已锁定）</th>
+                <th>余额人天（含已冻结）</th>
                 <th>状态</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
@@ -2535,8 +2535,8 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                 <th>SN</th>
                 <th>产品</th>
                 <th>节点数</th>
-                <th>升级权益（含已锁定）</th>
-                <th>巡检权益（含已锁定）</th>
+                <th>升级权益（含已冻结）</th>
+                <th>巡检权益（含已冻结）</th>
                 <th>状态</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
@@ -2560,7 +2560,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <td className="numeric-cell" key={field}>
                       <Input
                         key={`${record.id}:${field}:${record[field]}`}
-                        aria-label={`${record.id} ${field === 'upgradeEntitlement' ? '升级权益' : '巡检权益'}（含已锁定）`}
+                        aria-label={`${record.id} ${field === 'upgradeEntitlement' ? '升级权益' : '巡检权益'}（含已冻结）`}
                         type="number"
                         min="0"
                         max={record.nodeCount}
@@ -3050,7 +3050,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                 </label>
                 <label htmlFor="upgrade-entitlement">
                   <span>
-                    升级权益（含已锁定） <em>*</em>
+                    升级权益（含已冻结） <em>*</em>
                   </span>
                   <Input
                     id="upgrade-entitlement"
@@ -3067,7 +3067,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                 </label>
                 <label htmlFor="inspection-entitlement">
                   <span>
-                    巡检权益（含已锁定） <em>*</em>
+                    巡检权益（含已冻结） <em>*</em>
                   </span>
                   <Input
                     id="inspection-entitlement"

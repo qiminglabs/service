@@ -40,7 +40,7 @@ export function applyCustomerDecision(
     id: `customer-decision:${confirmation.planId}:${at}`,
     at, actor: actor.name, actorId: actor.id, category: '服务依据',
     title: accepted ? '客户确认通过' : '客户拒绝确认',
-    detail: accepted ? '请求进入待受理。' : `${reason.trim()} · 请求退回客户确认步骤，服务依据、资产锁定及审批结果保留。`,
+    detail: accepted ? '请求进入待受理。' : `${reason.trim()} · 请求退回客户确认步骤，服务依据、资产冻结及审批结果保留。`,
   });
   return next;
 }
@@ -52,6 +52,8 @@ export function customerDecisionIssue(
   customerId?: string,
 ): string | null {
   const changed = JSON.stringify(next.operations?.customerDecisions) !== JSON.stringify(previous.operations?.customerDecisions);
+  // Manager cancellation is validated separately against the latest saved request.
+  if (!changed && next.status === '已取消') return null;
   if (!changed && !(previous.status === '待确认' && next.status !== previous.status)) return null;
   const decision = next.operations?.customerDecisions?.at(-1);
   if (!actor || !decision || !changed) return '请由客户通过确认或拒绝操作处理请求。';

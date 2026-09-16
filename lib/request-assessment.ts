@@ -311,7 +311,7 @@ export function assessmentLockIssue(
     if (available === null)
       return `${asset.name} 尚未维护余额，请先在主数据中填写余额人天。`;
     if (allocation.days > available + 1e-8)
-      return `${asset.name} 可锁定余额不足，请刷新后重新评估资产方案。`;
+      return `${asset.name} 可冻结余额不足，请刷新后重新评估资产方案。`;
   }
   return null;
 }
@@ -482,7 +482,7 @@ export function applyAssessmentAction(
       return { ...a, name: asset.name, method: assetDayMethod(asset) };
     });
     if (allocations.reduce((sum, a) => sum + a.days, 0) > effort + 1e-8)
-      throw new Error('锁定人天不能超过计价总人天。');
+      throw new Error('冻结人天不能超过计价总人天。');
     const methodIssue = allocationMethodIssue(record, allocations, assets);
     if (methodIssue) throw new Error(methodIssue);
     if (plan) assessment.plans.at(-1)!.releasedAt = now;
@@ -502,7 +502,7 @@ export function applyAssessmentAction(
       if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
     });
     title = plan ? '调整服务依据' : '服务依据关联';
-    detail = `计价总人天 ${effort} · 锁定 ${planAssetDays(assessment.plans.at(-1))} 人天`;
+    detail = `计价总人天 ${effort} · 冻结 ${planAssetDays(assessment.plans.at(-1))} 人天`;
   } else if (action.type === 'gap-submit') {
     if (!plan || !canSubmitGapApproval(record, actor, users))
       throw new Error('仅本请求的内部申请人或方案指定的销售可发起额度特批。');

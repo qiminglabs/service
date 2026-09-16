@@ -1,5 +1,5 @@
 export const backendSettingsSections = [
-  { key: 'forms', label: '服务请求表单', tabs: [{ key: 'request-items', label: '服务项字段' }, { key: 'application-fields', label: '申请项字段' }] },
+  { key: 'forms', label: '服务请求表单', tabs: [{ key: 'request-items', label: '服务项字段' }, { key: 'application-fields', label: '服务申请字段' }] },
   { key: 'request-flow', label: '服务请求流程', tabs: [
     { key: 'collaborators', label: '协作人分配' },
     { key: 'submission', label: '提交校验' },

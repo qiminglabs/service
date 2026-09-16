@@ -1,4 +1,5 @@
 import { specialApprovalSaveIssue } from './approval-execution.ts';
+import { requestCancellationSaveIssue } from './request-cancellation.ts';
 import { requestTypeOf, requestTypes, type RequestType } from './request-types.ts';
 import { requestTypeSaveIssue, isDeliveryConversion, deliveryConversionItemsIssue, canSupplementDeliveryMaterials } from './request-type-workflow.ts';
 import { materialRequiredFor } from './material-requirements.ts';
@@ -1106,7 +1107,8 @@ export async function saveLocal(
             const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
             const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? []);
             const projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor);
-            const issue = requestTypeSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
+            const issue = requestCancellationSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
+              ?? requestTypeSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
               ?? routingSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? []) ?? customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? projectIssue ?? supplementIssue ?? decisionIssue
               ?? requestIdentityIssue(serviceRequest, previous, access?.actor)
               ?? hardwareAssessmentSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])

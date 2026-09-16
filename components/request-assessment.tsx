@@ -7,7 +7,7 @@ import { createApprovalExecution, type ApprovalExecution } from '@/lib/approval-
 
 import type { ValidationFailure } from '@/lib/submission-validation';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -216,7 +216,7 @@ export function RequestAssessment({
       })
       .catch(() => {
         if (active) {
-          setError('无法读取资产锁定情况，请刷新重试。');
+          setError('无法读取资产冻结情况，请刷新重试。');
           setLoaded(false);
         }
       });
@@ -423,13 +423,13 @@ export function RequestAssessment({
                   {plan.allocations.length > 0 && <span>人天资产合计：{fmt(planAssetDays(plan))} 人天</span>}
                 </div>
                 {plan.allocations.length || entitlementAllocations.length ? (
-                  <ul className="sr-basis-asset-list" aria-label="已锁定人天资产及已冻结权益">
+                  <ul className="sr-basis-asset-list" aria-label="已冻结人天资产及权益">
                     {plan.allocations.map(asset => (
                       <li key={asset.assetId}>
                         <span className="sr-basis-asset-kind">人天资产</span>
                         <div className="sr-basis-asset-name"><strong>{asset.name}</strong><small>{asset.assetId}</small></div>
                         <strong className="sr-basis-asset-quantity">{fmt(asset.days)} <small>人天</small></strong>
-                        <Badge>已锁定</Badge>
+                        <Badge>已冻结</Badge>
                       </li>
                     ))}
                     {entitlementAllocations.map(allocation => (
@@ -441,7 +441,7 @@ export function RequestAssessment({
                       </li>
                     ))}
                   </ul>
-                ) : <p className="sr-help">{plan.effort > 0 ? '暂无已锁定的客户资产。' : '本次无需占用客户资产。'}</p>}
+                ) : <p className="sr-help">{plan.effort > 0 ? '暂无已冻结的客户资产。' : '本次无需占用客户资产。'}</p>}
               </div>
               {gap > 1e-8 && (
                 <div className="sr-assessment-gap">
@@ -474,8 +474,8 @@ export function RequestAssessment({
               {effort === undefined
                 ? '完成人天核定后，关联客户资产或额外服务额度。'
                 : requestAudience(record) === 'internal'
-                  ? '请选择客户资产并填写锁定人天；不足部分由内部申请人或负责销售发起额度特批。'
-                  : '请选择客户资产并填写锁定人天；不足部分由负责销售发起额度特批。'}
+                  ? '请选择客户资产并填写冻结人天；不足部分由内部申请人或负责销售发起额度特批。'
+                  : '请选择客户资产并填写冻结人天；不足部分由负责销售发起额度特批。'}
             </p>
           )}
           {currentApprovals.length > 0 && (
@@ -854,9 +854,28 @@ function AssessmentForm({
           </>
         )}
         {mode === 'plan' && (
-          <>
-            {!!effortEntitlementAllocations(a.effort?.lines).length && <section>
-              <h4>待冻结权益</h4>
+          <div className="sr-basis-plan-layout">
+            {plan && a.approvals.some(approval => approval.planId === plan.id && ['已通过', '已拒绝'].includes(approval.state)) && (
+              <div className="sr-basis-approval-warning" role="alert">
+                <TriangleAlert size={18} aria-hidden="true" />
+                <span>保存后，原特殊审批将失效；如仍有额度缺口，需重新发起审批。</span>
+              </div>
+            )}
+            <section className="sr-basis-card sr-basis-pricing" aria-label="计价">
+              <div className="sr-basis-section-heading">
+                <h4>计价</h4>
+                {requirements.length > 1 && <span>合计 <strong>{fmt(assessed ?? 0)}</strong> 人天</span>}
+              </div>
+              <dl className="sr-basis-pricing-values">
+                {requirements.length ? requirements.map(row => <div key={row.method}>
+                  <dt>{row.method}人天</dt><dd><strong>{fmt(row.days)}</strong><span>人天</span></dd>
+                </div>) : <div><dt>计价人天</dt><dd><strong>{fmt(assessed ?? 0)}</strong><span>人天</span></dd></div>}
+              </dl>
+            </section>
+            <section className="sr-basis-card sr-basis-freezing" aria-label="冻结">
+              <div className="sr-basis-section-heading"><h4>冻结</h4></div>
+            {!!effortEntitlementAllocations(a.effort?.lines).length && <section className="sr-asset-method-group">
+              <div className="sr-asset-method-heading"><h5>服务权益</h5><span>冻结数量</span></div>
               <div className="sr-assessment-allocations">{effortEntitlementAllocations(a.effort?.lines).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
                 <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
               </div>)}</div>
@@ -866,30 +885,31 @@ function AssessmentForm({
               {coverage.map(row => {
                 const matchingAssets = customerAssets.filter(asset => assetDayMethod(asset) === row.method);
                 return <section className="sr-asset-method-group" key={row.method} aria-label={`${row.method}人天资产`}>
-                  <div className="sr-asset-method-heading"><h4>{row.method}人天</h4><span>计价需求 <strong>{fmt(row.days)}</strong> 人天</span></div>
                   <div className="sr-assessment-asset-editor">
                     {matchingAssets.map(asset => {
                       const available = assetAvailable(asset, records, record.id);
                       const maxDays = Math.max(0, Math.min(available ?? 0, row.days - (row.lockedDays - (Number(amounts[asset.id]) || 0))));
                       return <div key={asset.id}>
-                        <span><strong>{asset.name}</strong><small>{asset.id} · {available === null ? '余额未维护' : `可锁定 ${fmt(available)} 人天`}</small></span>
-                        <Input aria-label={`${asset.name} ${asset.id} 锁定${row.method}人天`} placeholder="锁定人天，最多一位小数" type="number" min="0" step="0.1" max={maxDays}
+                        <span><strong>{asset.name}</strong><small>{asset.id} · {available === null ? '余额未维护' : `可冻结 ${fmt(available)} 人天`}</small></span>
+                        <label className="sr-basis-freeze-input"><Input aria-label={`${asset.name} ${asset.id} 冻结${row.method}人天`} placeholder="0" type="number" min="0" step="0.1" max={maxDays}
                           disabled={disabled || available === null} value={amounts[asset.id] ?? ''}
-                          onChange={event => setAmounts(old => ({ ...old, [asset.id]: event.target.value }))} />
+                          onChange={event => setAmounts(old => ({ ...old, [asset.id]: event.target.value }))} /><span>人天</span></label>
                       </div>;
                     })}
                     {!matchingAssets.length && <p className="sr-help">暂无可用的{row.method}人天资产。</p>}
                   </div>
                   <div className="sr-asset-method-summary" aria-live="polite">
-                    <span>已选锁定 {fmt(row.lockedDays)} 人天</span>
+                    <span>已选冻结 {fmt(row.lockedDays)} 人天</span>
                     {row.gap > 0 ? <strong className="sr-assessment-gap-preview">{row.method}资产缺少：{fmt(row.gap)} 人天</strong>
                       : <span>{row.method}资产已足额覆盖</span>}
                   </div>
                 </section>;
               })}
             </div>
+            {!coverage.length && !effortEntitlementAllocations(a.effort?.lines).length && <p className="sr-help">无需冻结资产或权益。</p>}
             {allocationIssue && <p className="sr-error" role="alert">{allocationIssue}</p>}
-          </>
+            </section>
+          </div>
         )}
         {(mode === 'gap' || mode === 'decide') && (
           <Field title={mode === 'gap' ? '额度特批原因 *' : '审批意见 *'}>

@@ -2,6 +2,7 @@
 import { requestTypeOf, requestTypes, type RequestType } from '@/lib/request-types';
 
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
+import { canCancelRequest, cancelRequest } from '@/lib/request-cancellation';
 import { deliveryConversionIssue, deliveryConversionMaterialIssues, convertAssessmentToDelivery } from '@/lib/request-type-workflow';
 import { RequestDeliveryConversion } from '@/components/request-delivery-conversion';
 
@@ -346,6 +347,8 @@ export function RequestWorkspace(props: Props) {
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [returnDraftOpen, setReturnDraftOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   const [projectOpen, setProjectOpen] = useState(false);
   const [returnDraftReason, setReturnDraftReason] = useState('');
   const [reservationRecords, setReservationRecords] = useState<
@@ -1002,6 +1005,8 @@ export function RequestWorkspace(props: Props) {
               </p>
             </div>
             <div className="detail-actions">
+              {canCancelRequest(draft, props.currentActor, props.users) && <Button variant="outline" disabled={busy}
+                onClick={() => { setError(''); setCancelReason(''); setCancelOpen(true); }}>取消服务请求</Button>}
               {draft.status === '评估完成' && requestTypeOf(draft) === '售前评估'
                 && !deliveryConversionIssue(draft, props.currentActor, props.users) && (
                 <Button disabled={busy} onClick={() => { if (busy || saveLock.current) return; setError(''); if (checkBeforeDeliveryConversion(draft)) setConversion(structuredClone(draft)); }}>转为服务交付</Button>
@@ -1608,6 +1613,34 @@ export function RequestWorkspace(props: Props) {
         />
       )}
 
+      <Dialog open={cancelOpen} onOpenChange={open => { if (!busy) setCancelOpen(open); }}>
+        <DialogContent className="sr-ops-dialog" showCloseButton={!busy}>
+          <DialogHeader>
+            <DialogTitle>取消服务请求</DialogTitle>
+            <DialogDescription>取消后将释放已冻结额度，相关特殊审批失效，保留申请、评估及操作历史。此请求将结束，如需继续服务请新建请求。</DialogDescription>
+          </DialogHeader>
+          <div className="sr-confirmation-preview">
+            <section className="sr-customer-visible-panel">
+              <div className="sr-confirmation-note-label">
+                <label htmlFor="request-cancellation-reason" className="sr-ops-field"><span>取消原因 <em aria-hidden="true">*</em></span></label>
+                <CustomerVisibleBadge id="request-cancellation-reason-hint" />
+              </div>
+              <Textarea id="request-cancellation-reason" required aria-describedby="request-cancellation-reason-hint" value={cancelReason} disabled={busy} onChange={event => setCancelReason(event.target.value)} rows={3} placeholder="请说明取消原因" />
+            </section>
+          </div>
+          {error && <p className="sr-error" role="alert">{error}</p>}
+          <DialogFooter>
+            <Button variant="outline" disabled={busy} onClick={() => setCancelOpen(false)}>暂不取消</Button>
+            <Button variant="destructive" disabled={busy || !cancelReason.trim()} onClick={async () => {
+              if (!draft || busy || saveLock.current) return;
+              setError('');
+              try {
+                if (await persist(cancelRequest(draft, props.currentActor, props.users, cancelReason), '服务请求已取消')) setCancelOpen(false);
+              } catch (issue) { setError(issue instanceof Error ? issue.message : '取消失败，请重试。'); }
+            }}>{busy ? '正在取消…' : '确认取消'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={returnDraftOpen}
         onOpenChange={(open) => {
@@ -1618,7 +1651,7 @@ export function RequestWorkspace(props: Props) {
           <DialogHeader>
             <DialogTitle>退回草稿</DialogTitle>
             <DialogDescription>
-              退回后可修改申请信息和材料；已锁定资产将释放，相关特批失效，评估历史保留。
+              退回后可修改申请信息和材料；已冻结资产将释放，相关特批失效，评估历史保留。
             </DialogDescription>
           </DialogHeader>
           <label className="sr-ops-field">
