@@ -1,3 +1,4 @@
+import { isConvertedRequest } from './request-readonly.ts';
 import type { ContactRef, CustomerRef, InternalUser, ServiceRequest } from './service-requests';
 import type { OperationActor } from './request-operations';
 import { fixedIdentityRoles } from './internal-users.ts';
@@ -18,6 +19,7 @@ export function hardwareCollaboratorId(record: ServiceRequest): string | undefin
   return assessment?.routing ? assessment.routing.hardware?.userId || undefined : assessment?.hardware?.reviewerId || undefined;
 }
 export function withHardwareCollaborators(record: ServiceRequest, users: InternalUser[]): ServiceRequest {
+  if (isConvertedRequest(record)) return record;
   const userId = hardwareCollaboratorId(record);
   const user = users.find(user => user.id === userId && user.status === '启用' && fixedIdentityRoles[user.id] === 'SmartX 硬件产品经理');
   if (!user || record.internalParticipants?.some(person => person.userId === user.id)) return record;
@@ -34,6 +36,7 @@ export function managerCollaboratorId(record: ServiceRequest): string | undefine
   return assessment?.routing ? assessment.routing.manager?.userId || undefined : assessment?.managerId || undefined;
 }
 export function withAssessmentCollaborators(record: ServiceRequest, users: InternalUser[]): ServiceRequest {
+  if (isConvertedRequest(record)) return record;
   const userId = managerCollaboratorId(record);
   const user = users.find(user => user.id === userId && user.status === '启用' && fixedIdentityRoles[user.id] === 'SmartX 项目经理');
   const next = user && !record.internalParticipants?.some(person => person.userId === user.id)
@@ -51,6 +54,7 @@ export function fixedInternalCollaboratorLabel(userId: string, applicantId?: str
     .filter(Boolean).join(' · ') || undefined;
 }
 export function withRequestCollaborators(record: ServiceRequest, contacts: ContactRef[], customers: CustomerRef[] = [], users: InternalUser[] = []): ServiceRequest {
+  if (isConvertedRequest(record)) return record;
   const audience = record.createdByAudience ?? (users.some(user => user.id === record.createdById) ? 'internal' : requestAudience(record));
   const next = { ...record, createdByAudience: audience, externalCollaborators: [...(record.externalCollaborators ?? [])], internalParticipants: [...(record.internalParticipants ?? [])] };
   if (record.createdById) {

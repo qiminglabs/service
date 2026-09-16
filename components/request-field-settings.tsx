@@ -15,12 +15,15 @@ import {
 } from '@/lib/china-province-city';
 import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { RequestFlowDiagram } from '@/components/request-flow-diagram';
+import { RequestProjectMappingSettings } from '@/components/request-project-mapping-settings';
+import { ProjectCollaboratorAssignmentSettings } from '@/components/project-collaborator-assignment-settings';
 import { ExecutionFlowDiagram } from '@/components/execution-flow-diagram';
 import { RequestFlowSettings } from '@/components/request-flow-settings';
 import { ApprovalRuleSettings } from '@/components/approval-rule-settings';
 import { RequestRuleSettings } from '@/components/request-rule-settings';
 import { backendSettingsSections, type BackendSettingsSection, type RequestFlowTab } from '@/lib/backend-settings';
 import { initialApplicationFields, isSystemApplicationField, normalizeApplicationFields } from '@/lib/request-application-fields';
+import { initialProjectFields, isSystemProjectField, normalizeProjectFields, projectFieldRules } from '@/lib/service-project-fields';
 import { editionFeatureFields, editionFieldRequirement, fieldRequirementLabels, fieldOptionsIssue } from '@/lib/request-field-requirements';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,7 +65,7 @@ export type RequestField = {
   name: string;
   type: RequestFieldType;
   options: FieldOption[];
-  referenceTarget?: 'partners' | 'businessObjects' | 'customers';
+  referenceTarget?: 'partners' | 'businessObjects' | 'customers' | 'users';
   updatedAt?: string;
   updatedBy?: string;
 };
@@ -109,7 +112,7 @@ export function normalizeRequestFields(
   >,
 ): RequestField[] {
   return sortRequestFields(
-    fields.filter(field => field.id !== 'expectedProvider').map((field) => ({
+    fields.map((field) => ({
       ...field,
       type: systemFields[field.id]?.type ?? field.type ?? 'single',
       name: requestFieldLabel(field.id, field.name?.trim() || systemFields[field.id]?.name || field.name),
@@ -158,6 +161,8 @@ export function RequestFieldSettings({
   onChange: onServiceFieldsChange,
   applicationFields,
   onApplicationFieldsChange,
+  projectFields = initialProjectFields,
+  onProjectFieldsChange,
   ready,
   actor,
   actorIdentity,
@@ -170,6 +175,8 @@ export function RequestFieldSettings({
   onChange: (fields: RequestField[]) => void;
   applicationFields: RequestField[];
   onApplicationFieldsChange: (fields: RequestField[]) => void;
+  projectFields?: RequestField[];
+  onProjectFieldsChange?: (fields: RequestField[]) => void;
   ready: boolean;
 }) {
   const currentSection = backendSettingsSections.find(item => item.key === section)!;
@@ -180,9 +187,13 @@ export function RequestFieldSettings({
     setActiveTab(key);
   }
   const applicationTab = activeTab === 'application-fields';
-  const fields = applicationTab ? applicationFields : serviceFields;
-  const onChange = applicationTab ? onApplicationFieldsChange : onServiceFieldsChange;
-  const systemField = applicationTab ? isSystemApplicationField : isSystemField;
+  const projectTab = section === 'project-forms';
+  const visibleProjectFields = normalizeProjectFields(projectFields).filter(field =>
+    !['id', 'status', 'createdBy', 'createdAt'].includes(field.id),
+  );
+  const fields = projectTab ? projectFields : applicationTab ? applicationFields : serviceFields;
+  const onChange = projectTab ? onProjectFieldsChange! : applicationTab ? onApplicationFieldsChange : onServiceFieldsChange;
+  const systemField = projectTab ? isSystemProjectField : applicationTab ? isSystemApplicationField : isSystemField;
   const [target, setTarget] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<RequestFieldType>('single');
@@ -191,7 +202,7 @@ export function RequestFieldSettings({
   const [error, setError] = useState('');
   const creating = target === 'new';
   const locked = target !== null && systemField(target);
-  const fixedTypeOptions = applicationTab && target === 'requestType';
+  const fixedTypeOptions = (applicationTab && target === 'requestType') || (projectTab && target === 'status');
   const isChoice =
     (type === 'single' || type === 'multiple') && target !== 'businessObjects';
   function open(id: string) {
@@ -273,16 +284,12 @@ export function RequestFieldSettings({
     }
     setTarget(null);
   }
-  if (section === 'execution-flow') {
-    return <section className="reference-panel backend-settings-panel" aria-label={currentSection.label}>
-      <ExecutionFlowDiagram />
-    </section>;
-  }
   return (
     <section
       className="reference-panel backend-settings-panel"
       aria-label={currentSection.label}
     >
+      {section === 'execution-flow' && <ExecutionFlowDiagram />}
       {section === 'request-flow' && <RequestFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={selectFlowTab} />}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
@@ -292,12 +299,12 @@ export function RequestFieldSettings({
             aria-label={currentSection.label}
           >
             {currentSection.tabs.map(tab => <TabsTrigger key={tab.key} id={tabId(tab.key)} value={tab.key} className="reference-tab">
-              {tab.label}{tab.key === 'request-items' && <span>{serviceFields.length}</span>}{tab.key === 'application-fields' && <span>{applicationFields.length}</span>}
+              {tab.label}{tab.key === 'request-items' && <span>{serviceFields.length}</span>}{tab.key === 'application-fields' && <span>{applicationFields.length}</span>}{tab.key === 'project-fields' && <span>{visibleProjectFields.length}</span>}
             </TabsTrigger>)}
           </TabsList>
-          {section === 'forms' && <Button disabled={!ready} onClick={() => open('new')}><Plus size={16} />创建字段</Button>}
+          {(section === 'forms' || projectTab) && <Button disabled={!ready} onClick={() => open('new')}><Plus size={16} />创建字段</Button>}
         </div>
-        {section === 'forms' && <TabsContent value={activeTab}>
+        {(section === 'forms' || projectTab) && <TabsContent value={activeTab}>
           <div className="table-scroll">
             <table className="reference-table app-list-table">
               <thead>
@@ -305,21 +312,22 @@ export function RequestFieldSettings({
                   <th>字段名称</th>
                   <th>字段类型</th>
                   <th>选项</th>
+                  {projectTab && <th>填写规则</th>}
                   <th>修改时间</th>
                   <th>修改人</th>
                   <th>操作</th>
                 </tr>
               </thead>
               <tbody>
-                {(applicationTab ? normalizeApplicationFields(fields) : normalizeRequestFields(fields)).map((field) => (
+                {(projectTab ? visibleProjectFields : applicationTab ? normalizeApplicationFields(fields) : normalizeRequestFields(fields)).map((field) => (
                   <tr key={field.id}>
                     <td>
                       <strong>{field.name}</strong>
                       {systemField(field.id) && <span className="request-system-field">系统预置</span>}
                     </td>
-                    <td>{fieldTypes[field.type]}</td>
+                    <td>{projectTab && field.id === 'createdAt' ? '日期时间' : fieldTypes[field.type]}</td>
                     <td>
-                      {field.referenceTarget === 'customers' ? (
+                      {projectTab && field.id === 'serviceProviderId' ? '合作伙伴创建时固定为所属企业，内部创建时可选择服务方' : field.referenceTarget === 'users' ? '关联内部用户，自动记录' : field.referenceTarget === 'customers' ? (
                         '关联客户对象，单选'
                       ) : field.id === 'businessObjects' ? (
                         '关联业务对象，可多选'
@@ -342,6 +350,7 @@ export function RequestFieldSettings({
                         '—'
                       )}
                     </td>
+                    {projectTab && <td>{projectFieldRules[field.id] ?? '选填'}</td>}
                     <td>
                       {field.updatedAt
                         ? new Date(field.updatedAt).toLocaleString('zh-CN', { hour12: false })
@@ -371,6 +380,8 @@ export function RequestFieldSettings({
           <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
           <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
         </>}
+        {section === 'execution-flow' && <TabsContent value="project-collaborators"><ProjectCollaboratorAssignmentSettings /></TabsContent>}
+        {section === 'execution-flow' && <TabsContent value="request-project-mapping"><RequestProjectMappingSettings actor={actorIdentity} applicationFields={applicationFields} projectFields={projectFields} /></TabsContent>}
         {section === 'pricing' && <TabsContent value="entitlement-conversions">
           <EntitlementConversions actor={actor} />
         </TabsContent>}
@@ -387,10 +398,10 @@ export function RequestFieldSettings({
               {creating ? '创建字段' : '编辑字段'}
             </DialogTitle>
             <DialogDescription>
-              {fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为售前评估和服务交付；可修改字段名称。' : locked
+              {projectTab && locked ? '可修改字段名称；字段类型、填写规则、项目状态选项及系统自动记录规则固定。' : fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为售前评估和服务交付；可修改字段名称。' : locked
                 ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项，字段类型不可修改。'
                 : creating
-                  ? applicationTab ? '创建后保存在服务申请字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
+                  ? projectTab ? '创建后可在服务项目中填写，并配置请求转项目映射。' : applicationTab ? '创建后保存在服务申请字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
                   : '可修改名称和选项；字段类型创建后不可修改，以保留历史数据。'}
             </DialogDescription>
           </DialogHeader>
@@ -436,7 +447,8 @@ export function RequestFieldSettings({
                 <p className="sr-help">{fieldRequirementLabels[editionFieldRequirement(target)!]}。添加到服务表单时默认启用，可在字段属性中调整。</p>
               </div>
             )}
-            {fixedTypeOptions && <div className="sr-span"><strong>可选类型</strong><div className="request-field-options">{options.map(option => <span key={option.value}>{option.value}</span>)}</div></div>}
+            {projectTab && target && <p className="sr-help sr-span">{projectFieldRules[target]}</p>}
+            {fixedTypeOptions && <div className="sr-span"><strong>{projectTab ? '项目状态' : '可选类型'}</strong><div className="request-field-options">{options.map(option => <span key={option.value}>{option.value}</span>)}</div></div>}
             {isChoice && !fixedTypeOptions && (
               <section
                 className="sr-span request-field-editor"

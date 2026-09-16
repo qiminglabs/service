@@ -1,6 +1,7 @@
 'use client';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
 import { initializeCatalogFormsFromBackupV2 } from '@/lib/catalog-form-initialization';
+import { initializePartnerCatalogConfigs } from '@/lib/partner-catalog-config';
 import { responsibleTeams } from '@/lib/customer-teams';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
 import { parseDayQuantity, formatDays } from '@/lib/day-quantity';
@@ -108,11 +109,14 @@ import {
   type RequestField,
 } from '@/components/request-field-settings';
 import { initialApplicationFields, normalizeApplicationFields } from '@/lib/request-application-fields';
+import { initialProjectFields, normalizeProjectFields } from '@/lib/service-project-fields';
+import { ServiceProjects } from '@/components/service-projects';
+import { CustomerServiceProjects } from '@/components/customer-service-projects';
 import { importedServiceCatalogSeeds } from './service-catalog-import';
 
 type ServiceStatus = '草稿' | '已启用' | '已停用';
 type SortDirection = 'asc' | 'desc';
-type ViewKey = 'requests' | 'catalog' | 'reference-data' | 'field-settings';
+type ViewKey = 'requests' | 'projects' | 'catalog' | 'reference-data' | 'field-settings';
 type ReferenceTab =
   | 'customers'
   | 'contacts'
@@ -230,9 +234,7 @@ function mergeImportedServices(storedServices: Service[]): Service[] {
     ...service,
     priceCoefficient: isEntitlementService(service) ? undefined : service.priceCoefficient,
     defaultQuantity: isEntitlementService(service) ? undefined : service.defaultQuantity,
-    allowedInitiatorSites: service.allowedInitiatorSites.filter(
-      (site) => site !== '合作伙伴中心',
-    ),
+    allowedInitiatorSites: [...service.allowedInitiatorSites],
   }));
 }
 
@@ -427,12 +429,12 @@ const referenceTabs: Array<{
   icon: LucideIcon;
 }> = [
   { value: 'customers', label: '客户', icon: Building2 },
-  { value: 'contacts', label: '联系人', icon: ContactRound },
+  { value: 'contacts', label: '客户中心用户', icon: ContactRound },
   { value: 'assets', label: '服务资产', icon: Server },
   { value: 'business-objects', label: '业务对象', icon: Network },
   { value: 'users', label: '内部用户', icon: Users },
   { value: 'partners', label: '合作伙伴', icon: Building2 },
-  { value: 'partner-users', label: '合作伙伴用户', icon: ContactRound },
+  { value: 'partner-users', label: '合作伙伴中心用户', icon: ContactRound },
   { value: 'service-certifications', label: '服务认证', icon: ClipboardList },
 ];
 
@@ -451,6 +453,11 @@ const navigation: Array<{
     key: 'requests',
     label: '服务请求',
     icon: ClipboardList,
+  },
+  {
+    key: 'projects',
+    label: '服务项目',
+    icon: Boxes,
   },
   {
     key: 'catalog',
@@ -731,9 +738,29 @@ export default function Home() {
   return <Workspace key={generation} onInitialized={() => setGeneration(value => value + 1)} />;
 }
 
+function initialDemoWorkspace() {
+  return {
+    requestFields: initialRequestFields,
+    applicationFields: initialApplicationFields,
+    projectFields: initialProjectFields,
+    services,
+    customers: initialCustomers,
+    contacts: initialContacts,
+    assets: initialAssets,
+    businessObjects: initialBusinessObjects,
+    users: initialUsers,
+    partners: samplePartners,
+    partnerUsers: samplePartnerUsers,
+    serviceCertifications: ensureCertificationSamples([], initialUsers, samplePartnerUsers, samplePartners),
+  };
+}
+
 function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const resetting = useRef(false);
   const [selectedView, setActiveView] = useState<ViewKey>('requests');
+  const [initialProjectId, setInitialProjectId] = useState('');
+  const [initialRequestId, setInitialRequestId] = useState('');
+  const projectLinkHandled = useRef(false);
   const [settingsSection, setSettingsSection] = useState<BackendSettingsSection>('forms');
   const [requestCreateToken, setRequestCreateToken] = useState(0);
   const [serviceRecords, setServiceRecords] = useState<Service[]>(services);
@@ -803,6 +830,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const [requestFields, setRequestFields] =
     useState<RequestField[]>(initialRequestFields);
   const [applicationFields, setApplicationFields] = useState<RequestField[]>(initialApplicationFields);
+  const [projectFields, setProjectFields] = useState<RequestField[]>(initialProjectFields);
   const resolvedApplicationFields = useMemo(() => applicationFields.map(field => field.referenceTarget === 'partners'
     ? { ...field, options: partners.map(partner => ({ value: partner.name, enabled: true })) }
     : field), [applicationFields, partners]);
@@ -810,12 +838,29 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     ? { ...field, options: partners.map(partner => ({ value: partner.name, enabled: true })) }
     : field), [requestFields, partners]);
   const [referencesReady, setReferencesReady] = useState(false);
+  useEffect(() => {
+    if (!referencesReady || projectLinkHandled.current) return;
+    projectLinkHandled.current = true;
+    const params = new URLSearchParams(window.location.search);
+    const project = params.get('project');
+    const request = params.get('request');
+    if (!project && !request) return;
+    const user = params.get('user');
+    if (user && identities.some(identity => identity.id === user)) setCurrentUserId(user);
+    if (project) { setInitialProjectId(project); setActiveView('projects'); }
+    else if (request) {
+      const linkActor = identities.find(identity => identity.id === user) ?? currentActor;
+      const linkPortal = resolvePortalContext(linkActor, identitySources);
+      if (linkPortal.views.includes('requests')) { setInitialRequestId(request); setActiveView('requests'); }
+      else { setInitialRequestId(''); setActiveView(linkPortal.views[0] ?? 'requests'); }
+    }
+  }, [referencesReady]);
   const [referenceStorageError, setReferenceStorageError] = useState('');
   const [requestResetError, setRequestResetError] = useState('');
 
   useEffect(() => {
     let active = true;
-    removeSelectedDemoRules().then(() => initializeCatalogFormsFromBackupV2()).then(() => reinitializeRuleBasedRequestSamples().catch(error => {
+    resetLocalDemoData(initialDemoWorkspace(), true).then(() => removeSelectedDemoRules()).then(() => initializeCatalogFormsFromBackupV2()).then(() => initializePartnerCatalogConfigs()).then(() => reinitializeRuleBasedRequestSamples().catch(error => {
       if (active) setRequestResetError(`服务请求重新初始化未完成，原数据已保留：${error instanceof Error ? error.message : '请刷新重试。'}`);
     })).then(() => readLocal<{
       id: string;
@@ -823,6 +868,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         customerOwnersInitialized?: boolean;
         requestFields?: RequestField[];
         applicationFields?: RequestField[];
+        projectFields?: RequestField[];
         services: Service[];
         customers: Customer[];
         contacts: Contact[];
@@ -841,6 +887,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         )?.payload;
         if (snapshot) {
           setApplicationFields(normalizeApplicationFields(snapshot.applicationFields));
+          setProjectFields(normalizeProjectFields(snapshot.projectFields));
           const storedRequestFields = normalizeRequestFields(
             snapshot.requestFields ?? initialRequestFields,
           );
@@ -909,6 +956,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           customerOwnersInitialized: true,
           requestFields,
           applicationFields,
+          projectFields,
           services: serviceRecords,
           customers,
           contacts,
@@ -932,6 +980,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     referencesReady,
     requestFields,
     applicationFields,
+    projectFields,
     serviceRecords,
     customers,
     contacts,
@@ -947,19 +996,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     if (resetting.current || !referencesReady) return;
     resetting.current = true;
     try {
-      await resetLocalDemoData({
-        requestFields: initialRequestFields,
-        applicationFields: initialApplicationFields,
-        services,
-        customers: initialCustomers,
-        contacts: initialContacts,
-        assets: initialAssets,
-        businessObjects: initialBusinessObjects,
-        users: initialUsers,
-        partners: samplePartners,
-        partnerUsers: samplePartnerUsers,
-        serviceCertifications: ensureCertificationSamples([], initialUsers, samplePartnerUsers, samplePartners),
-      });
+      await resetLocalDemoData(initialDemoWorkspace());
+      clearDetailNavigation();
       // Remount all editors so stale forms and filters cannot overwrite restored data.
       onInitialized();
     } catch (error) {
@@ -983,10 +1021,21 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     setCreateOpen(true);
   }
 
+  function clearDetailNavigation() {
+    setInitialProjectId('');
+    setInitialRequestId('');
+    projectLinkHandled.current = true;
+    const url = new URL(window.location.href);
+    for (const key of ['project', 'request', 'user']) url.searchParams.delete(key);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
   function switchIdentity(id: string) {
     if (!identities.some((identity) => identity.id === id)) return;
+    clearDetailNavigation();
     setCurrentUserId(id);
-    setActiveView('requests');
+    const nextActor = identities.find(identity => identity.id === id)!;
+    setActiveView(resolvePortalContext(nextActor, identitySources).views[0] ?? 'requests');
     setDetailServiceId(null);
     setCreateOpen(false);
     setReferenceCreateOpen(false);
@@ -997,6 +1046,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 
   function selectView(view: ViewKey) {
     if (!portal.views.includes(view)) return;
+    clearDetailNavigation();
     setActiveView(view);
     setDetailServiceId(null);
     setQuery('');
@@ -1475,6 +1525,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               <h1>
                 {activeView === 'requests'
                   ? '服务请求'
+                  : activeView === 'projects'
+                    ? '服务项目'
                   : activeView === 'catalog'
                     ? '服务目录'
                     : activeView === 'field-settings'
@@ -1515,6 +1567,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                           partner.status === '启用',
                       ),
                   )}
+                  initialRequestId={initialRequestId}
                   createToken={requestCreateToken}
                 />
                 </ApplicationFieldsContext.Provider>
@@ -1526,6 +1579,10 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                   : '正在读取本地资料…'}
               </p>
             )
+          ) : activeView === 'projects' ? (
+            referencesReady && (currentActor.role === '客户' ? <CustomerServiceProjects initialProjectId={initialProjectId} key={currentActor.id} actor={currentActor} itemFields={resolvedRequestFields} services={serviceRecords} /> : <ServiceProjects initialProjectId={initialProjectId} key={currentActor.id} customers={customers} actor={currentActor} fields={projectFields}
+              services={serviceRecords} businessObjects={businessObjects} itemFields={resolvedRequestFields}
+              collaboratorDirectory={{ contacts, users, partners, partnerUsers }} />)
           ) : activeView === 'catalog' ? (
             <BusinessObjectProductsContext.Provider
               value={[...businessObjectProducts]}
@@ -1620,6 +1677,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               onChange={setRequestFields}
               applicationFields={applicationFields}
               onApplicationFieldsChange={setApplicationFields}
+              projectFields={projectFields}
+              onProjectFieldsChange={setProjectFields}
               ready={referencesReady}
             />
           ) : (
@@ -1881,7 +1940,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               />
               <MultiChoiceField
                 label="可发起站点"
-                options={['内部系统', '客户中心']}
+                options={['内部系统', '客户中心', '合作伙伴中心']}
                 values={catalogForm.allowedInitiatorSites}
                 onChange={(allowedInitiatorSites) =>
                   setCatalogForm((form) => ({ ...form, allowedInitiatorSites }))
@@ -2270,6 +2329,11 @@ function CatalogDetail({
             key={`${service.id}-customer`}
             service={service}
             audience="customer"
+          />
+          <RequestCatalogSettings
+            key={`${service.id}-partner`}
+            service={service}
+            audience="partner"
           />
         </aside>
       </div>

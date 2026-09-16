@@ -156,6 +156,7 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
                     )?.payload as RequestConfig | undefined) ??
                     defaultConfig(service),
                   savedAt: service.updatedAt ?? '',
+                  partner: records.find(r => r.id === `partner-request-config:${serviceId}`)?.payload as RequestConfig | undefined,
                   reason: '当前初始版本',
                 },
               ];
@@ -220,6 +221,7 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
                 title="客户中心申请表单"
                 config={selected.customer}
               />
+              {selected.partner ? <ConfigSnapshot title="合作伙伴中心申请表单" config={selected.partner} /> : <section className="detail-card"><h3>合作伙伴中心申请表单</h3><p>该历史版本未记录合作伙伴中心申请表单。</p></section>}
             </>
           )}
           </div>

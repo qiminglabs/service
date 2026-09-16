@@ -4,6 +4,7 @@ import type { OperationActor } from './request-operations';
 export type PortalType = 'staff' | 'customer' | 'partner';
 export type PortalView =
   | 'requests'
+  | 'projects'
   | 'catalog'
   | 'reference-data'
   | 'field-settings';
@@ -13,10 +14,10 @@ export const portalDefinitions: Record<
 > = {
   staff: {
     title: '服务管理中心',
-    views: ['requests', 'catalog', 'reference-data', 'field-settings'],
+    views: ['requests', 'projects', 'catalog', 'reference-data', 'field-settings'],
   },
-  customer: { title: '客户中心', views: ['requests'] },
-  partner: { title: '合作伙伴中心', views: ['requests'] },
+  customer: { title: '客户中心', views: ['requests', 'projects'] },
+  partner: { title: '合作伙伴中心', views: ['projects'] },
 };
 
 export type PortalContext = {
@@ -70,7 +71,7 @@ export function resolvePortalContext(
         actor.role === 'SmartX 系统管理员'
           ? portalDefinitions.staff.views
           : actor.role === 'SmartX 项目经理'
-            ? ['requests', 'catalog']
+            ? ['requests', 'projects', 'catalog']
             : ['requests'],
       organizationId: 'smartx',
       organizationName: '北京志凌海纳科技有限公司',

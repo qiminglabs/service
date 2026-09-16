@@ -1,5 +1,4 @@
 import type { RequestField } from '../components/request-field-settings';
-import type { RequestConfig } from './service-requests';
 import { requestTypes } from './request-types.ts';
 
 export const initialApplicationFields: RequestField[] = [
@@ -22,24 +21,6 @@ export function normalizeApplicationFields(fields: RequestField[] = []): Request
       const stored = fields.find(field => field.id === seed.id);
       return { ...seed, ...stored, name: stored?.name?.trim() || seed.name, type: seed.type, referenceTarget: seed.referenceTarget, options: structuredClone(seed.id === 'requestType' ? seed.options : stored?.options ?? seed.options) };
     }),
-    ...fields.filter(field => !ids.includes(field.id) && field.id !== 'expectedProvider').map(field => ({ ...field, options: structuredClone(field.options) })),
+    ...fields.filter(field => !ids.includes(field.id)).map(field => ({ ...field, options: structuredClone(field.options) })),
   ];
-}
-
-// Only live service forms lose the field; existing request snapshots retain their history.
-export function withoutServiceExpectedProvider(config: RequestConfig): RequestConfig {
-  const omit = <T,>(values?: Record<string, T>) => values
-    ? Object.fromEntries(Object.entries(values).filter(([id]) => id !== 'expectedProvider')) : undefined;
-  return {
-    ...config,
-    fields: config.fields.filter(id => id !== 'expectedProvider'),
-    fieldOrder: config.fieldOrder?.filter(id => id !== 'expectedProvider'),
-    fieldRowStarts: config.fieldRowStarts?.filter(id => id !== 'expectedProvider'),
-    fieldNames: omit(config.fieldNames) ?? {},
-    fieldOptions: omit(config.fieldOptions) ?? {},
-    fieldRequired: omit(config.fieldRequired),
-    fieldRequiredWhen: omit(config.fieldRequiredWhen),
-    fieldWidths: omit(config.fieldWidths),
-    fieldColumns: omit(config.fieldColumns),
-  };
 }

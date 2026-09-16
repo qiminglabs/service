@@ -16,7 +16,7 @@ const executionStages = [
 
 export function ExecutionFlowDiagram() {
   const arrowId = `execution-flow-arrow-${useId().replaceAll(':', '')}`;
-  return <details className="request-flow-map-panel" open>
+  return <details className="request-flow-map-panel">
     <summary>服务执行流程图<ChevronDown size={16} aria-hidden="true" /></summary>
     <div className="request-flow-map-scroll">
       <svg className="request-flow-map" viewBox="0 0 1320 148" role="group" aria-label={`服务执行流程及处理人：${executionStages.map(stage => `${stage.label}（${stage.owner}）`).join(' → ')}。所有项目复核后均须关联服务依据，足额后进入客户确认。不足时由内部申请人或客户所有人发起特殊审批，审批人由系统按规则分配，通过后进入客户确认。特殊项目完成后可进行项目复盘，由项目经理负责，待开放。`}>

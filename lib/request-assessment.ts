@@ -1,4 +1,5 @@
 import type { HardwareAssessmentRequirement } from './hardware-assessment-trigger';
+import { activeRequestAssetAllocations } from './project-reservation-release.ts';
 import { requestTypeOf } from './request-types.ts';
 import { convertAssessmentToDelivery } from './request-type-workflow.ts';
 import { canPerformAssessmentRole, type AssessmentRouting } from './assessment-routing.ts';
@@ -275,8 +276,8 @@ export function assetAvailable(
     .reduce(
       (sum, r) =>
         sum +
-        (currentPlan(r)
-          ?.allocations.filter((a) => a.assetId === asset.id)
+        (activeRequestAssetAllocations(r)
+          .filter((a) => a.assetId === asset.id)
           .reduce((n, a) => n + a.days, 0) ?? 0),
       0,
     );

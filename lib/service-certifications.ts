@@ -156,5 +156,18 @@ export function ensureCertificationSamples(
       status: '启用',
     });
   }
+  // Give every enabled demo user both current certifications, without replacing
+  // edited certificates or recreating disabled records on subsequent loads.
+  for (const holderType of ['internal', 'partner'] as const) {
+    for (const user of certificationUsers(holderType, users, partnerUsers, partners)) {
+      for (const [index, certification] of serviceCertificationOptions.entries()) {
+        const id = `CRT-DEMO-${holderType}-${user.id}-${index + 1}`;
+        if (result.some(record => record.id === id ||
+          (record.holderType === holderType && record.userId === user.id && record.certification === certification))) continue;
+        result.push({ id, holderType, userId: user.id, userName: user.name,
+          certification, expiresOn: index === 0 ? '2027-12-31' : '2028-06-30', status: '启用' });
+      }
+    }
+  }
   return result;
 }

@@ -231,7 +231,7 @@ export function RequestOperationsTabs({
         </TabsList>
         {closed && (
           <p className="sr-ops-hint">
-            请求已结束，工作记录仅供查阅。协作人仍可在右侧管理。
+            {record.status === '已转服务项目' ? '请求已转为服务项目，全部信息及协作人仅供查阅，不再支持编辑。' : '请求已结束，工作记录仅供查阅。协作人仍可在右侧管理。'}
           </p>
         )}
         {error && !dialog && (

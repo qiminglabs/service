@@ -105,12 +105,10 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
           { province: '浙江省', city: '杭州市', detail: '西湖区文三路 100 号（演示地址）' },
           { province: '四川省', city: '成都市', detail: '高新区软件园 D 座 6 层（演示地址）' },
         ];
-        const partners = (sources.partners ?? []).filter(partner => partner.name);
         const values: Record<string, string> = {
           nodes: String(object?.nodeCount ?? 3), edition: ['基础版', '敏捷版', '标准版', '企业版'][index % 4], version: ['5.0.1', '5.0.2', '5.0.3'][index % 3],
           productForm: index % 2 ? '一体机' : '纯软件', address: writeAddress(places[index % places.length]),
           tibCount: String(24 + index * 16 + itemIndex * 8), instanceCount: String(12 + index * 8 + itemIndex * 4), clusterCount: String(1 + itemIndex),
-          expectedProvider: partners[(index + itemIndex) % partners.length]?.name ?? '',
         };
         item.values = Object.fromEntries(item.config.fields.map(field => {
           const options = item.config.fieldOptions[field];

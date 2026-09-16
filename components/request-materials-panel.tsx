@@ -4,18 +4,21 @@ import { useEffect, useState } from 'react';
 import { FileText, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
-import { requestMaterialGroups } from '@/lib/request-materials';
+import { requestMaterialGroups, type RequestMaterialGroup } from '@/lib/request-materials';
 import { requestMaterialFiles, requestMaterialsCustomerVisible } from '@/lib/service-requests';
 import { isInternal } from '@/lib/request-operations';
-import type { ServiceRequest } from '@/lib/service-requests';
+import type { ServiceRequest, RequestAudience } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
 
-export function RequestMaterialsPanel({ record, actor, readonly, busy, onMaterial, description }: {
+export function RequestMaterialsPanel({ record, actor, readonly, busy, onMaterial, description, audience, isGroupReadonly, title = '申请材料' }: {
   record: ServiceRequest;
   actor: OperationActor;
   readonly: boolean;
   busy: boolean;
   description?: string;
+  title?: string;
+  isGroupReadonly?: (group: RequestMaterialGroup) => boolean;
+  audience?: RequestAudience;
   onMaterial: (target: { itemId: string; requirementId: string }) => void;
 }) {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -27,13 +30,13 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
     target?.setAttribute('data-material-highlight', 'true');
     return () => { target?.removeAttribute('data-material-highlight'); };
   }, [record.id, highlightedItem]);
-  const internal = isInternal(actor.role);
+  const internal = audience ? audience === 'internal' : isInternal(actor.role);
   const customerVisible = requestMaterialsCustomerVisible(record);
   const groups = requestMaterialGroups(record).map(group => ({ group, files: requestMaterialFiles(record, group.material, internal ? 'internal' : 'customer') }));
   if (!internal && !customerVisible) return null;
-  return <section className={`sr-panel sr-request-materials-panel${customerVisible ? ' sr-customer-visible-panel' : ''}`} aria-label="申请材料">
+  return <section className={`sr-panel sr-request-materials-panel${customerVisible ? ' sr-customer-visible-panel' : ''}`} aria-label={title}>
     <div className="sr-panel-heading"><div className="sr-panel-title-with-visibility">
-      <h3>申请材料</h3>
+      <h3>{title}</h3>
       {customerVisible && <CustomerVisibleBadge />}
     </div></div>
     {description && <p className="sr-request-material-description">{description}</p>}
@@ -47,6 +50,7 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
             <div className="sr-request-material-title"><h4>{group.requirement.name}{group.requirement.required && <sup className="sr-material-required" aria-label="必填">*</sup>}</h4>
               <span className="sr-badge" data-tone={files.length ? 'green' : group.requirement.required ? 'amber' : 'muted'}>{files.length ? '已提供' : group.requirement.required ? '待提供' : '选填'}</span>
             </div>
+            {isGroupReadonly?.(group) && <p className="sr-help">转换后只读</p>}
             <div className="sr-material-relations">
               <span className="sr-material-relations-label"><Link2 size={14} aria-hidden="true" />关联服务项</span>
               {related.map(entry => <button type="button" className="sr-material-relation" key={entry.item.id}
@@ -63,7 +67,7 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
           </div>
           <Button variant="outline" disabled={busy}
             onClick={() => onMaterial({ itemId: member.item.id, requirementId: member.requirement.id })}>
-            {readonly || files.length ? '查看材料' : '填写材料'}
+            {readonly || isGroupReadonly?.(group) || files.length ? '查看材料' : '填写材料'}
           </Button>
         </article>;
       })}

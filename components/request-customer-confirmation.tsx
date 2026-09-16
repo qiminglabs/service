@@ -44,7 +44,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
       setError(error instanceof Error ? error.message : '保存失败，请重试。');
     } finally { lock.current = false; setWorking(false); }
   }
-  if (['草稿', '已取消'].includes(record.status) || (!canDecide && !latest?.accepted)) return null;
+  if (['草稿', '已取消', '已转服务项目'].includes(record.status) || (!canDecide && !latest?.accepted)) return null;
   return <section className="sr-panel sr-ops-panel">
     <div className="sr-ops-heading">
       <div>

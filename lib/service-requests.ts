@@ -1,3 +1,8 @@
+import { validateCustomValues } from './custom-field-mapping.ts';
+import { normalizeApplicationFields, isSystemApplicationField } from './request-application-fields.ts';
+import { isConvertedRequest, convertedRequestReadonlyMessage } from './request-readonly.ts';
+import { mappedServiceProject, parseProjectMapping, requestProjectMappingId } from './request-project-mapping.ts';
+import { fixedIdentityRoles as projectActorRoles } from './internal-users.ts';
 import { specialApprovalSaveIssue } from './approval-execution.ts';
 import { requestCancellationSaveIssue } from './request-cancellation.ts';
 import { requestTypeOf, requestTypes, type RequestType } from './request-types.ts';
@@ -8,7 +13,6 @@ import { canPerformAssessmentRole, routeAssessmentOnSave, routingSaveIssue } fro
 import { assessmentRoutingId } from './assessment-routing-schema.ts';
 import { runValidationQueue, validationEventsForTransition, SubmissionValidationError } from './submission-validation.ts';
 import { requestFieldLabel } from './request-field-labels.ts';
-import { withoutServiceExpectedProvider } from './request-application-fields.ts';
 import { submissionRulesId } from './submission-rule-schema.ts';
 export { requestIssues } from './request-validation-builtins.ts';
 import { addressLabel, isAddressValue, addressComplete } from './request-address.ts';
@@ -40,6 +44,7 @@ export type CatalogService = {
   allowedInitiatorSites?: string[];
 };
 export type RequestAudience = 'internal' | 'customer';
+export type CatalogFormAudience = RequestAudience | 'partner';
 
 export function isEntitlementService(service: { priceUnit: string }) {
   return ['巡检权益', '升级权益'].includes(service.priceUnit);
@@ -54,13 +59,13 @@ export function applyCatalogConfigRules(service: CatalogService, config: Request
 
 export function serviceAvailableForRequest(
   service: CatalogService,
-  audience: RequestAudience,
+  audience: CatalogFormAudience,
 ): boolean {
   return (
     service.status === '已启用' &&
     (service.allowedInitiatorSites === undefined ||
       service.allowedInitiatorSites.includes(
-        audience === 'customer' ? '客户中心' : '内部系统',
+        audience === 'customer' ? '客户中心' : audience === 'partner' ? '合作伙伴中心' : '内部系统',
       ))
   );
 }
@@ -69,8 +74,12 @@ export function customerRequestConfigId(serviceId: string) {
   return `customer-request-config:${serviceId}`;
 }
 
+export function partnerRequestConfigId(serviceId: string) {
+  return `partner-request-config:${serviceId}`;
+}
+
 export async function readRequestConfigs(
-  audience: RequestAudience,
+  audience: CatalogFormAudience,
 ): Promise<RequestConfig[]> {
   if (audience === 'internal') {
     return (await readLocal<RequestConfig>('configs')).map(
@@ -83,7 +92,7 @@ export async function readRequestConfigs(
   return references
     .filter(
       (record) => record.payload?.serviceId &&
-        record.id === customerRequestConfigId(record.payload.serviceId),
+        record.id === (audience === 'partner' ? partnerRequestConfigId : customerRequestConfigId)(record.payload.serviceId),
     )
     .map((record) => normalizeCatalogRequestConfig(record.payload!));
 }
@@ -481,6 +490,7 @@ export function requestProgressSteps(request: RequestStatus | ServiceRequest) {
     }));
 }
 export type ServiceRequest = {
+  projectReservationReleases?: import('./project-reservation-release').ProjectReservationRelease[];
   id: string;
   requestType?: RequestType | '';
   title: string;
@@ -489,7 +499,7 @@ export type ServiceRequest = {
   description: string;
   expectedServiceDate?: string;
   expectedServiceDateUncertain?: boolean;
-  expectedProvider?: string;
+  customValues?: Record<string, string>;
   /** Retained only for compatibility with historical records; no longer collected or validated. */
   businessImpact?: string;
   owner: string;
@@ -524,7 +534,7 @@ export function itemDisplayFields(item: RequestItem, names: Record<string, strin
   return fields;
 }
 export function itemSummaryFields(item: RequestItem, names: Record<string, string> = {}, objects: Pick<ObjectRef, 'id' | 'name'>[] = []): { key: string; label: string; value: string; address: boolean }[] {
-  const defaults: Record<string, string> = { ...fieldLabels, method: '服务方式', edition: '授权版本', businessObjects: '业务对象', productForm: '产品形态', address: '地址', tibCount: 'TiB 数', instanceCount: '实例数', clusterCount: '集群数', expectedProvider: '期望服务商' };
+  const defaults: Record<string, string> = { ...fieldLabels, method: '服务方式', edition: '授权版本', businessObjects: '业务对象', productForm: '产品形态', address: '地址', tibCount: 'TiB 数', instanceCount: '实例数', clusterCount: '集群数' };
   const keys = [...new Set(['method', 'edition', 'nodes', 'version', ...item.config.fields, ...Object.keys(item.values), 'businessObjects'])].filter(key => key !== 'description');
   return keys.flatMap(key => {
     if (!requestFieldIsVisible(item.config, key, item.method, item.values)) return [];
@@ -606,7 +616,7 @@ export function requestIdentityIssue(
     )
       return '创建人和创建时间不支持修改。';
     if (existing.status === '草稿' && actor?.role === '客户' && !canCheckRequestCompleteness(existing, actor)) {
-      const fields = ['title', 'requestType', 'contactId', 'description', 'expectedServiceDate', 'expectedServiceDateUncertain', 'expectedProvider', 'items', 'status', 'submittedAt'] as const;
+      const fields = ['title', 'requestType', 'contactId', 'description', 'expectedServiceDate', 'expectedServiceDateUncertain', 'items', 'status', 'submittedAt'] as const;
       if (fields.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '非本人发起的服务申请仅支持只读查看，不允许修改或提交。';
     }
@@ -626,7 +636,7 @@ export function requestIdentityIssue(
           && !currentPlan(record) && record.operations?.assessment?.rounds.length === 0;
         if (!validReturn) return '仅待评估阶段的负责项目经理可以退回草稿。';
       }
-      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'expectedServiceDateUncertain', 'expectedProvider'] as const;
+      const frozen = ['title', 'contactId', 'description', 'expectedServiceDate', 'expectedServiceDateUncertain'] as const;
       if (frozen.some(key => JSON.stringify(existing[key]) !== JSON.stringify(record[key])))
         return '提交后基本信息只读，不支持修改。';
       if (JSON.stringify(existing.items) !== JSON.stringify(record.items)
@@ -670,7 +680,7 @@ export function requestCreationAccessIssue(record: ServiceRequest, access: Reque
 }
 
 export function canAccessRequest(record: ServiceRequest, { actor, directory, customerId, contacts }: RequestAccessContext): boolean {
-  if (!actor.id) return false;
+  if (!actor.id || actor.role === '合作伙伴服务工程师') return false;
   if (actor.role === 'SmartX 系统管理员' || actor.role === 'SmartX 项目经理') return true;
   if (isRequestApplicant(record, actor) && (actor.role !== '客户' || (customerId === record.customerId && !!contacts?.some(c => c.id === actor.id && c.customerId === record.customerId && c.status === '启用')))) return true;
   if (actor.role === '客户') return customerId === record.customerId
@@ -713,6 +723,8 @@ export function requestCollaborationSaveIssue(
   refs: { contacts: ContactRef[]; customers: CustomerRef[]; users: InternalUser[] },
   access?: RequestAccessContext,
 ): string | null {
+  if (isConvertedRequest(previous) && (JSON.stringify(record.internalParticipants) !== JSON.stringify(previous?.internalParticipants)
+    || JSON.stringify(record.externalCollaborators) !== JSON.stringify(previous?.externalCollaborators))) return convertedRequestReadonlyMessage;
   const { contacts, customers, users } = refs;
   const assessmentRemovalIssue = assessmentCollaboratorRemovalIssue(record, previous);
   record = withAssessmentCollaborators(record, users);
@@ -788,7 +800,7 @@ export function newItem(
   service: CatalogService,
   config: RequestConfig,
 ): RequestItem {
-  const snapshot = structuredClone(applyCatalogConfigRules(service, withoutServiceExpectedProvider(normalizeRequestConfig(config))));
+  const snapshot = structuredClone(applyCatalogConfigRules(service, normalizeRequestConfig(config)));
   return {
     id: crypto.randomUUID(),
     serviceId: service.id,
@@ -812,7 +824,6 @@ export function copyRequestItem(source: RequestItem): RequestItem {
 }
 
 export function requestFieldIsRequired(config: RequestConfig, fieldId: string, method: string, values: Record<string, string> = {}): boolean {
-  if (fieldId === 'expectedProvider') return false;
   const requirement = config.fieldRequiredWhen?.[fieldId];
   if (isEditionRequirement(requirement))
     return config.fields.includes('edition') && (values.edition === '企业版' || (requirement === 'standard-or-enterprise' && values.edition === '标准版'));
@@ -824,7 +835,6 @@ export function requestFieldIsRequired(config: RequestConfig, fieldId: string, m
 }
 
 export function requestFieldIsVisible(config: RequestConfig, fieldId: string, method: string, values: Record<string, string> = {}): boolean {
-  if (fieldId === 'expectedProvider') return false;
   return !config.fieldRequiredWhen?.[fieldId] || requestFieldIsRequired(config, fieldId, method, values);
 }
 
@@ -848,7 +858,6 @@ export function clearHiddenItemFields(item: RequestItem): RequestItem {
 
 export function clearHiddenRequestFields(record: ServiceRequest): ServiceRequest {
   const next = { ...record, items: record.items.map(clearHiddenItemFields) };
-  delete next.expectedProvider;
   return next;
 }
 
@@ -925,7 +934,7 @@ export function itemBasicIssues(item: RequestItem): string[] {
 
 // Apply only to live catalog forms, not existing application/history snapshots.
 export function normalizeCatalogRequestConfig(config: RequestConfig): RequestConfig {
-  const normalized = withoutServiceExpectedProvider(normalizeRequestConfig(config));
+  const normalized = normalizeRequestConfig(config);
   if (normalized.versionFieldDefaultRemoved) return normalized;
   const omitVersion = <T,>(value?: Record<string, T>): Record<string, T> | undefined => value
     ? Object.fromEntries(Object.entries(value).filter(([id]) => id !== 'version')) : undefined;
@@ -1073,6 +1082,7 @@ export async function saveLocal(
   record: ServiceRequest | RequestConfig | { id: string; payload: unknown },
   access?: RequestAccessContext,
 ): Promise<void> {
+  if (store === 'references' && 'id' in record && record.id === requestProjectMappingId) throw new Error('请通过请求转项目映射管理保存配置。');
   if (store === 'references' && 'id' in record && record.id === assessmentRoutingId) throw new Error('请通过服务请求流程配置保存分配规则。');
   const db = await openDatabase();
   try {
@@ -1085,6 +1095,13 @@ export async function saveLocal(
         const incomingParticipants = serviceRequest.internalParticipants;
         const current = records.get(serviceRequest.id);
         current.onsuccess = () => {
+          // Use the persisted state before any normalization or automatic collaborator updates.
+          // This also rejects stale tabs, status rollback attempts and attachment-only writes.
+          if (current.result && isConvertedRequest(normalizeStoredRequest(current.result))) {
+            reject(new RequestIdentityError(convertedRequestReadonlyMessage));
+            transaction.abort();
+            return;
+          }
           const referenceRead = transaction.objectStore('references').getAll();
           referenceRead.onsuccess = () => {
             const savedWorkspace = referenceRead.result.find((entry: { id: string }) => entry.id === 'workspace')?.payload;
@@ -1092,6 +1109,8 @@ export async function saveLocal(
             serviceRequest = withAssessmentCollaborators(serviceRequest, savedWorkspace?.users ?? []);
             const storedPrevious = current.result ? normalizeStoredRequest(current.result) : undefined;
             const previous = storedPrevious ? withRequestCollaborators(storedPrevious, savedWorkspace?.contacts ?? [], savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []) : undefined;
+            try { validateCustomValues(serviceRequest.customValues, normalizeApplicationFields(savedWorkspace?.applicationFields).filter(field => !isSystemApplicationField(field.id)), previous?.customValues); }
+            catch (error) { reject(error); transaction.abort(); return; }
             const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, access) : null;
             if (creationIssue) {
               reject(new RequestIdentityError(creationIssue));
@@ -1106,8 +1125,15 @@ export async function saveLocal(
             }
             const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
             const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? []);
-            const projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor);
-            const issue = requestCancellationSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
+            let projectIssue: string | null = null;
+            try {
+              projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor,
+                serviceRequest.operations?.projectCreation && !previous?.operations?.projectCreation
+                  ? parseProjectMapping(referenceRead.result.find((entry: { id: string }) => entry.id === requestProjectMappingId)?.payload)
+                  : undefined);
+            } catch (error) { projectIssue = error instanceof Error ? error.message : '映射配置读取失败。'; }
+            const issue = (JSON.stringify(serviceRequest.projectReservationReleases) !== JSON.stringify(previous?.projectReservationReleases) ? '项目额度释放记录只能通过取消服务项目更新。' : null)
+              ?? requestCancellationSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
               ?? requestTypeSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? [])
               ?? routingSaveIssue(serviceRequest, previous, access?.actor, savedWorkspace?.users ?? []) ?? customerMaterialSaveIssue(serviceRequest, previous, access?.actor) ?? projectIssue ?? supplementIssue ?? decisionIssue
               ?? requestIdentityIssue(serviceRequest, previous, access?.actor)
@@ -1152,6 +1178,20 @@ export async function saveLocal(
                   } catch (error) {
                     reject(error instanceof SubmissionValidationError ? error : new SubmissionValidationError([{ ruleId: 'queue', requirement: '校验队列', message: '校验队列执行失败，请刷新后重试。' }], validationEvents));
                     transaction.abort(); return;
+                  }
+                  if (serviceRequest.operations?.projectCreation && !previous?.operations?.projectCreation) {
+                    try {
+                      const actor = access?.actor;
+                      if (!actor || projectActorRoles[actor.id] !== 'SmartX 项目经理' || !users.some((user: InternalUser) => user.id === actor.id && user.status === '启用')) throw new Error('仅已启用的负责项目经理可以创建项目。');
+                      const creation = serviceRequest.operations.projectCreation;
+                      const mapping = parseProjectMapping(referenceRead.result.find((entry: { id: string }) => entry.id === requestProjectMappingId)?.payload);
+                      const projects = creation.projects.map(project => mappedServiceProject(previous!, project, creation, mapping, workspacePayload?.partners ?? [], workspacePayload ?? {}));
+                      for (const project of projects) {
+                        const key = `service-project:${project.id}`;
+                        if (referenceRead.result.some((entry: { id: string }) => entry.id === key)) throw new Error('项目编号已存在，请重新打开创建弹窗。');
+                        transaction.objectStore('references').add({ id: key, payload: project });
+                      }
+                    } catch (error) { reject(new RequestIdentityError(error instanceof Error ? error.message : '项目创建失败。')); transaction.abort(); return; }
                   }
                   if (!checkAssessment) { records.put(withRequestCollaborators(serviceRequest, contacts, customers, users)); return; }
                   const ownerIssue = changedPlan ? planSalesOwnerIssue(serviceRequest, workspacePayload?.customers ?? [], workspacePayload?.users ?? []) : null;

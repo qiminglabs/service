@@ -12,7 +12,10 @@ export function activeEntitlementAllocations(record: ServiceRequest): Entitlemen
   const assessment = record.operations?.assessment;
   const plan = assessment?.plans.at(-1);
   if (!plan || plan.releasedAt) return [];
-  return plan.entitlementAllocations ?? effortEntitlementAllocations(assessment?.effort?.lines);
+  const released = record.projectReservationReleases?.filter(release => release.planId === plan.id).flatMap(release => release.entitlementAllocations) ?? [];
+  return (plan.entitlementAllocations ?? effortEntitlementAllocations(assessment?.effort?.lines)).map(allocation => ({ ...allocation,
+    quantity: Math.max(0, allocation.quantity - released.filter(entry => entry.itemId === allocation.itemId && entry.objectId === allocation.objectId && entry.kind === allocation.kind).reduce((sum, entry) => sum + entry.quantity, 0)),
+  })).filter(allocation => allocation.quantity > 0);
 }
 export function entitlementAvailable(object: ObjectRef, kind: EntitlementAllocation['kind'], records: ServiceRequest[] = [], exceptId = ''): number | undefined {
   const balance = kind === 'inspection' ? object.inspectionEntitlement : object.upgradeEntitlement;

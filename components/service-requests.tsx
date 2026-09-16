@@ -1,4 +1,6 @@
 'use client';
+import { isSystemApplicationField } from '@/lib/request-application-fields';
+import { isConvertedRequest, convertedRequestReadonlyMessage } from '@/lib/request-readonly';
 import { requestTypeOf, requestTypes, type RequestType } from '@/lib/request-types';
 
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
@@ -11,6 +13,7 @@ import type { ValidationFailure } from '@/lib/submission-validation';
 import type { RuleEvent } from '@/lib/submission-rule-schema';
 import { isRequestApplicant, requestAudience, managerCollaboratorId, hardwareCollaboratorId, assessmentCollaboratorRemovalIssue } from '@/lib/request-collaboration';
 import { commitCatalogVersion } from '@/lib/catalog-versions';
+import { initializePartnerCatalogConfigs } from '@/lib/partner-catalog-config';
 import { RequestFormBuilder } from '@/components/request-form-builder';
 import { requestFormOrder } from '@/lib/request-form-layout';
 import { RequestFormLayout } from '@/components/request-form-layout';
@@ -127,6 +130,7 @@ import {
 } from '@/lib/service-requests';
 import type {
   CatalogService,
+  CatalogFormAudience,
   ContactRef,
   CustomerRef,
   InternalUser,
@@ -156,6 +160,7 @@ type Props = {
     email: string;
     status: string;
   }[];
+  initialRequestId?: string;
   createToken: number;
 };
 const dateLabel = (value: string) =>
@@ -379,6 +384,7 @@ export function RequestWorkspace(props: Props) {
     } finally { validationLock.current = false; setValidating(false); }
   }
   const handledToken = useRef(0);
+  const openedRequestLink = useRef('');
   const saveLock = useRef(false);
 
   function beginCreate() {
@@ -431,10 +437,16 @@ export function RequestWorkspace(props: Props) {
           if (!current) return current;
           const latest = visible.find((record) => record.id === current.id);
           if (!latest) return null;
-          return ['待评估', '评估完成'].includes(current.status) ? latest : current;
+          return isConvertedRequest(latest) || ['待评估', '评估完成'].includes(current.status) ? latest : current;
         });
         setReady(true);
         setError('');
+        if (props.initialRequestId && openedRequestLink.current !== props.initialRequestId) {
+          openedRequestLink.current = props.initialRequestId;
+          const linked = visible.find(record => record.id === props.initialRequestId);
+          if (linked) { setDraft(structuredClone(linked)); setMaterialTarget(null); setShowIssues(false); setNotice(''); }
+          else setError('来源服务请求不存在或当前身份无权访问。');
+        }
       })
       .catch(() => {
         setError('无法读取本地资料。请允许此站点使用浏览器存储后重试。');
@@ -455,7 +467,7 @@ export function RequestWorkspace(props: Props) {
       window.removeEventListener('catalog-version-saved', refresh);
       window.removeEventListener('assessment-routing-updated', refresh);
     };
-  }, []);
+  }, [props.initialRequestId]);
   useEffect(() => {
     if (canCreate && props.createToken > handledToken.current) {
       handledToken.current = props.createToken;
@@ -465,6 +477,7 @@ export function RequestWorkspace(props: Props) {
 
   async function persist(record: ServiceRequest, message = '草稿已保存到本机', failureHeading?: string) {
     if (saveLock.current) return false;
+    if (draft?.id === record.id && isConvertedRequest(draft)) { setError(convertedRequestReadonlyMessage); return false; }
     saveLock.current = true;
     setBusy(true);
     setError('');
@@ -737,14 +750,15 @@ export function RequestWorkspace(props: Props) {
         | 'description'
         | 'expectedServiceDate'
         | 'expectedServiceDateUncertain'
-        | 'expectedProvider'
+        | 'customValues'
         | 'externalCollaborators'
         | 'internalParticipants'
       >
     >,
   ) {
+    if (isConvertedRequest(draft)) return;
     setDraft((record) =>
-      record
+      record && !isConvertedRequest(record)
         ? withRequestContact({ ...record, ...patch }, props.contacts, props.customers, props.users)
         : record,
     );
@@ -757,6 +771,7 @@ export function RequestWorkspace(props: Props) {
     >,
   ) {
     if (!draft || busy) return;
+    if (isConvertedRequest(draft)) { setError(convertedRequestReadonlyMessage); return; }
     const removalIssue =
       requestContactRemovalIssue({ ...draft, ...patch }, draft) ??
       customerOwnerRemovalIssue({ ...draft, ...patch }, draft, props.customers) ??
@@ -1046,7 +1061,6 @@ export function RequestWorkspace(props: Props) {
                       void persist(draft);
                     }}
                   >
-                    <Save size={15} />
                     保存草稿
                   </Button>
                   {isRequestApplicant(draft, props.currentActor) && <Button
@@ -1119,7 +1133,7 @@ export function RequestWorkspace(props: Props) {
                     (contact) => contact.customerId === draft.customerId,
                   )}
                   value={draft.externalCollaborators ?? []}
-                  readonly={!canAddExternalCollaborators(draft, access)}
+                  readonly={isConvertedRequest(draft) || !canAddExternalCollaborators(draft, access)}
                   allowRemove={true}
                   busy={busy}
                   onChange={(externalCollaborators) =>
@@ -1138,7 +1152,7 @@ export function RequestWorkspace(props: Props) {
                     }
                     users={props.users}
                     value={draft.internalParticipants ?? []}
-                    readonly={false}
+                    readonly={isConvertedRequest(draft)}
                     busy={busy}
                     onChange={(internalParticipants) =>
                       updateCollaborators({ internalParticipants })
@@ -1148,14 +1162,15 @@ export function RequestWorkspace(props: Props) {
               </aside>
             }
           >
-            {isInternal(props.currentActor.role) && (
-              <RequestProjects record={draft} />
-            )}
+            <RequestProjects record={draft} actor={props.currentActor} />
             {returnNotice && (
-              <section className="sr-panel sr-ops-panel" role="status">
+              <section className={`sr-panel sr-ops-panel${draft.status === '已取消' && isInternal(props.currentActor.role) ? ' sr-customer-visible-panel' : ''}`} role="status">
                 <div className="sr-ops-heading">
                   <div>
-                    <h3>{returnNotice.title}</h3>
+                    <div className="sr-panel-title-with-visibility">
+                      <h3>{returnNotice.title}</h3>
+                      {draft.status === '已取消' && isInternal(props.currentActor.role) && <CustomerVisibleBadge />}
+                    </div>
                     <p className="whitespace-pre-wrap break-words">
                       {returnNotice.reason}
                     </p>
@@ -1225,6 +1240,7 @@ export function RequestWorkspace(props: Props) {
                     rows={3}
                   />
                 </label>
+                {applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{field.name}</div><RequestFieldControl field={field} value={draft.customValues?.[field.id] ?? ''} disabled={readonly || busy} onChange={value => updateDraft({ customValues: { ...draft.customValues, [field.id]: value } })} /></div>)}
               </fieldset>
             </section>
             <RequestItemsPanel
@@ -1248,7 +1264,7 @@ export function RequestWorkspace(props: Props) {
               </div>
               <dl className="sr-system-info">
                 <div>
-                  <dt>提交站点</dt>
+                  <dt>创建站点</dt>
                   <dd>{requestAudience(draft) === 'customer' ? '客户中心' : '内部系统'}</dd>
                 </div>
                 <div>
@@ -1378,6 +1394,7 @@ export function RequestWorkspace(props: Props) {
             <label className="sr-span">{applicationLabel('description', '申请说明')}（选填）
               <textarea rows={3} value={creation.description} onChange={event => updateCreation({ description: event.target.value })} placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。" />
             </label>
+            {applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{field.name}</div><RequestFieldControl field={field} value={creation.customValues?.[field.id] ?? ''} disabled={busy} onChange={value => updateCreation({ customValues: { ...creation.customValues, [field.id]: value } })} /></div>)}
           </fieldset>
           </section>
           <RequestItemsPanel
@@ -1604,6 +1621,7 @@ export function RequestWorkspace(props: Props) {
       {projectOpen && draft && (
         <RequestProjectDialog
           objects={props.businessObjects}
+          saveError={error}
           key={`${draft.id}:${props.currentActor.id}`}
           record={draft}
           actor={props.currentActor}
@@ -2093,9 +2111,9 @@ export function RequestCatalogSettings({
   audience = 'internal',
 }: {
   service: CatalogService;
-  audience?: 'internal' | 'customer';
+  audience?: CatalogFormAudience;
 }) {
-  const configLabel = audience === 'internal' ? '内部申请' : '客户中心申请';
+  const configLabel = audience === 'internal' ? '内部申请' : audience === 'partner' ? '合作伙伴中心申请' : '客户中心申请';
   const requestFields = useContext(RequestFieldsContext);
   const products = useContext(BusinessObjectProductsContext);
   const [config, setConfig] = useState<RequestConfig>(() =>
@@ -2109,7 +2127,8 @@ export function RequestCatalogSettings({
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     let active = true;
-    readRequestConfigs(audience)
+    (audience === 'partner' ? initializePartnerCatalogConfigs() : Promise.resolve())
+      .then(() => readRequestConfigs(audience))
       .then((records) => {
         if (active) {
           setConfig(resolveRequestConfig(service, records));

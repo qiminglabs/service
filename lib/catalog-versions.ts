@@ -1,6 +1,14 @@
-import { defaultConfig, openDatabase, applyCatalogConfigRules } from './service-requests';
+import {
+  defaultConfig,
+  openDatabase,
+  applyCatalogConfigRules,
+} from './service-requests.ts';
 import { workspaceDayQuantityIssue } from './day-quantity.ts';
-import type { CatalogService, RequestConfig } from './service-requests';
+import type {
+  CatalogService,
+  CatalogFormAudience,
+  RequestConfig,
+} from './service-requests';
 import { prepareMaterialDeduplication } from './request-materials.ts';
 
 export type VersionedService = CatalogService & {
@@ -14,22 +22,27 @@ export type CatalogVersion = {
     service: VersionedService;
     internal: RequestConfig;
     customer: RequestConfig;
+    partner?: RequestConfig;
     savedAt: string;
     reason: string;
   };
 };
 
-// One transaction writes the catalog, both configuration snapshots, and history.
+// One transaction writes the catalog, all configuration snapshots, and history.
 export async function commitCatalogVersion(
   serviceId: string,
   change: {
     service?: VersionedService;
     config?: RequestConfig;
-    audience?: 'internal' | 'customer';
+    audience?: CatalogFormAudience;
     reason: string;
   },
 ) {
-  if (change.config) change = { ...change, config: await prepareMaterialDeduplication(change.config) };
+  if (change.config)
+    change = {
+      ...change,
+      config: await prepareMaterialDeduplication(change.config),
+    };
   const db = await openDatabase();
   let savedConfig: RequestConfig | undefined;
   try {
@@ -40,10 +53,11 @@ export async function commitCatalogVersion(
       const workspace = refs.get('workspace');
       const internal = configs.get(serviceId);
       const customer = refs.get(`customer-request-config:${serviceId}`);
+      const partner = refs.get(`partner-request-config:${serviceId}`);
       const history = refs.get(`catalog-history:${serviceId}`);
       let loaded = 0;
       const finish = () => {
-        if (++loaded !== 4) return;
+        if (++loaded !== 5) return;
         try {
           const current = workspace.result?.payload.services.find(
             (s: VersionedService) => s.id === serviceId,
@@ -53,13 +67,30 @@ export async function commitCatalogVersion(
             tx.abort();
             return;
           }
-          const oldInternal = applyCatalogConfigRules(current, internal.result ?? defaultConfig(current));
+          const oldInternal = applyCatalogConfigRules(
+            current,
+            internal.result ?? defaultConfig(current),
+          );
           if (change.service) {
-            const issue = workspaceDayQuantityIssue({ services: [change.service] }, { services: [current] });
+            const issue = workspaceDayQuantityIssue(
+              { services: [change.service] },
+              { services: [current] },
+            );
             if (issue) throw new Error(issue);
           }
-          const oldCustomer =
-            applyCatalogConfigRules(current, customer.result?.payload ?? defaultConfig(current));
+          const oldCustomer = applyCatalogConfigRules(
+            current,
+            customer.result?.payload ?? defaultConfig(current),
+          );
+          const oldPartner = applyCatalogConfigRules(
+            current,
+            partner.result?.payload ?? structuredClone(oldCustomer),
+          );
+          if (!partner.result)
+            refs.put({
+              id: `partner-request-config:${serviceId}`,
+              payload: oldPartner,
+            });
           const entries: CatalogVersion['payload'][] =
             history.result?.payload ?? [];
           const now = new Date().toISOString();
@@ -68,19 +99,32 @@ export async function commitCatalogVersion(
             throw new Error('目录已被更新，请刷新后重新编辑。');
           }
           savedConfig =
-            change.audience === 'customer' ? oldCustomer : oldInternal;
+            change.audience === 'partner'
+              ? oldPartner
+              : change.audience === 'customer'
+                ? oldCustomer
+                : oldInternal;
           if (!entries.length)
             entries.push({
               service: { ...current, version },
               internal: oldInternal,
               customer: oldCustomer,
+              partner: oldPartner,
               savedAt: now,
               reason: '版本管理启用时的初始快照',
             });
-          const nextInternal =
-            applyCatalogConfigRules(change.service ?? current, change.audience === 'internal' ? change.config! : oldInternal);
-          const nextCustomer =
-            applyCatalogConfigRules(change.service ?? current, change.audience === 'customer' ? change.config! : oldCustomer);
+          const nextInternal = applyCatalogConfigRules(
+            change.service ?? current,
+            change.audience === 'internal' ? change.config! : oldInternal,
+          );
+          const nextCustomer = applyCatalogConfigRules(
+            change.service ?? current,
+            change.audience === 'customer' ? change.config! : oldCustomer,
+          );
+          const nextPartner = applyCatalogConfigRules(
+            change.service ?? current,
+            change.audience === 'partner' ? change.config! : oldPartner,
+          );
           const clean = (value: object) =>
             JSON.stringify(
               Object.fromEntries(
@@ -108,7 +152,8 @@ export async function commitCatalogVersion(
               status: current.status,
             }) === clean(current) &&
             clean(nextInternal) === clean(oldInternal) &&
-            clean(nextCustomer) === clean(oldCustomer)
+            clean(nextCustomer) === clean(oldCustomer) &&
+            clean(nextPartner) === clean(oldPartner)
           );
           if (
             !contentChanged &&
@@ -126,6 +171,7 @@ export async function commitCatalogVersion(
               service: next,
               internal: nextInternal,
               customer: nextCustomer,
+              partner: nextPartner,
               savedAt: now,
               reason: change.reason,
             });
@@ -145,14 +191,22 @@ export async function commitCatalogVersion(
             id: `customer-request-config:${serviceId}`,
             payload: nextCustomer,
           });
+          refs.put({
+            id: `partner-request-config:${serviceId}`,
+            payload: nextPartner,
+          });
           savedConfig =
-            change.audience === 'customer' ? nextCustomer : nextInternal;
+            change.audience === 'partner'
+              ? nextPartner
+              : change.audience === 'customer'
+                ? nextCustomer
+                : nextInternal;
         } catch (error) {
           reject(error);
           tx.abort();
         }
       };
-      for (const request of [workspace, internal, customer, history])
+      for (const request of [workspace, internal, customer, partner, history])
         request.onsuccess = finish;
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);

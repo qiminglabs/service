@@ -1,0 +1,82 @@
+import type { CustomerRef, RequestItem, StoredFile } from './service-requests';
+import type { ProjectCollaboratorDirectory } from './service-project-collaborators';
+import type { ServiceProjectRecord } from './service-projects';
+import type { OperationActor } from './request-operations';
+import { fixedIdentityRoles } from './internal-users.ts';
+import type { SupplementMention } from './supplement-mentions';
+
+export type CustomerProjectDirectory = ProjectCollaboratorDirectory & { customers: CustomerRef[] };
+export function customerProjectOrganization(actor: OperationActor, directory: CustomerProjectDirectory): string | undefined {
+  if (actor.role !== '客户' || !actor.id) return undefined;
+  const contact = directory.contacts.find(person => person.id === actor.id && person.status === '启用');
+  return directory.customers.find(customer => customer.id === contact?.customerId && customer.status === '启用')?.id;
+}
+export function canViewCustomerProject(project: ServiceProjectRecord, actor: OperationActor, directory: CustomerProjectDirectory): boolean {
+  const organizationId = customerProjectOrganization(actor, directory);
+  return !!organizationId && project.customerId === organizationId
+    && !!project.collaborators?.customer?.some(person => person.id === actor.id);
+}
+export type CustomerProjectContact = { id: string; name: string; phone: string; email: string; roles: string[] };
+export type CustomerServiceProject = {
+  revision: number;
+  id: string; name: string; status: ServiceProjectRecord['status']; expectedServiceDate: string;
+  serviceProviderName: string; note: string; createdAt: string; updatedAt: string;
+  cancellationReason?: string;
+  cancelledFromStatus?: ServiceProjectRecord['status'];
+  customerId: string;
+  customerName: string;
+  items: RequestItem[];
+  collaborators: CustomerProjectContact[];
+  smartxContacts: CustomerProjectContact[];
+  supplementMentionUsers: { id: string; name: string; isManager: boolean }[];
+  supplements: { id: string; author: string; at: string; comment: string; files: StoredFile[]; mentions: SupplementMention[]; externalVisible: boolean }[];
+};
+// Explicit customer projection: internal assessments, quotas, worklogs, material
+// files and private collaboration metadata are never passed to the customer view.
+export function customerServiceProject(project: ServiceProjectRecord, directory?: CustomerProjectDirectory): CustomerServiceProject {
+  const customer = directory?.customers.find(entry => entry.id === project.customerId);
+  const internalCollaborators = (project.collaborators?.internal ?? []).map(person => {
+    const user = directory?.users.find(entry => entry.id === person.id);
+    return { id: person.id, name: user?.name ?? person.name, phone: user?.phone ?? '', email: user?.email ?? '', roles: person.assignmentRoles?.filter(role => role !== '原客户协作人') ?? [] };
+  });
+  const smartxContacts = new Map<string, CustomerProjectContact>();
+  const addContact = (id: string | undefined, role: string) => {
+    const user = directory?.users.find(entry => entry.id === id);
+    if (!user) return;
+    const existing = smartxContacts.get(user.id);
+    smartxContacts.set(user.id, { id: user.id, name: user.name, phone: user.phone ?? '', email: user.email ?? '', roles: [...new Set([...(existing?.roles ?? []), role])] });
+  };
+  addContact(customer?.ownerUserId, '客户经理');
+  for (const person of internalCollaborators) {
+    if (person.roles.includes('项目经理') || fixedIdentityRoles[person.id] === 'SmartX 项目经理') addContact(person.id, '项目经理');
+    if (person.roles.some(role => role === '请求申请人' || role === '申请人')) addContact(person.id, '申请人');
+  }
+  return structuredClone({
+    revision: project.revision,
+    id: project.id, name: project.name, status: project.status, expectedServiceDate: project.expectedServiceDate,
+    serviceProviderName: project.serviceProviderName ?? '', note: project.note, createdAt: project.createdAt, updatedAt: project.updatedAt,
+    cancellationReason: project.cancellation?.reason,
+    cancelledFromStatus: project.cancellation?.fromStatus,
+    customerId: project.customerId,
+    customerName: customer?.name ?? project.customerId,
+    items: (project.items ?? []).map(item => ({
+      id: item.id, serviceId: item.serviceId, serviceName: item.serviceName,
+      methods: item.methods, method: item.method, methodFieldType: item.methodFieldType,
+      description: item.description, businessObjectIds: item.businessObjectIds,
+      businessObjectSnapshot: item.businessObjectSnapshot ? {
+        savedAt: item.businessObjectSnapshot.savedAt,
+        objects: item.businessObjectSnapshot.objects.filter(entry => item.businessObjectIds.includes(entry.object.id) && entry.object.customerId === project.customerId),
+      } : undefined,
+      values: Object.fromEntries(Object.entries(item.values).filter(([key]) => item.config.fields.includes(key))),
+      config: { ...item.config, materials: [] }, materials: [],
+    })),
+    collaborators: (project.collaborators?.customer ?? []).map(person => {
+      const contact = directory?.contacts.find(entry => entry.id === person.id && entry.customerId === project.customerId);
+      return { id: person.id, name: contact?.name ?? person.name, phone: contact?.phone ?? '', email: contact?.email ?? '', roles: person.assignmentRoles?.filter(role => role !== '原客户协作人') ?? [] };
+    }),
+    smartxContacts: [...smartxContacts.values()],
+    supplementMentionUsers: (directory?.users ?? []).filter(user => user.status === '启用' && project.collaborators?.internal?.some(person => person.id === user.id))
+      .map(user => ({ id: user.id, name: user.name, isManager: project.collaborators?.internal?.find(person => person.id === user.id)?.assignmentRoles?.includes('项目经理') === true || fixedIdentityRoles[user.id] === 'SmartX 项目经理' })),
+    supplements: (project.supplements ?? []).filter(item => item.externalVisible).map(({ id, author, at, comment, files, mentions }) => ({ id, author, at, comment, files, mentions: mentions ?? [], externalVisible: true })),
+  });
+}

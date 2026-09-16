@@ -6,6 +6,7 @@ import { ensureConversionHistory } from './entitlement-conversions.ts';
 import { requestFormOrder } from './request-form-layout.ts';
 import { demoReportingUsers, demoWorkflowRuleReferences } from './demo-workflow-rules.ts';
 import { ruleBasedRequestSamplesMarker } from './reinitialize-request-samples.ts';
+import { buildProjectSamples } from './demo-service-projects.ts';
 
 export function initializeCustomerOwners<T extends CustomerRef>(customers: T[], users: InternalUser[]): T[] {
   const sales = users.find(user => user.status === '启用' && /销售/.test(user.department));
@@ -17,9 +18,11 @@ type InitialWorkspace = Parameters<typeof buildRequestSamples>[0] & {
   requestFields?: { id: string; name: string; options?: Array<string | { value: string; enabled: boolean }> }[];
 };
 
+export const requestedDemoResetMarker = 'demo-reset-2026-09-16-projects-certifications-v2';
+
 // Call only for an explicitly requested reset. Validate/build first;
 // then replace this application's three stores in a single rollback-safe commit.
-export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T) {
+export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T, onlyIfNeeded = false) {
   const workspace = structuredClone(initial);
   workspace.users = demoReportingUsers(workspace.users);
   workspace.customers = initializeCustomerOwners(workspace.customers, workspace.users);
@@ -32,7 +35,7 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
       config.fieldOptions[field.id] = (field.options ?? []).flatMap(option =>
         typeof option === 'string' ? [option] : option.enabled ? [option.value] : []);
     }
-    const removedFields = new Set(['version', 'productForm', 'tibCount', 'clusterCount', 'instanceCount', 'expectedProvider']);
+    const removedFields = new Set(['version', 'productForm', 'tibCount', 'clusterCount', 'instanceCount']);
     config.fields = config.fields.filter(id => !removedFields.has(id));
     config.fieldOrder = config.fieldOrder?.filter(id => !removedFields.has(id));
     for (const id of removedFields) {
@@ -51,7 +54,8 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
     resolved.fieldRowStarts = ['description'];
     return resolved;
   });
-  const references = [...new Map([
+  const references: { id: string; payload: unknown }[] = [...new Map([
+    { id: requestedDemoResetMarker, payload: { initializedAt: new Date().toISOString() } },
     ...demoSubmissionRuleReferences([]),
     { id: 'workspace', payload: { ...workspace, customerOwnersInitialized: true } },
     ...configs.map(config => ({ id: customerRequestConfigId(config.serviceId), payload: structuredClone(config) })),
@@ -61,7 +65,10 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
     { id: ruleBasedRequestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
     { id: presalesRequestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
   ].map(reference => [reference.id, reference])).values()];
-  const samples = buildRequestSamples(workspace, [], configs, references, new Date(), true);
+  const now = new Date();
+  const generated = buildProjectSamples(workspace, buildRequestSamples(workspace, [], configs, references, now, true), now);
+  const samples = generated.requests;
+  references.push(...generated.projects.map(project => ({ id: `service-project:${project.id}`, payload: project })));
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -69,20 +76,21 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T)
       tx.oncomplete = () => resolve();
       tx.onabort = () => reject(tx.error ?? new Error('初始化未完成，原数据已保留。'));
       tx.onerror = () => reject(tx.error);
-      try {
-        const requests = tx.objectStore('requests');
-        const settings = tx.objectStore('configs');
-        const refs = tx.objectStore('references');
-        requests.clear();
-        settings.clear();
-        refs.clear();
-        samples.forEach(record => requests.add(record));
-        configs.forEach(record => settings.add(record));
-        references.forEach(record => refs.add(record));
-      } catch (error) {
-        tx.abort();
-        reject(error);
-      }
+      const replace = () => {
+        try {
+          const requests = tx.objectStore('requests');
+          const settings = tx.objectStore('configs');
+          const refs = tx.objectStore('references');
+          requests.clear(); settings.clear(); refs.clear();
+          samples.forEach(record => requests.add(record));
+          configs.forEach(record => settings.add(record));
+          references.forEach(record => refs.add(record));
+        } catch (error) { tx.abort(); reject(error); }
+      };
+      if (onlyIfNeeded) {
+        const marker = tx.objectStore('references').get(requestedDemoResetMarker);
+        marker.onsuccess = () => { if (!marker.result) replace(); };
+      } else replace();
     });
   } finally {
     db.close();

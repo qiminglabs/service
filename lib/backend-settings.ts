@@ -1,5 +1,6 @@
 export const backendSettingsSections = [
-  { key: 'forms', label: '服务请求表单', tabs: [{ key: 'request-items', label: '服务项字段' }, { key: 'application-fields', label: '服务申请字段' }] },
+  { key: 'forms', label: '服务请求字段', tabs: [{ key: 'request-items', label: '服务项字段' }, { key: 'application-fields', label: '服务申请字段' }] },
+  { key: 'project-forms', label: '服务项目字段', tabs: [{ key: 'project-fields', label: '服务项目字段' }] },
   { key: 'request-flow', label: '服务请求流程', tabs: [
     { key: 'collaborators', label: '协作人分配' },
     { key: 'submission', label: '提交校验' },
@@ -7,8 +8,8 @@ export const backendSettingsSections = [
     { key: 'assessment-hardware', label: '硬件产品经理分配' },
     { key: 'approval-designer', label: '特殊审批' },
   ] },
+  { key: 'execution-flow', label: '服务执行流程', tabs: [{ key: 'project-collaborators', label: '协作人分配' }, { key: 'request-project-mapping', label: '请求转项目映射' }] },
   { key: 'pricing', label: '计价与权益', tabs: [{ key: 'entitlement-conversions', label: '权益换算' }] },
-  { key: 'execution-flow', label: '服务执行流程', tabs: [] },
 ] as const;
 
 export type BackendSettingsSection = typeof backendSettingsSections[number]['key'];
