@@ -48,7 +48,7 @@ export function RequestFlowDiagram({ activeTab, tabId, onTabSelect }: {
   return <details className="request-flow-map-panel">
     <summary>服务请求流程图<ChevronDown size={16} aria-hidden="true" /></summary>
     <div className="request-flow-map-scroll">
-      <svg className="request-flow-map request-flow-map--request" viewBox="0 0 1420 188" role="group" aria-label="服务请求流程及处理人：申请人提交，系统分配负责人；硬件产品经理先评估，负责项目经理完成材料评估及人天核定。售前评估类进入评估完成，可由负责项目经理转为服务交付；服务交付类继续由内部申请人或客户所有人关联服务依据。额度不足时由内部申请人或客户所有人发起特殊审批，审批人由系统按规则分配。客户确认后，由负责项目经理受理并转换服务项目。提交服务请求可跳转提交校验，两个分配节点及特殊审批可跳转对应配置。">
+      <svg className="request-flow-map request-flow-map--request" viewBox="0 0 1420 188" role="group" aria-label="服务请求流程及处理人：申请人提交，系统分配负责人；硬件产品经理先评估，负责项目经理完成材料评估及人天核定。技术评估类进入评估完成，可由负责项目经理转为服务交付；服务交付类继续由内部申请人或客户所有人关联服务依据。额度不足时由内部申请人或客户所有人发起特殊审批，审批人由系统按规则分配。客户确认后，由负责项目经理受理并转换服务项目。提交服务请求可跳转提交校验，两个分配节点及特殊审批可跳转对应配置。">
         <defs><marker id={arrowId} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#94a8be" /></marker></defs>
         <g className="request-flow-map-links" markerEnd={`url(#${arrowId})`}>
           <line x1="140" y1="100" x2="194" y2="100" />
@@ -68,7 +68,7 @@ export function RequestFlowDiagram({ activeTab, tabId, onTabSelect }: {
         </g>
         <g className="request-flow-map-labels">
           <text x="194" y="12">命中触发条件</text>
-          <text x="630" y="28">售前评估</text>
+          <text x="630" y="28">技术评估</text>
           <text x="722" y="87">服务交付</text>
           <text x="852" y="28">转为服务交付</text>
           <text x="454" y="76">先通过</text>

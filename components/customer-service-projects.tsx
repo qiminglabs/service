@@ -77,7 +77,7 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
         <section className="sr-panel"><div className="sr-panel-heading"><h3>基本信息</h3></div>
           <fieldset className="sr-form-grid" disabled>
             <label htmlFor="customer-project-name">项目名称<Input id="customer-project-name" value={project.name} readOnly /></label>
-            <DateField id="customer-project-date" label="期望服务时间" value={project.expectedServiceDate} readonly onChange={() => {}} />
+            <DateField id="customer-project-date" label="期望服务日期" value={project.expectedServiceDate} readonly onChange={() => {}} />
             <label htmlFor="customer-project-customer">客户<Input id="customer-project-customer" value={project.customerName} readOnly /></label>
             <label htmlFor="customer-project-provider">服务方<Input id="customer-project-provider" value={project.serviceProviderName || '未指定'} readOnly /></label>
             <label className="sr-span" htmlFor="customer-project-note">项目说明<Textarea id="customer-project-note" value={project.note} readOnly rows={3} /></label>
@@ -96,9 +96,12 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
       <TabsContent value="supplements" keepMounted>
         <ProjectSupplementsPanel key={`${project.id}:${actor.id}`} actor={actor} busy={false} editable={!supplementsClosed}
           hideReadonlyWhenEmpty emptyMessage={supplementsClosed ? '暂无补充信息' : '暂无补充资料'}
-          record={{ supplements: project.supplements, collaborators: { internal: project.supplementMentionUsers.map(user => ({ id: user.id, name: user.name, details: '', assignmentRoles: user.isManager ? ['项目经理'] : [] })) } }}
-          users={project.supplementMentionUsers.map(user => ({ id: user.id, name: user.name, status: '启用', email: '', department: '' }))}
-          joinMention={async () => '客户仅可 @ 已加入项目的内部协作人。'} publish={async input => {
+          record={{ supplements: project.supplements, collaborators: {
+            internal: project.supplementMentionUsers.filter(user => user.group === 'internal').map(user => ({ id: user.id, name: user.name, details: '', assignmentRoles: user.isManager ? ['项目经理'] : [] })),
+            partner: project.supplementMentionUsers.filter(user => user.group === 'partner').map(user => ({ id: user.id, name: user.name, details: '' })),
+          } }}
+          users={project.supplementMentionUsers.map(user => ({ id: user.id, name: user.name, status: '启用', email: user.email, companyName: user.companyName, department: '' }))}
+          joinMention={async () => '客户仅可 @ 已加入项目的内部协作人和当前服务方的合作伙伴协作人。'} publish={async input => {
           try {
             setNotice('');
             const updated = await saveCustomerProjectSupplement(project.id, project.revision, input, actor);
@@ -118,9 +121,9 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
   const filtered = records.filter(record => (status === '全部状态' || record.status === status) && `${record.name} ${record.id} ${record.serviceProviderName}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <section className="sr-workspace" aria-label="客户服务项目">
     <div className="sr-toolbar"><div className="sr-filter-group"><div className="sr-search"><Search size={16} /><Input aria-label="搜索服务项目" placeholder="搜索项目名称、编号或服务方" value={query} onChange={event => setQuery(event.target.value)} /></div><select aria-label="筛选项目状态" value={status} onChange={event => setStatus(event.target.value)}><option>全部状态</option>{serviceProjectStatuses.map(value => <option key={value}>{value}</option>)}</select></div></div>
-    <div className="sr-table-scroll"><table className="sr-table app-list-table"><thead><tr><th>项目名称 / 编号</th><th>服务方</th><th>期望服务时间</th><th>状态</th><th>操作</th></tr></thead><tbody>
-      {filtered.map(record => <tr key={record.id}><td><button className="sr-title-link app-list-link" onClick={() => select(record.id)}>{record.name}</button><small>{record.id}</small></td><td>{record.serviceProviderName || '未指定'}</td><td>{record.expectedServiceDate || '未填写'}</td><td><Status value={record.status} /></td><td><Button variant="outline" size="sm" onClick={() => select(record.id)}>查看项目</Button></td></tr>)}
-      {!filtered.length && <tr><td colSpan={5}>{records.length ? '暂无符合筛选条件的项目' : '暂无参与的服务项目，加入客户协作人后将在此显示。'}</td></tr>}
+    <div className="sr-table-scroll"><table className="sr-table app-list-table"><thead><tr><th>项目名称 / 编号</th><th>服务方</th><th>服务项</th><th>期望服务日期</th><th>状态</th><th>创建时间/创建人</th><th>操作</th></tr></thead><tbody>
+      {filtered.map(record => <tr key={record.id}><td><button className="sr-title-link app-list-link" onClick={() => select(record.id)}>{record.name}</button><small>{record.id}</small></td><td>{record.serviceProviderName || '未指定'}</td><td>{record.items.length} 项</td><td>{record.expectedServiceDate || '未填写'}</td><td><Status value={record.status} /></td><td>{stamp(record.createdAt)}<small>{record.createdBy || '—'}</small></td><td><Button variant="outline" size="sm" onClick={() => select(record.id)}>查看项目</Button></td></tr>)}
+      {!filtered.length && <tr><td colSpan={7}>{records.length ? '暂无符合筛选条件的项目' : '暂无参与的服务项目，加入客户协作人后将在此显示。'}</td></tr>}
     </tbody></table></div>
   </section>;
 }

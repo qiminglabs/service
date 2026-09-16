@@ -13,9 +13,7 @@ import { defaultProjectMapping, mappingRules, type RequestProjectMapping, type M
 import { readProjectMapping, saveProjectMapping } from '@/lib/request-project-mapping-store';
 
 const groups = [
-  { section: '请求字段', source: '服务请求', target: '服务项目', description: '将请求基本信息带入项目，项目名称可在创建前调整。' },
-  { section: '服务项', source: '申请项', target: '项目服务项', description: '按创建时的分组逐项转换，保留目录和业务对象关联。' },
-  { section: '材料', source: '申请材料', target: '项目材料', description: '随对应服务项带入附件、在线文档及材料要求。' },
+  { section: '请求字段', source: '服务请求', target: '服务项目' },
 ] as const;
 
 export function RequestProjectMappingSettings({ actor, applicationFields, projectFields }: { actor: OperationActor; applicationFields: RequestField[]; projectFields: RequestField[] }) {
@@ -39,7 +37,7 @@ export function RequestProjectMappingSettings({ actor, applicationFields, projec
     saveLock.current = true;
     setSavingSection(section); setError(''); setNotice('');
     try {
-      const input = section === '请求字段' ? { ...config, customFields: (config.customFields ?? []).filter(mapping => customTargets.some(field => field.id === mapping.target.id)).map(mapping => ({ ...mapping, source: customSources.find(field => field.id === mapping.source.id) ?? mapping.source, target: customTargets.find(field => field.id === mapping.target.id)! })) } : config;
+      const input = section === '请求字段' ? { ...config, customFields: (config.customFields ?? []).filter(mapping => customTargets.some(field => field.id === mapping.target.id)).map(mapping => ({ ...mapping, source: customSources.find(field => field.id === mapping.source.id) ?? mapping.source, target: customTargets.find(field => field.id === mapping.target.id)! })) } : { ...config };
       const saved = await saveProjectMapping(input, actor, section);
       setConfig(current => ({ ...current, ...(section === '请求字段' ? { customFields: saved.customFields } : {}), revision: saved.revision, updatedAt: saved.updatedAt, updatedBy: saved.updatedBy }));
       setNotice(`${groups.find(group => group.section === section)?.target}映射及只读设置已保存，将应用于之后创建的项目。`);
@@ -51,12 +49,12 @@ export function RequestProjectMappingSettings({ actor, applicationFields, projec
     {error && <p className="sr-error" role="alert">{error}</p>}
     {notice && <output className="sr-mapping-notice">{notice}</output>}
     {!allowed && <p>仅系统管理员可修改映射配置。</p>}
-    <div className="sr-mapping-object-list">{groups.map(({ section, source, target, description }) => <section className="sr-mapping-object" key={section} aria-label={`${source}到${target}映射`}>
-      <div className="sr-mapping-object-header"><div><h4>{source}<ArrowRight size={16} aria-hidden="true" />{target}</h4><p>{description}</p></div><div className="sr-project-mapping-actions"><Button aria-label={`保存${target}映射`} disabled={!ready || busy || !allowed} onClick={() => void save(section)}>{savingSection === section ? '保存中…' : '保存映射'}</Button></div></div>
-      <div className="table-scroll"><table className="sr-project-mapping-table"><colgroup><col className="sr-mapping-source-col" /><col className="sr-mapping-arrow-col" /><col /><col className="sr-mapping-readonly-col" /></colgroup><thead><tr><th scope="col">来源字段 / 固定值</th><th scope="col" aria-label="映射到" /><th scope="col">目标字段</th><th scope="col">转换后只读</th></tr></thead><tbody>{mappingRules.filter(rule => rule.section === section).map(rule => <tr key={rule.target}>
+    <div className="sr-mapping-object-list">{groups.map(({ section, source, target }) => <section className="sr-mapping-object" key={section} aria-label={`${source}到${target}映射`}>
+      <div className="sr-mapping-object-header"><div><h4>{source}<ArrowRight size={16} aria-hidden="true" />{target}</h4></div>{section === '请求字段' && <div className="sr-project-mapping-actions"><Button aria-label={`保存${target}映射`} disabled={!ready || busy || !allowed} onClick={() => void save(section)}>{savingSection === section ? '保存中…' : '保存映射'}</Button></div>}</div>
+      <div className="table-scroll"><table className="sr-project-mapping-table"><colgroup><col className="sr-mapping-source-col" /><col className="sr-mapping-arrow-col" /><col />{section === '请求字段' && <col className="sr-mapping-readonly-col" />}</colgroup><thead><tr><th scope="col">来源字段 / 固定值</th><th scope="col" aria-label="映射到" /><th scope="col">目标字段</th>{section === '请求字段' && <th scope="col">转换后只读</th>}</tr></thead><tbody>{mappingRules.filter(rule => rule.section === section).map(rule => <tr key={rule.target}>
         <td>{rule.sources.length === 1 ? <span className="sr-mapping-fixed-source">{rule.sources[0][1]}</span> : <select aria-label={`${rule.label}映射来源`} value={config.fields[rule.target]} disabled={!ready || busy || !allowed} onChange={event => { const value = event.target.value; setConfig(current => ({ ...current, fields: { ...current.fields, [rule.target]: value }, ...(!value ? { readonly: { ...current.readonly, [rule.target]: false } } : {}) })); setNotice(''); }}>{rule.sources.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}</td>
         <td><ArrowRight size={15} aria-hidden="true" /></td><td>{rule.label}</td>
-        <td><div className="sr-mapping-readonly"><Switch aria-label={`${rule.label}转换后只读`} checked={!!config.fields[rule.target] && config.readonly?.[rule.target] === true} disabled={!ready || busy || !allowed || !config.fields[rule.target]} onCheckedChange={checked => { setConfig(current => ({ ...current, readonly: { ...current.readonly, [rule.target]: checked } })); setNotice(''); }} /><span>{!config.fields[rule.target] ? '未映射' : config.readonly?.[rule.target] ? '只读' : '可编辑'}</span></div></td>
+        {section === '请求字段' && <td>{rule.target === 'customerId' ? <span className="sr-mapping-fixed-source">系统固定（只读）</span> : <div className="sr-mapping-readonly"><Switch aria-label={`${rule.label}转换后只读`} checked={!!config.fields[rule.target] && config.readonly?.[rule.target] === true} disabled={!ready || busy || !allowed || !config.fields[rule.target]} onCheckedChange={checked => { setConfig(current => ({ ...current, readonly: { ...current.readonly, [rule.target]: checked } })); setNotice(''); }} /><span>{!config.fields[rule.target] ? '未映射' : config.readonly?.[rule.target] ? '只读' : '可编辑'}</span></div>}</td>}
       </tr>)}{section === '请求字段' && customTargets.map(targetField => {
         const entry = config.customFields?.find(mapping => mapping.target.id === targetField.id);
         const sources = customSources.filter(sourceField => compatibleMappingFields(sourceField, targetField));
@@ -70,7 +68,8 @@ export function RequestProjectMappingSettings({ actor, applicationFields, projec
             setConfig(current => ({ ...current, customFields: current.customFields?.map(mapping => mapping.target.id === targetField.id ? { ...mapping, readonly: checked } : mapping) })); setNotice('');
           }} /><span>{entry ? entry.readonly ? '只读' : '可编辑' : '未映射'}</span></div></td>
         </tr>;
-      })}</tbody></table></div>
+      })}
+      </tbody></table></div>
     </section>)}</div>
   </div>;
 }

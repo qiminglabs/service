@@ -9,6 +9,7 @@ import { projectItemReadonly } from '@/lib/service-project-readonly';
 import type { ServiceProjectRecord } from '@/lib/service-projects';
 import type { RequestItem } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
+import { isInternal } from '@/lib/request-operations';
 import type { ProjectItemChange } from '@/lib/service-project-items';
 
 export function ServiceProjectMaterials({ id, customerId, items, actor, readonly, busy, save, project }: {
@@ -21,7 +22,7 @@ export function ServiceProjectMaterials({ id, customerId, items, actor, readonly
   const record = projectMaterialRecord({ id, customerId, items });
   const group = target ? requestMaterialGroup(record, target.itemId, target.requirementId) : undefined;
   return <>
-    <RequestMaterialsPanel title="项目材料" record={record} actor={actor} audience="internal" readonly={readonly} busy={busy} isGroupReadonly={group => group.members.some(member => projectItemReadonly(project, member.item.id, 'materials'))}
+    <RequestMaterialsPanel title="项目材料" showCustomerVisibility={isInternal(actor.role)} record={record} actor={actor} audience="internal" readonly={readonly} busy={busy} isGroupReadonly={group => group.members.some(member => projectItemReadonly(project, member.item.id, 'materials'))}
       onMaterial={value => { setError(''); setTarget(value); }} />
     {group && <RequestMaterialDialog key={group.key} record={record} actor={actor} item={materialDialogItem(group)}
       requirement={group.requirement} readonly={readonly || group.members.some(member => projectItemReadonly(project, member.item.id, 'materials'))} busy={busy} error={error} onClose={() => setTarget(null)}

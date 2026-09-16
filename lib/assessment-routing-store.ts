@@ -112,6 +112,8 @@ export async function saveRoutingPolicy(
             )
               throw new Error('触发条件中的服务项已不存在，请重新选择。');
           }
+          if (config[role].rules.some(old => !result[role].rules.some(rule => rule.id === old.id)))
+            throw new Error('分配规则只能停用，不能删除。');
           const eligible = routingUsers(workspace.users, role);
           if (
             policy.defaultUserId &&
@@ -126,10 +128,10 @@ export async function saveRoutingPolicy(
               routingTestKey(previous) !== routingTestKey(rule) ||
               JSON.stringify(previous.compiled) !==
                 JSON.stringify(rule.compiled);
-            if ((!previous && !rule.enabled) || (previous && rule.enabled !== previous.enabled))
-              throw new Error('不再支持启用或停用规则，请通过删除移除规则。');
-            if (previous && !previous.enabled && changed)
-              throw new Error('历史停用规则仅支持删除。');
+            if ((!previous && !rule.enabled) || (previous && !previous.enabled && rule.enabled))
+              throw new Error('停用规则不能直接启用，请新建规则。');
+            if (previous && !previous.enabled && (changed || tested?.key === routingTestKey(rule)))
+              throw new Error('停用规则只读，不可编辑。');
             if (
               changed &&
               (!tested ||
@@ -148,13 +150,19 @@ export async function saveRoutingPolicy(
           }
           result[role].rules = result[role].rules.map(rule => {
             const previous = config[role].rules.find(item => item.id === rule.id);
-            const changed = !previous || routingTestKey(previous) !== routingTestKey(rule) || JSON.stringify(previous.compiled) !== JSON.stringify(rule.compiled);
-            // Metadata comes from this save, never from a client-supplied timestamp or name.
-            const { updatedAt: _at, updatedBy: _by, ...definition } = rule;
-            return { ...definition,
-              ...(changed ? { updatedAt: result.updatedAt, updatedBy: actor.name }
-                : { ...(previous.updatedAt ? { updatedAt: previous.updatedAt } : {}), ...(previous.updatedBy ? { updatedBy: previous.updatedBy } : {}) }),
-            };
+            const edited = !!previous && (routingTestKey(previous) !== routingTestKey(rule)
+              || JSON.stringify(previous.compiled) !== JSON.stringify(rule.compiled)
+              || (!!tested && tested.key === routingTestKey(rule)));
+            const changed = !previous || edited || previous.enabled !== rule.enabled;
+            const { history: _history, revision: _revision, updatedAt: _at, updatedBy: _by, ...definition } = rule;
+            if (!changed) return structuredClone(previous!);
+            const history = structuredClone(previous?.history ?? []);
+            if (edited) {
+              const { history: _oldHistory, ...snapshot } = structuredClone(previous!);
+              history.push({ ...snapshot, revision: previous!.revision ?? 1, enabled: false, archivedAt: result.updatedAt!, archivedBy: actor.name });
+            }
+            return { ...definition, revision: previous ? (previous.revision ?? 1) + (edited ? 1 : 0) : 1,
+              ...(history.length ? { history } : {}), updatedAt: result.updatedAt, updatedBy: actor.name };
           });
           store.put({ id: assessmentRoutingId, payload: result });
         } catch (error) {

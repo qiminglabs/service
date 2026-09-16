@@ -62,7 +62,7 @@ export function requestMaterialGroups(record: Pick<ServiceRequest, 'items' | 're
       requirement: { ...first.requirement,
         required: members.some(member => materialRequiredFor(member.requirement, requestTypeOf(record))),
         requiredByType: {
-          '售前评估': members.some(member => materialRequiredFor(member.requirement, '售前评估')),
+          '技术评估': members.some(member => materialRequiredFor(member.requirement, '技术评估')),
           '服务交付': members.some(member => materialRequiredFor(member.requirement, '服务交付')),
         } },
       material: { requirementId: first.requirement.id, files: [...files.values()] } };

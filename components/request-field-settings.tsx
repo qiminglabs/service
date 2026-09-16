@@ -17,6 +17,7 @@ import { EntitlementConversions } from '@/components/entitlement-conversions';
 import { RequestFlowDiagram } from '@/components/request-flow-diagram';
 import { RequestProjectMappingSettings } from '@/components/request-project-mapping-settings';
 import { ProjectCollaboratorAssignmentSettings } from '@/components/project-collaborator-assignment-settings';
+import { ServiceFlowSettings } from '@/components/service-flow-settings';
 import { ExecutionFlowDiagram } from '@/components/execution-flow-diagram';
 import { RequestFlowSettings } from '@/components/request-flow-settings';
 import { ApprovalRuleSettings } from '@/components/approval-rule-settings';
@@ -380,6 +381,8 @@ export function RequestFieldSettings({
           <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
           <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
         </>}
+        {section === 'execution-flow' && <TabsContent value="service-flows"><ServiceFlowSettings actor={actorIdentity} mode="flows" /></TabsContent>}
+        {section === 'execution-flow' && <TabsContent value="service-flow-assignment"><ServiceFlowSettings actor={actorIdentity} mode="assignment" /></TabsContent>}
         {section === 'execution-flow' && <TabsContent value="project-collaborators"><ProjectCollaboratorAssignmentSettings /></TabsContent>}
         {section === 'execution-flow' && <TabsContent value="request-project-mapping"><RequestProjectMappingSettings actor={actorIdentity} applicationFields={applicationFields} projectFields={projectFields} /></TabsContent>}
         {section === 'pricing' && <TabsContent value="entitlement-conversions">
@@ -398,7 +401,7 @@ export function RequestFieldSettings({
               {creating ? '创建字段' : '编辑字段'}
             </DialogTitle>
             <DialogDescription>
-              {projectTab && locked ? '可修改字段名称；字段类型、填写规则、项目状态选项及系统自动记录规则固定。' : fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为售前评估和服务交付；可修改字段名称。' : locked
+              {projectTab && locked ? '可修改字段名称；字段类型、填写规则、项目状态选项及系统自动记录规则固定。' : fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为技术评估和服务交付；可修改字段名称。' : locked
                 ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项，字段类型不可修改。'
                 : creating
                   ? projectTab ? '创建后可在服务项目中填写，并配置请求转项目映射。' : applicationTab ? '创建后保存在服务申请字段库中。' : '创建后可在服务目录的申请表单中添加使用。'

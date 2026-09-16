@@ -4,6 +4,7 @@ import type { ServiceProjectRecord } from './service-projects';
 import type { OperationActor } from './request-operations';
 import { fixedIdentityRoles } from './internal-users.ts';
 import type { SupplementMention } from './supplement-mentions';
+import { internalProjectProvider } from './service-project-providers.ts';
 
 export type CustomerProjectDirectory = ProjectCollaboratorDirectory & { customers: CustomerRef[] };
 export function customerProjectOrganization(actor: OperationActor, directory: CustomerProjectDirectory): string | undefined {
@@ -17,10 +18,21 @@ export function canViewCustomerProject(project: ServiceProjectRecord, actor: Ope
     && !!project.collaborators?.customer?.some(person => person.id === actor.id);
 }
 export type CustomerProjectContact = { id: string; name: string; phone: string; email: string; roles: string[] };
+type CustomerProjectMentionUser = { id: string; name: string; email: string; companyName: string; isManager: boolean; group: 'internal' | 'partner' };
+export function customerProjectMentionUsers(project: ServiceProjectRecord, directory?: CustomerProjectDirectory): CustomerProjectMentionUser[] {
+  const internal: CustomerProjectMentionUser[] = (directory?.users ?? [])
+    .filter(user => user.status === '启用' && project.collaborators?.internal?.some(person => person.id === user.id))
+    .map(user => ({ id: user.id, name: user.name, email: user.email ?? '', companyName: internalProjectProvider.name, group: 'internal', isManager: project.collaborators?.internal?.find(person => person.id === user.id)?.assignmentRoles?.includes('项目经理') === true || fixedIdentityRoles[user.id] === 'SmartX 项目经理' }));
+  const partner = directory?.partners.find(partner => partner.status === '启用' && project.serviceProviderId === `partner:${partner.id}`);
+  const partners: CustomerProjectMentionUser[] = partner ? (directory?.partnerUsers ?? [])
+    .filter(user => user.status === '启用' && user.partnerId === partner.id && project.collaborators?.partner?.some(person => person.id === user.id))
+    .map(user => ({ id: user.id, name: user.name, email: user.email ?? '', companyName: partner.name, group: 'partner', isManager: false })) : [];
+  return [...internal, ...partners];
+}
 export type CustomerServiceProject = {
   revision: number;
   id: string; name: string; status: ServiceProjectRecord['status']; expectedServiceDate: string;
-  serviceProviderName: string; note: string; createdAt: string; updatedAt: string;
+  serviceProviderName: string; note: string; createdAt: string; createdBy: string; updatedAt: string;
   cancellationReason?: string;
   cancelledFromStatus?: ServiceProjectRecord['status'];
   customerId: string;
@@ -28,12 +40,15 @@ export type CustomerServiceProject = {
   items: RequestItem[];
   collaborators: CustomerProjectContact[];
   smartxContacts: CustomerProjectContact[];
-  supplementMentionUsers: { id: string; name: string; isManager: boolean }[];
+  showPartnerCollaborators: boolean;
+  partnerCollaborators: CustomerProjectContact[];
+  supplementMentionUsers: CustomerProjectMentionUser[];
   supplements: { id: string; author: string; at: string; comment: string; files: StoredFile[]; mentions: SupplementMention[]; externalVisible: boolean }[];
 };
 // Explicit customer projection: internal assessments, quotas, worklogs, material
 // files and private collaboration metadata are never passed to the customer view.
 export function customerServiceProject(project: ServiceProjectRecord, directory?: CustomerProjectDirectory): CustomerServiceProject {
+  const partnerId = project.serviceProviderId?.startsWith('partner:') ? project.serviceProviderId.slice('partner:'.length) : '';
   const customer = directory?.customers.find(entry => entry.id === project.customerId);
   const internalCollaborators = (project.collaborators?.internal ?? []).map(person => {
     const user = directory?.users.find(entry => entry.id === person.id);
@@ -54,7 +69,7 @@ export function customerServiceProject(project: ServiceProjectRecord, directory?
   return structuredClone({
     revision: project.revision,
     id: project.id, name: project.name, status: project.status, expectedServiceDate: project.expectedServiceDate,
-    serviceProviderName: project.serviceProviderName ?? '', note: project.note, createdAt: project.createdAt, updatedAt: project.updatedAt,
+    serviceProviderName: project.serviceProviderName ?? '', note: project.note, createdAt: project.createdAt, createdBy: project.createdBy, updatedAt: project.updatedAt,
     cancellationReason: project.cancellation?.reason,
     cancelledFromStatus: project.cancellation?.fromStatus,
     customerId: project.customerId,
@@ -75,8 +90,12 @@ export function customerServiceProject(project: ServiceProjectRecord, directory?
       return { id: person.id, name: contact?.name ?? person.name, phone: contact?.phone ?? '', email: contact?.email ?? '', roles: person.assignmentRoles?.filter(role => role !== '原客户协作人') ?? [] };
     }),
     smartxContacts: [...smartxContacts.values()],
-    supplementMentionUsers: (directory?.users ?? []).filter(user => user.status === '启用' && project.collaborators?.internal?.some(person => person.id === user.id))
-      .map(user => ({ id: user.id, name: user.name, isManager: project.collaborators?.internal?.find(person => person.id === user.id)?.assignmentRoles?.includes('项目经理') === true || fixedIdentityRoles[user.id] === 'SmartX 项目经理' })),
+    showPartnerCollaborators: !!partnerId,
+    partnerCollaborators: partnerId ? (project.collaborators?.partner ?? []).flatMap(person => {
+      const user = directory?.partnerUsers.find(user => user.id === person.id && user.partnerId === partnerId);
+      return user ? [{ id: user.id, name: user.name, phone: user.phone ?? '', email: user.email ?? '', roles: person.assignmentRoles ?? [] }] : [];
+    }) : [],
+    supplementMentionUsers: customerProjectMentionUsers(project, directory),
     supplements: (project.supplements ?? []).filter(item => item.externalVisible).map(({ id, author, at, comment, files, mentions }) => ({ id, author, at, comment, files, mentions: mentions ?? [], externalVisible: true })),
   });
 }

@@ -118,7 +118,7 @@ export function testSubmissionRule(definition: Candidate, raw: unknown, summary:
   } else {
     const peers: ConflictRule[] = [...builtinConflictRules];
     for (const rule of stored) {
-      if (rule.id === excludeId || !rule.active?.enabled) continue;
+      if (rule.id === excludeId || rule.enabled === false || !rule.active?.enabled) continue;
       try { peers.push({ ...parseRuleDefinition(rule.active), id: rule.id, compiled: parseCompiledRule(rule.active.compiled) }); }
       catch { conflicts.push({ context: '已启用规则', message: '现有规则格式损坏，无法完成冲突检查。', requirements: [rule.requirement] }); }
     }

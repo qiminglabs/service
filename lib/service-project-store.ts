@@ -32,7 +32,6 @@ import {
   type ServiceProjectStatus,
 } from './service-projects.ts';
 import type { OperationActor } from './request-operations';
-import type { InternalUser } from './service-requests';
 import { appendProjectActivity } from './service-project-activity.ts';
 import {
   applyProjectOperation,
@@ -136,13 +135,8 @@ export async function saveProjectSupplement(
   input: ProjectSupplementInput,
   actor: OperationActor,
 ) {
-  assertActiveProjectActor(actor, await savedProjectDirectory());
-  const references = await readLocal<{
-    id: string;
-    payload?: { users?: InternalUser[] };
-  }>('references');
-  const users =
-    references.find((row) => row.id === 'workspace')?.payload?.users ?? [];
+  const directory = await savedProjectDirectory();
+  assertActiveProjectActor(actor, directory);
   return updateLocalReference<ServiceProjectRecord>(
     `${prefix}${id}`,
     (previous) => {
@@ -150,7 +144,7 @@ export async function saveProjectSupplement(
       previous = normalizeServiceProjectStatus(previous);
       if (previous.revision !== revision)
         throw new Error('项目已被更新，请重新打开详情后重试。');
-      const updated = addProjectSupplement(previous, actor, input, users);
+      const updated = addProjectSupplement(previous, actor, input, directory.users, directory);
       return appendProjectActivity(
         updated,
         actor,

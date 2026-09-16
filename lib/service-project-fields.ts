@@ -5,7 +5,7 @@ export const initialProjectFields: RequestField[] = [
   { id: 'name', name: '项目名称', type: 'text', options: [] },
   {
     id: 'expectedServiceDate',
-    name: '期望服务时间',
+    name: '期望服务日期',
     type: 'date',
     options: [],
   },
@@ -66,7 +66,9 @@ export function normalizeProjectFields(
       ...stored,
       ...seed,
       referenceTarget: seed.referenceTarget,
-      name: stored?.name?.trim() || seed.name,
+      name: seed.id === 'expectedServiceDate' && stored?.name?.trim() === '期望服务时间'
+        ? seed.name
+        : stored?.name?.trim() || seed.name,
       options: structuredClone(seed.options),
     };
   }), ...fields.filter(field => !isSystemProjectField(field.id)).map(field => structuredClone(field))];

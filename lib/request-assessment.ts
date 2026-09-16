@@ -334,8 +334,8 @@ export function applyAssessmentAction(
     throw new Error('仅内部人员可处理评估工作。');
   if (record.status !== '待评估')
     throw new Error('仅待评估阶段可处理评估工作。');
-  if (requestTypeOf(record) === '售前评估' && ['plan', 'gap-submit', 'gap-decide', 'confirm'].includes(action.type))
-    throw new Error('售前评估须先完成评估并转为服务交付，再进入后续交付流程。');
+  if (requestTypeOf(record) === '技术评估' && ['plan', 'gap-submit', 'gap-decide', 'confirm'].includes(action.type))
+    throw new Error('技术评估须先完成评估并转为服务交付，再进入后续交付流程。');
   const assessment = structuredClone(assessmentOf(record));
   const manager = () => {
     if (
@@ -456,7 +456,7 @@ export function applyAssessmentAction(
       });
     }
     title = '人天核定';
-    if (requestTypeOf(record) === '售前评估') { status = '评估完成'; title = '人天核定 · 评估完成'; }
+    if (requestTypeOf(record) === '技术评估') { status = '评估完成'; title = '人天核定 · 评估完成'; }
     detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.kind === 'entitlement' ? `差额权益 ${line.deficitEntitlements}` : line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
   } else if (action.type === 'plan') {
     if (!canManageAssessmentBasis(record, actor, customers, users)) throw new Error(assessmentBasisPermissionMessage(record));

@@ -157,11 +157,12 @@ export function editProjectCollaborators(
   const fixed = existing.find(person => person.assignmentRoles?.length && !ids.includes(person.id));
   if (fixed) throw new Error(`${fixed.name}为默认分配协作人，不允许移除。`);
   const selected = [...new Set(ids)].map((id) => {
-    // Historical customer/internal selections may remain; partner selections
-    // must still belong to the current service provider and be available.
+    // Retain fixed applicants even after deactivation, while still enforcing
+    // the service-provider boundary for every partner selection.
     const person =
       available.find((item) => item.id === id) ??
-      (group !== 'partner'
+      (group !== 'partner' || (existing.some(person => person.id === id && person.assignmentRoles?.length)
+        && directory.partnerUsers.some(person => person.id === id && `partner:${person.partnerId}` === previous.serviceProviderId))
         ? existing.find((item) => item.id === id)
         : undefined);
     if (!person) throw new Error('所选协作人不可用，请重新选择。');

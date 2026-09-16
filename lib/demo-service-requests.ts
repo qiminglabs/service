@@ -58,7 +58,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     titles.push('共用环境材料－双服务项草稿', '共用环境材料－三服务项评估', '共用环境材料－巡检组合确认');
     states.push('草稿', '待评估', '待确认');
     selections.push([days], [days, inspection], [days, upgrade]);
-    titles.push('售前评估－方案评估中', '售前评估－评估已完成', '售前评估转为服务交付－待关联服务依据');
+    titles.push('技术评估－方案评估中', '技术评估－评估已完成', '技术评估转为服务交付－待关联服务依据');
     states.push('待评估', '评估完成', '待评估');
   }
   const routing = references.find(reference => reference.id === assessmentRoutingId)?.payload;
@@ -85,7 +85,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     const applicant = index === 9 ? identities.find(person => person.role === 'SmartX 系统管理员') ?? sales : sales;
     let record = newRequest(`【示例】${titles[index]}`, customer.id, applicant.name, contact.id, applicant.id, applicant.role);
     record = { ...record, id, createdAt: at, updatedAt: at, expectedServiceDate: expected,
-      requestType: index >= 13 ? '售前评估' : '服务交付',
+      requestType: index >= 13 ? '技术评估' : '服务交付',
       description: '演示数据：用于展示服务申请、材料评估及客户确认流程，不代表真实交付承诺。',
       internalParticipants: [...new Map([applicant, sales, manager,
         identities.find(person => person.id === customer.ownerUserId)].filter(Boolean)
@@ -179,7 +179,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
       act({ type: 'review', outcome: '评估通过', opinion: '【演示】售前方案与环境材料已核对，服务范围可实施。' });
       act({ type: 'effort', items: record.items.map(item => ({ itemId: item.id,
         estimatedDays: Math.max(2, sources.services.find(service => service.id === item.serviceId)?.defaultQuantity ?? 1) })),
-        note: '【演示】售前评估已完成，核定人天作为后续交付依据。' });
+        note: '【演示】技术评估已完成，核定人天作为后续交付依据。' });
       if (index === 15) act({ type: 'convert-to-delivery' });
     }
     if (states[index] === '待确认' || states[index] === '待受理') {

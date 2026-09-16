@@ -732,7 +732,7 @@ export function RequestWorkspace(props: Props) {
   const materialRequirement = selectedMaterialGroup?.requirement;
   const filtered = requests.filter((record) => {
     if (!canAccessRequest(record, access)) return false;
-    const customer =
+    const customer = customerPortal ? '' :
       props.customers.find((c) => c.id === record.customerId)?.name ?? '';
     return (
       (status === '全部状态' || record.status === status) &&
@@ -871,7 +871,7 @@ export function RequestWorkspace(props: Props) {
                   <Search size={16} />
                   <Input
                     aria-label="搜索服务请求"
-                    placeholder={`搜索${applicationLabel('title', '申请主题')}、编号或${applicationLabel('customerId', '客户')}`}
+                    placeholder={customerPortal ? `搜索${applicationLabel('title', '申请主题')}或编号` : `搜索${applicationLabel('title', '申请主题')}、编号或${applicationLabel('customerId', '客户')}`}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -903,12 +903,13 @@ export function RequestWorkspace(props: Props) {
                 <thead>
                   <tr>
                     <th>{applicationLabel('title', '申请主题')} / 编号</th>
-                    <th>客户</th>
+                    {!customerPortal && <th>客户</th>}
                     <th>申请类型</th>
                     <th>申请项</th>
                     <th>{applicationLabel('expectedServiceDate', '期望服务日期')}</th>
                     <th>状态</th>
-                    <th>最近更新</th>
+                    {isInternal(props.currentActor.role) && <th>创建站点</th>}
+                    <th>创建时间/创建人</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -929,10 +930,10 @@ export function RequestWorkspace(props: Props) {
                         </button>
                         <small>{record.id}</small>
                       </td>
-                      <td>
+                      {!customerPortal && <td>
                         {props.customers.find((c) => c.id === record.customerId)
                           ?.name ?? '待选择'}
-                      </td>
+                      </td>}
                       <td>{requestTypeOf(record) || '未选择类型'}</td>
                       <td>{record.items.length} 项</td>
                       <td>{record.expectedServiceDateUncertain ? '暂不确定' : record.expectedServiceDate || '—'}</td>
@@ -944,9 +945,10 @@ export function RequestWorkspace(props: Props) {
                           {record.status}
                         </span>
                       </td>
+                      {isInternal(props.currentActor.role) && <td>{requestAudience(record) === 'customer' ? '客户中心' : '内部系统'}</td>}
                       <td>
-                        {dateLabel(record.updatedAt)}
-                        <small>{migrateRoleLabel(record.owner)}</small>
+                        {dateLabel(record.createdAt)}
+                        <small>{migrateRoleLabel(record.createdBy ?? record.owner ?? '—')}</small>
                       </td>
                       <td>
                         <Button
@@ -1022,7 +1024,7 @@ export function RequestWorkspace(props: Props) {
             <div className="detail-actions">
               {canCancelRequest(draft, props.currentActor, props.users) && <Button variant="outline" disabled={busy}
                 onClick={() => { setError(''); setCancelReason(''); setCancelOpen(true); }}>取消服务请求</Button>}
-              {draft.status === '评估完成' && requestTypeOf(draft) === '售前评估'
+              {draft.status === '评估完成' && requestTypeOf(draft) === '技术评估'
                 && !deliveryConversionIssue(draft, props.currentActor, props.users) && (
                 <Button disabled={busy} onClick={() => { if (busy || saveLock.current) return; setError(''); if (checkBeforeDeliveryConversion(draft)) setConversion(structuredClone(draft)); }}>转为服务交付</Button>
               )}
@@ -1090,6 +1092,7 @@ export function RequestWorkspace(props: Props) {
             </section>
           )}
           <RequestOperationsTabs
+            contacts={props.contacts}
             validationFailures={validationResult?.requestId === draft.id ? validationResult.failures : undefined}
             customers={props.customers}
             services={props.services}
@@ -1112,7 +1115,7 @@ export function RequestWorkspace(props: Props) {
                             <span className="sr-participant-name">{contact.name}</span>
 
                           <small title={`${contact.phone?.trim() || '未填写电话'} · ${contact.email?.trim() || '未填写邮箱'}`}>
-                            {contact.phone?.trim() ? <a href={`tel:${contact.phone.replace(/\s/g, '')}`}>{contact.phone.trim()}</a> : '未填写电话'}
+                            {contact.phone?.trim() || '未填写电话'}
                             {' · '}
                             {contact.email?.trim() || '未填写邮箱'}
                           </small>

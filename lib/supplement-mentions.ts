@@ -1,14 +1,19 @@
-import type { InternalUser, ServiceRequest } from './service-requests';
+import type { ContactRef, InternalUser, ServiceRequest } from './service-requests';
 import { appendActivity, isInternal, type OperationActor } from './request-operations.ts';
 
 export type SupplementMention = { userId: string; name: string; start: number; end: number };
-export function supplementMentionUsers(record: ServiceRequest, actor: OperationActor, users: InternalUser[]): InternalUser[] {
-  const related = new Set([...(record.internalParticipants ?? []).map(person => person.userId), record.operations?.assessment?.managerId]);
-  return users.filter(user => user.status === '启用' && (isInternal(actor.role) || (actor.role === '客户' && related.has(user.id))));
+export function customerCollaboratorMentionUsers(customerId: string, ids: string[], contacts: ContactRef[]): InternalUser[] {
+  return contacts.filter(contact => contact.status === '启用' && contact.customerId === customerId && ids.includes(contact.id))
+    .map(contact => ({ id: contact.id, name: contact.name, status: contact.status, email: contact.email ?? '', department: '' }));
 }
-export function supplementMentionRecipients(record: ServiceRequest, actor: OperationActor, users: InternalUser[]): InternalUser[] {
-  const candidates = supplementMentionUsers(record, actor, users);
-  return isInternal(actor.role) ? candidates.filter(user => record.internalParticipants?.some(person => person.userId === user.id)) : candidates;
+export function supplementMentionUsers(record: ServiceRequest, actor: OperationActor, users: InternalUser[], contacts: ContactRef[] = []): InternalUser[] {
+  const related = new Set([...(record.internalParticipants ?? []).map(person => person.userId), record.operations?.assessment?.managerId]);
+  return [...users.filter(user => user.status === '启用' && (isInternal(actor.role) || (actor.role === '客户' && related.has(user.id)))),
+    ...(isInternal(actor.role) ? customerCollaboratorMentionUsers(record.customerId, (record.externalCollaborators ?? []).map(person => person.contactId), contacts) : [])];
+}
+export function supplementMentionRecipients(record: ServiceRequest, actor: OperationActor, users: InternalUser[], contacts: ContactRef[] = []): InternalUser[] {
+  const candidates = supplementMentionUsers(record, actor, users, contacts);
+  return isInternal(actor.role) ? candidates.filter(user => record.internalParticipants?.some(person => person.userId === user.id) || record.externalCollaborators?.some(person => person.contactId === user.id)) : candidates;
 }
 export function addMentionCollaborator(record: ServiceRequest, actor: OperationActor, user: InternalUser, confirmed: boolean): ServiceRequest {
   if (!actor.id || !isInternal(actor.role)) throw new Error('仅内部员工可以添加内部协作人。');

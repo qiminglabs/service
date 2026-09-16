@@ -33,6 +33,8 @@ export type RouteGroup = {
 };
 export type RoutePredicate = { version: 1; groups: RouteGroup[] };
 export type RoutingRule = {
+  revision?: number;
+  history?: Array<Omit<RoutingRule, 'history'> & { archivedAt: string; archivedBy: string }>;
   id: string;
   requirement: string;
   priority: number;
@@ -201,7 +203,7 @@ export function parseRoutingConfig(value: unknown): RoutingConfig {
     const p = object(value);
     if (typeof p.defaultUserId !== 'string')
       throw new Error('默认负责人格式无效。');
-    const rules = array(p.rules, 100).map((v) => {
+    const parseRule = (v: unknown, historical = false): RoutingRule => {
       const r = object(v);
       if (
         typeof r.id !== 'string' ||
@@ -217,7 +219,15 @@ export function parseRoutingConfig(value: unknown): RoutingConfig {
         Number(r.priority) > 9999
       )
         throw new Error('请填写有效的匹配条件、负责人和优先级（1–9999）。');
+      if (r.revision !== undefined && (!Number.isSafeInteger(r.revision) || Number(r.revision) < 1)) throw new Error('分配规则版本无效。');
+      if (historical && (r.enabled !== false || r.history !== undefined)) throw new Error('历史版本必须停用且只读。');
       return {
+        ...(r.revision !== undefined ? { revision: Number(r.revision) } : {}),
+        ...(r.history !== undefined ? { history: array(r.history, 10000).map(value => {
+          const snapshot = object(value);
+          if (typeof snapshot.archivedAt !== 'string' || typeof snapshot.archivedBy !== 'string') throw new Error('历史版本信息无效。');
+          return { ...parseRule(snapshot, true), archivedAt: snapshot.archivedAt, archivedBy: snapshot.archivedBy };
+        }) } : {}),
         id: r.id,
         requirement: r.requirement.trim(),
         priority: Number(r.priority),
@@ -227,7 +237,8 @@ export function parseRoutingConfig(value: unknown): RoutingConfig {
         ...(typeof r.updatedAt === 'string' ? { updatedAt: r.updatedAt } : {}),
         ...(typeof r.updatedBy === 'string' ? { updatedBy: r.updatedBy } : {}),
       };
-    });
+    };
+    const rules = array(p.rules, 100).map(v => parseRule(v));
     if (new Set(rules.map((r) => r.id)).size !== rules.length)
       throw new Error('分配规则编号重复。');
     const active = rules.filter((r) => r.enabled);

@@ -10,6 +10,7 @@ export const projectCollaboratorAssignmentRules = [
   { id: 'customer-owner', scope: '全部项目', timing: '创建项目时', source: '客户所有人', target: '内部协作人', identity: '客户所有人' },
   { id: 'project-manager', scope: '全部项目', timing: '创建项目时', source: '请求负责项目经理；直接创建时为当前项目经理', target: '内部协作人', identity: '项目经理' },
   { id: 'project-applicant', scope: '内部直接创建的项目', timing: '创建项目时', source: '项目申请人（创建人）', target: '内部协作人', identity: '申请人' },
+  { id: 'partner-project-applicant', scope: '合作伙伴中心创建的项目', timing: '创建项目时', source: '项目申请人（创建人）', target: '合作伙伴协作人', identity: '申请人' },
   { id: 'request-applicant', scope: '由内部服务请求转换的项目', timing: '请求转项目时', source: '请求申请人', target: '内部协作人', identity: '请求申请人' },
   { id: 'customer-collaborators', scope: '由服务请求转换的项目', timing: '请求转项目时', source: '原客户协作人（含客户申请人）', target: '客户协作人', identity: '—' },
 ] as const;
@@ -19,7 +20,7 @@ export function assignInitialProjectCollaborators(customerId: string, actor: Ope
   directory: ProjectCollaboratorDirectory & { customers: CustomerRef[] },
   selected: ProjectCollaborators = {}, request?: ServiceRequest): ProjectCollaborators {
   const next = structuredClone(selected);
-  const add = (group: 'internal' | 'customer', person: ProjectCollaborator) => {
+  const add = (group: 'internal' | 'customer' | 'partner', person: ProjectCollaborator) => {
     const people = next[group] ??= [];
     const existing = people.find(entry => entry.id === person.id);
     if (existing) existing.assignmentRoles = [...new Set([...(existing.assignmentRoles ?? []), ...(person.assignmentRoles ?? [])])];
@@ -33,6 +34,12 @@ export function assignInitialProjectCollaborators(customerId: string, actor: Ope
   addUser(request ? managerCollaboratorId(request) : actor.role === 'SmartX 项目经理' ? actor.id : undefined, '项目经理');
   if (!request) {
     if (projectItemAudience(actor) === 'internal') addUser(actor.id, '申请人');
+    if (projectItemAudience(actor) === 'partner') {
+      const creator = directory.partnerUsers.find(person => person.id === actor.id && person.status === '启用'
+        && directory.partners.some(partner => partner.id === person.partnerId && partner.status === '启用'));
+      if (creator) add('partner', { id: creator.id, name: creator.name,
+        details: [creator.phone, creator.email].filter(Boolean).join(' · '), assignmentRoles: ['申请人'] });
+    }
     return next;
   }
   if (request.customerId !== customerId) throw new Error('来源请求与项目客户不一致，不能带入协作人。');
@@ -58,7 +65,7 @@ export function withProjectAssignmentRoles(project: ServiceProjectRecord,
   const assigned = assignInitialProjectCollaborators(project.customerId, { id: project.createdById, name: project.createdBy,
     role: project.createdSite === '合作伙伴中心' ? '合作伙伴服务工程师' : fixedIdentityRoles[project.createdById] ?? '' }, directory, {}, request);
   const collaborators = structuredClone(project.collaborators ?? {});
-  for (const group of ['internal', 'customer'] as const) {
+  for (const group of ['internal', 'customer', 'partner'] as const) {
     for (const person of collaborators[group] ?? []) {
       const roles = assigned[group]?.find(entry => entry.id === person.id)?.assignmentRoles;
       if (roles?.length) person.assignmentRoles = [...new Set([...(person.assignmentRoles ?? []), ...roles])];

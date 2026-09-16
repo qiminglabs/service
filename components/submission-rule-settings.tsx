@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { RuleDeleteDialog } from '@/components/rule-delete-dialog';
+import { RuleDisableDialog } from '@/components/rule-disable-dialog';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { builtinSubmissionRules } from '@/lib/submission-validation';
 import { ruleScopes, submissionCheckEvents } from '@/lib/submission-rule-schema';
 import type { RuleScope, SubmissionRule } from '@/lib/submission-rule-schema';
-import { canManageSubmissionRules, readSubmissionRules, saveTestedSubmissionRule, deleteSubmissionRule } from '@/lib/submission-rule-store';
+import { canManageSubmissionRules, readSubmissionRules, saveTestedSubmissionRule, disableSubmissionRule } from '@/lib/submission-rule-store';
 import { ruleCompilationKey, RuleConflictError, testSubmissionRule } from '@/lib/submission-rule-conflicts';
 import type { RuleTestResult } from '@/lib/submission-rule-conflicts';
 import type { OperationActor } from '@/lib/request-operations';
@@ -20,8 +20,8 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
   const [error, setError] = useState(''), [formError, setFormError] = useState(''), [notice, setNotice] = useState('');
   const [open, setOpen] = useState(false), [target, setTarget] = useState<SubmissionRule>();
-  const [deleteTarget, setDeleteTarget] = useState<SubmissionRule>();
-  const [deleteError, setDeleteError] = useState('');
+  const [disableTarget, setDisableTarget] = useState<SubmissionRule>();
+  const [disableError, setDisableError] = useState('');
   const [scope, setScope] = useState<RuleScope>('all');
   const [requirement, setRequirement] = useState('');
   const [promptText, setPromptText] = useState('');
@@ -33,6 +33,11 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
   const canSave = testCurrent && tested && !tested.conflicts.length && !!promptText.trim();
   const lock = useRef(false);
   const canManage = canManageSubmissionRules(actor);
+  const activeRules = rules.filter(rule => rule.enabled !== false);
+  const disabledVersions = rules.flatMap(rule => [
+    ...(rule.enabled === false ? [{ ...rule, archivedAt: rule.disabledAt ?? rule.updatedAt, archivedBy: rule.disabledBy ?? rule.updatedBy }] : []),
+    ...(rule.history ?? []),
+  ]).sort((a, b) => b.archivedAt.localeCompare(a.archivedAt));
   useEffect(() => {
     let active = true;
     const load = () => readSubmissionRules().then(value => { if (active) { setRules(value); setReady(true); setError(''); } }).catch(() => { if (active) { setReady(false); setError('无法读取校验规则，请刷新后重试。'); } });
@@ -78,14 +83,31 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
       setFormError(issue instanceof Error ? issue.message : '规则保存失败，请重试。');
     } finally { lock.current = false; setBusy(false); }
   }
-  async function remove() {
-    if (!deleteTarget || lock.current || !canManage || !ready) return;
-    lock.current = true; setBusy(true); setDeleteError('');
+  async function disable() {
+    if (!disableTarget || lock.current || !canManage || !ready) return;
+    lock.current = true; setBusy(true); setDisableError('');
     try {
-      setRules(await deleteSubmissionRule(actor, deleteTarget));
-      setDeleteTarget(undefined); setNotice('规则已删除，不再参与后续提交校验。');
-    } catch (issue) { setDeleteError(issue instanceof Error ? issue.message : '删除失败，请重试。'); }
+      setRules(await disableSubmissionRule(actor, disableTarget));
+      setDisableTarget(undefined); setNotice('规则已停用，不再参与后续提交校验。');
+    } catch (issue) { setDisableError(issue instanceof Error ? issue.message : '停用失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
+  }
+  function renderRule(rule: SubmissionRule, disabled = false, key = rule.id) {
+    return <tr key={key}>
+      <td>{ruleScopes[rule.scope]}</td>
+      <td><div className="submission-rule-requirement">{rule.requirement}
+        {rule.active && <details><summary>查看执行条件</summary><p>（{rule.active.summary}）</p>{rule.status !== 'ready' && <p>适用申请：{ruleScopes[rule.active.scope]}；提示文本：{rule.active.promptText}</p>}</details>}
+        {rule.error && <p className="submission-rule-problem">{rule.error}</p>}
+      </div></td>
+      <td className="submission-rule-prompt">{rule.promptText}</td>
+      <td><span className="rule-version-status" data-enabled={!disabled && !!rule.active?.enabled}>v{rule.version ?? Math.max(1, rule.revision)} · {disabled ? '已停用' : rule.active?.enabled ? '已启用' : '未生效'}</span></td>
+      <td>{new Date(disabled ? rule.disabledAt ?? rule.updatedAt : rule.updatedAt).toLocaleString('zh-CN', { hour12: false })}</td>
+      <td>{disabled ? rule.disabledBy ?? rule.updatedBy : rule.updatedBy}</td>
+      <td>{disabled ? <span className="sr-help">只读</span> : canManage && <div className="rule-table-actions">
+        <Button variant="ghost" disabled={busy} onClick={() => edit(rule)}>{rule.status === 'ready' ? '编辑' : '修改 / 重试'}</Button>
+        <Button variant="ghost" disabled={busy} onClick={() => { setDisableTarget(rule); setDisableError(''); }}>停用</Button>
+      </div>}</td>
+    </tr>;
   }
   return <>
     <div className="request-flow-settings">
@@ -97,28 +119,28 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
       {canManage && <Button disabled={!ready || busy} onClick={() => edit()}><Plus size={16} />新建规则</Button>}
     </div>
     <div className="table-scroll"><table className="reference-table app-list-table submission-rules-table">
-      <thead><tr><th>适用申请</th><th>自然语言描述</th><th>提示文本</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
+      <thead><tr><th>适用申请</th><th>自然语言描述</th><th>提示文本</th><th>版本 / 状态</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
       <tbody>
         {builtinSubmissionRules.map(rule => <tr key={rule.id}>
           <td>{ruleScopes[rule.scope]}</td>
-          <td>{rule.requirement}</td><td>{rule.promptText}</td><td>—</td><td>系统预置</td><td><span className="sr-help">系统预置</span></td>
+          <td>{rule.requirement}</td><td>{rule.promptText}</td><td>—</td><td>—</td><td>系统预置</td><td><span className="sr-help">系统预置</span></td>
         </tr>)}
-        {rules.map(rule => <tr key={rule.id}>
-          <td>{ruleScopes[rule.scope]}</td>
-          <td><div className="submission-rule-requirement">{rule.requirement}
-            {rule.active && <details><summary>查看执行条件</summary><p>（{rule.active.summary}）</p>{rule.status !== 'ready' && <p>适用申请：{ruleScopes[rule.active.scope]}；提示文本：{rule.active.promptText}</p>}</details>}
-            {rule.error && <p className="submission-rule-problem">{rule.error}</p>}
-          </div></td>
-          <td className="submission-rule-prompt">{rule.promptText}</td>
-          <td>{new Date(rule.updatedAt).toLocaleString('zh-CN', { hour12: false })}</td><td>{rule.updatedBy}</td>
-          <td>{canManage && <div className="rule-table-actions"><Button variant="ghost" disabled={busy} onClick={() => edit(rule)}>{rule.status === 'ready' ? '编辑' : '修改 / 重试'}</Button><Button variant="ghost" disabled={busy} onClick={() => { setDeleteTarget(rule); setDeleteError(''); }}>删除</Button></div>}</td>
-        </tr>)}
+        {activeRules.map(rule => renderRule(rule))}
       </tbody>
     </table></div>
     {!ready && !error && <p className="submission-rule-notice">正在读取规则…</p>}
     </section>
+    <details className="routing-rules disabled-rule-versions" aria-label="提交校验规则（已停用）">
+      <summary className="submission-rules-toolbar"><strong>提交校验规则（已停用）</strong></summary>
+      <div className="table-scroll"><table className="reference-table app-list-table submission-rules-table">
+        <thead><tr><th>适用申请</th><th>自然语言描述</th><th>提示文本</th><th>版本 / 状态</th><th>停用时间</th><th>停用人</th><th>操作</th></tr></thead>
+        <tbody>{disabledVersions.map((rule, index) => renderRule(rule, true, `${rule.id}-${rule.version ?? rule.revision}-${index}`))}
+          {!disabledVersions.length && <tr><td colSpan={7} className="routing-empty">{ready ? '暂无已停用版本。' : '正在读取规则…'}</td></tr>}
+        </tbody>
+      </table></div>
+    </details>
     </div>
-    <RuleDeleteDialog open={!!deleteTarget} requirement={deleteTarget?.requirement ?? ''} description="删除后，该规则不再参与后续提交校验。" busy={busy} error={deleteError} onCancel={() => setDeleteTarget(undefined)} onConfirm={() => void remove()} />
+    <RuleDisableDialog open={!!disableTarget} requirement={disableTarget ? `v${disableTarget.version ?? Math.max(1, disableTarget.revision)} · ${disableTarget.requirement}` : ''} description="停用后，该规则不再参与后续提交校验。" busy={busy} error={disableError} onCancel={() => setDisableTarget(undefined)} onConfirm={() => void disable()} />
     <Dialog open={open} onOpenChange={value => { if (!busy) setOpen(value); }}>
       <DialogContent className="submission-rule-dialog" aria-describedby={undefined}>
         <DialogHeader><DialogTitle>{target ? '编辑提交校验规则' : '新建提交校验规则'}</DialogTitle></DialogHeader>

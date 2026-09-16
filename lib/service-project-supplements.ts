@@ -1,11 +1,13 @@
-import type { StoredFile, InternalUser } from './service-requests';
-import { canViewCustomerProject, type CustomerProjectDirectory } from './customer-service-projects.ts';
+import type { StoredFile, InternalUser, ContactRef } from './service-requests';
+import { canViewCustomerProject, customerProjectMentionUsers, type CustomerProjectDirectory } from './customer-service-projects.ts';
 import {
   meetingAttachmentIssue,
+  isInternal,
   type OperationActor,
 } from './request-operations.ts';
 import {
   supplementMentionsIssue,
+  customerCollaboratorMentionUsers,
   type SupplementMention,
 } from './supplement-mentions.ts';
 import {
@@ -26,6 +28,12 @@ export type ProjectSupplement = ProjectSupplementInput & {
   author: string;
   at: string;
 };
+
+export function projectCustomerMentionUsers(record: Pick<ServiceProjectRecord, 'customerId' | 'collaborators'>, actor: OperationActor, contacts: ContactRef[] = []) {
+  return isInternal(actor.role) || actor.role === '合作伙伴服务工程师'
+    ? customerCollaboratorMentionUsers(record.customerId, (record.collaborators?.customer ?? []).map(person => person.id), contacts)
+    : [];
+}
 
 export function canAddProjectSupplement(
   record: ServiceProjectRecord,
@@ -58,11 +66,13 @@ export function addProjectSupplement(
     const issue = meetingAttachmentIssue(file);
     if (issue) throw new Error(issue);
   }
-  const recipients = users.filter(
+  const recipients: InternalUser[] = actor.role === '客户'
+    ? customerProjectMentionUsers(previous, directory).map(user => ({ id: user.id, name: user.name, status: '启用', email: '', department: '' }))
+    : [...users.filter(
     (user) =>
       user.status === '启用' &&
       previous.collaborators?.internal?.some((person) => person.id === user.id),
-  );
+  ), ...projectCustomerMentionUsers(previous, actor, directory?.contacts)];
   const mentionIssue = supplementMentionsIssue(
     input.comment,
     input.mentions,

@@ -18,7 +18,7 @@ type InitialWorkspace = Parameters<typeof buildRequestSamples>[0] & {
   requestFields?: { id: string; name: string; options?: Array<string | { value: string; enabled: boolean }> }[];
 };
 
-export const requestedDemoResetMarker = 'demo-reset-2026-09-16-projects-certifications-v2';
+export const requestedDemoResetMarker = 'demo-reset-2026-09-16-technical-assessment-v1';
 
 // Call only for an explicitly requested reset. Validate/build first;
 // then replace this application's three stores in a single rollback-safe commit.

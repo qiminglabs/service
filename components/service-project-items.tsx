@@ -2,6 +2,7 @@
 import { useContext, useRef, useState } from 'react';
 import { CircleAlert, FileText, Plus, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -27,7 +28,7 @@ import {
   readProjectItemContext,
   newProjectServiceItem,
 } from '@/lib/service-project-store';
-import { projectItemReadonlyTargets } from '@/lib/service-project-readonly';
+import { projectItemReadonlyTargets, projectItemReadonlyValueFields } from '@/lib/service-project-readonly';
 import type { MappingTarget } from '@/lib/request-project-mapping';
 import type { ServiceProjectRecord } from '@/lib/service-projects';
 import { projectItemAudience } from '@/lib/service-projects';
@@ -58,6 +59,7 @@ function ProjectItemsPanel({
   busy,
   readonly,
   showCompleteness,
+  showCustomerVisibility = false,
   canAdd = true,
   canRemove,
   onAdd,
@@ -70,6 +72,7 @@ function ProjectItemsPanel({
   busy: boolean;
   readonly: boolean;
   showCompleteness: boolean;
+  showCustomerVisibility?: boolean;
   canAdd?: boolean;
   canRemove: (item: RequestItem) => boolean;
   onAdd: () => void;
@@ -82,11 +85,12 @@ function ProjectItemsPanel({
   );
 
   return (
-    <section className="sr-panel">
+    <section className={`sr-panel${showCustomerVisibility ? ' sr-customer-visible-panel' : ''}`}>
       <div className="sr-panel-heading">
         <div>
           <div className="sr-panel-title-with-visibility">
             <h3>服务项</h3>
+            {showCustomerVisibility && <CustomerVisibleBadge />}
           </div>
         </div>
         {!readonly && (
@@ -236,6 +240,7 @@ function ProjectItemBasicFields({
   customerId,
   readonly,
   lockedFields,
+  lockedValueFields,
   busy,
   update,
 }: {
@@ -247,6 +252,7 @@ function ProjectItemBasicFields({
   customerId: string;
   readonly: boolean;
   lockedFields: MappingTarget[];
+  lockedValueFields: string[];
   busy: boolean;
   update: (patch: Partial<RequestItem>) => void;
 }) {
@@ -506,7 +512,7 @@ function ProjectItemBasicFields({
                   </span>
                   {key !== 'nodes' && field ? (
                     <RequestFieldControl
-                      disabled={fieldReadonly('values') || busy}
+                      disabled={fieldReadonly('values') || lockedValueFields.includes(key) || busy}
                       field={field}
                       value={value.values[key] ?? ''}
                       availableOptions={value.config.fieldOptions?.[key]}
@@ -516,7 +522,7 @@ function ProjectItemBasicFields({
                     />
                   ) : (
                     <Input
-                      readOnly={fieldReadonly('values')}
+                      readOnly={fieldReadonly('values') || lockedValueFields.includes(key)}
                       type={key === 'nodes' ? 'number' : 'text'}
                       min={key === 'nodes' ? 1 : undefined}
                       step={key === 'nodes' ? 1 : undefined}
@@ -657,13 +663,14 @@ export function ServiceProjectItems({
   return (
     <>
       <ProjectItemsPanel
+        showCustomerVisibility={audience === 'internal'}
         record={{ id, items }}
         objects={objects}
         busy={disabled}
         readonly={readonly}
         showCompleteness
         canAdd={!!customerId}
-        canRemove={item => !projectItemReadonlyTargets(project, item.id).length}
+        canRemove={item => !projectItemReadonlyTargets(project, item.id).length && !projectItemReadonlyValueFields(project, item.id).length}
         onAdd={() => void begin(null)}
         onEdit={(item) => void begin(item)}
         onCopy={(id) => void persist({ type: 'copy', id })}
@@ -746,9 +753,10 @@ export function ServiceProjectItems({
                       </Button>
                     )}
                 </div>
-                {projectItemReadonlyTargets(project, pending.id).length > 0 && <p className="sr-help">部分字段由来源请求带入，已按转换配置设为只读。</p>}
+                {(projectItemReadonlyTargets(project, pending.id).length + projectItemReadonlyValueFields(project, pending.id).length) > 0 && <p className="sr-help">部分字段由来源请求带入，已按转换配置设为只读。</p>}
                 <ProjectItemBasicFields
                   lockedFields={projectItemReadonlyTargets(project, pending.id)}
+                  lockedValueFields={projectItemReadonlyValueFields(project, pending.id)}
                   value={pending}
                   reservationRecords={context.requests}
                   priceUnit={selectedService?.priceUnit}

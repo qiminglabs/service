@@ -10,6 +10,9 @@ export type ApprovalRuleConditions = {
   testedRequirement?: string;
 };
 export type ApprovalRule = {
+  enabled?: boolean;
+  version?: number;
+  history?: Array<Omit<ApprovalRule, 'history'> & { archivedAt: string; archivedBy: string }>;
   id: string;
   revision: number;
   name: string;
@@ -31,10 +34,10 @@ export function sortApprovalRules(rules: ApprovalRule[]): ApprovalRule[] {
   return [...rules].sort((a, b) => a.priority - b.priority);
 }
 export function resolveApprovalRule(rules: ApprovalRule[], request: ServiceRequest, customers: RoutingDictionary['customers']): ApprovalRule | undefined {
-  return sortApprovalRules(rules).find(rule => rule.conditions.compiled && rule.conditions.testedRequirement === rule.conditions.requirement.trim() && matchesRoute(request, rule.conditions.compiled, customers));
+  return sortApprovalRules(rules).find(rule => rule.enabled !== false && rule.conditions.compiled && rule.conditions.testedRequirement === rule.conditions.requirement.trim() && matchesRoute(request, rule.conditions.compiled, customers));
 }
 export function newApprovalRule(rules: ApprovalRule[] = []): ApprovalRule {
-  return { id: crypto.randomUUID(), revision: 0, name: '', priority: nextApprovalPriority(rules), conditions: { requirement: '' }, flow: emptyApprovalConfig() };
+  return { id: crypto.randomUUID(), revision: 0, version: 1, enabled: true, name: '', priority: nextApprovalPriority(rules), conditions: { requirement: '' }, flow: emptyApprovalConfig() };
 }
 export function readApprovalRulesPayload(stored: unknown, legacy?: ApprovalConfig): ApprovalRules {
   if (stored !== undefined) {

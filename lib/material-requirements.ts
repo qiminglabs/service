@@ -6,7 +6,7 @@ export function materialRequiredFor(requirement: MaterialRequirement, type: Requ
 }
 
 export function materialRequiredTypes(requirement: MaterialRequirement): Record<RequestType, boolean> {
-  return { '售前评估': materialRequiredFor(requirement, '售前评估'), '服务交付': materialRequiredFor(requirement, '服务交付') };
+  return { '技术评估': materialRequiredFor(requirement, '技术评估'), '服务交付': materialRequiredFor(requirement, '服务交付') };
 }
 
 export function materialRequirementLabel(requirement: MaterialRequirement): string {

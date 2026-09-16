@@ -9,10 +9,11 @@ import type { InternalUser } from '@/lib/service-requests';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { RuleDeleteDialog } from '@/components/rule-delete-dialog';
+import { RuleDisableDialog } from '@/components/rule-disable-dialog';
+import { DisabledRuleVersions } from '@/components/disabled-rule-versions';
 import { ApprovalFlowSettings } from '@/components/approval-flow-settings';
 import { canManageRouting } from '@/lib/assessment-routing-store';
-import { readApprovalRules, saveApprovalRule, deleteApprovalRule, saveDefaultApprovalUser } from '@/lib/approval-flow-store';
+import { readApprovalRules, saveApprovalRule, disableApprovalRule, saveDefaultApprovalUser } from '@/lib/approval-flow-store';
 import { approvalRuleIssue, approvalRuleConditionLabel, newApprovalRule, sortApprovalRules, resolveApprovalRule, type ApprovalRule } from '@/lib/approval-rules';
 import { describeRoute, matchesRoute, parseRoutePredicate, routesOverlap, type RoutingDictionary } from '@/lib/assessment-routing-schema';
 import { readRoutingData } from '@/lib/assessment-routing-store';
@@ -25,14 +26,21 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
   const [rules, setRules] = useState<ApprovalRule[]>([]);
   const [ready, setReady] = useState(false), [busy, setBusy] = useState(false);
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [formError, setFormError] = useState('');
-  const [draft, setDraft] = useState<ApprovalRule>(), [deleteTarget, setDeleteTarget] = useState<ApprovalRule>();
-  const [deleteError, setDeleteError] = useState(''), [flowRuleId, setFlowRuleId] = useState('');
+  const [draft, setDraft] = useState<ApprovalRule>();
+  const [disableTarget, setDisableTarget] = useState<ApprovalRule>();
+  const [disableError, setDisableError] = useState('');
+  const [flowRuleId, setFlowRuleId] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ summary: string; matches: number; samples: number; priority: number; selected: number; overlaps: ApprovalRule[] }>();
   const [revision, setRevision] = useState<number | null>(null);
   const lock = useRef(false);
   const allowed = canManageRouting(actor);
-  const duplicate = !!draft && rules.some(rule => rule.id !== draft.id && rule.priority === draft.priority);
+  const activeRules = sortApprovalRules(rules.filter(rule => rule.enabled !== false));
+  const disabledVersions = rules.flatMap(rule => [
+    ...(rule.enabled === false ? [{ ...rule, archivedAt: rule.updatedAt, archivedBy: rule.updatedBy }] : []),
+    ...(rule.history ?? []),
+  ]).sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''));
+  const duplicate = !!draft && rules.some(rule => rule.enabled !== false && rule.id !== draft.id && rule.priority === draft.priority);
   function applyData(data: Awaited<ReturnType<typeof readApprovalRules>>) {
     setRoutingDictionary(data.dictionary);
     setRules(data.collection.rules); setUsers(data.users); setDefaultUserId(data.collection.defaultUserId ?? ''); setSavedDefaultUserId(data.collection.defaultUserId ?? ''); setDefaultRevision(data.collection.defaultRevision ?? 0); setReady(true);
@@ -69,7 +77,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
       const [latest, latestRules] = await Promise.all([readRoutingData(), readApprovalRules()]);
       setRules(latestRules.collection.rules);
       setRoutingDictionary(latestRules.dictionary);
-      if (latestRules.collection.rules.some(rule => rule.id !== draft.id && rule.priority === draft.priority)) throw new Error('优先级重复，请选择其他数字。');
+      if (latestRules.collection.rules.some(rule => rule.enabled !== false && rule.id !== draft.id && rule.priority === draft.priority)) throw new Error('优先级重复，请选择其他数字。');
       const dictionary = {
         customers: latest.workspace.customers.map(({ id, name, team }) => ({ id, name, team })),
         services: latest.workspace.services.map(({ id, name }) => ({ id, name })),
@@ -84,7 +92,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
       if (!routesOverlap(compiled, compiled, 'manager')) throw new Error('匹配条件互相矛盾，请修改后重新测试。');
       const samples = latest.requests.filter(request => request.status !== '草稿');
       const candidate = { ...draft, conditions: { requirement: draft.conditions.requirement, compiled, testedRequirement: draft.conditions.requirement.trim() } };
-      const others = latestRules.collection.rules.filter(rule => rule.id !== draft.id);
+      const others = latestRules.collection.rules.filter(rule => rule.enabled !== false && rule.id !== draft.id);
       const matches = samples.filter(request => matchesRoute(request, compiled, dictionary.customers));
       setDraft(candidate);
       setTestResult({ summary: describeRoute(compiled, dictionary), matches: matches.length, samples: samples.length, priority: draft.priority,
@@ -107,11 +115,11 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     } catch (issue) { setFormError(issue instanceof Error ? issue.message : '保存失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
   }
-  async function remove() {
-    if (!deleteTarget || lock.current || !allowed) return;
-    lock.current = true; setBusy(true); setDeleteError('');
-    try { setRules((await deleteApprovalRule(actor, deleteTarget)).rules); setDeleteTarget(undefined); setNotice('审批规则已删除。'); }
-    catch (issue) { setDeleteError(issue instanceof Error ? issue.message : '删除失败，请重试。'); }
+  async function disable(rule: ApprovalRule) {
+    if (lock.current || !allowed) return;
+    lock.current = true; setBusy(true); setDisableError('');
+    try { setRules((await disableApprovalRule(actor, rule)).rules); setDisableTarget(undefined); setError(''); setNotice('审批规则已停用，已发起的审批继续按原流程处理。'); }
+    catch (issue) { setDisableError(issue instanceof Error ? issue.message : '停用失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
   }
   if (flowRuleId) return <ApprovalFlowSettings key={flowRuleId} actor={actor} ruleId={flowRuleId} onBack={() => { setFlowRuleId(''); setNotice(''); void reload(); }} />;
@@ -129,8 +137,8 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     <section className="routing-rules" aria-label="条件审批规则">
     <div className="submission-rules-toolbar"><div><strong>条件审批规则</strong></div>{allowed && <Button disabled={!ready || busy} onClick={() => edit()}><Plus size={16} />新建规则</Button>}</div>
     <div className="table-scroll"><table className="reference-table app-list-table approval-rules-table">
-      <thead><tr><th>优先级</th><th>规则名称</th><th>自然语言描述</th><th>审批节点数量</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
-      <tbody>{sortApprovalRules(rules).map(rule => <tr key={rule.id}>
+      <thead><tr><th>优先级</th><th>规则名称</th><th>自然语言描述</th><th>审批节点数量</th><th>版本 / 状态</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
+      <tbody>{activeRules.map(rule => <tr key={rule.id}>
         <td>{rule.priority}</td><td><strong>{rule.name}</strong></td><td>
           <div className="submission-rule-requirement">
             {approvalRuleConditionLabel(rule.conditions)}
@@ -140,22 +148,52 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
                 ? describeRoute(rule.conditions.compiled, routingDictionary)
                 : '尚未生成有效执行条件，请编辑条件并转译测试。'}</p>
             </details>
+
           </div>
         </td>
         <td>{rule.flow.nodes.length}</td>
+        <td><span className="rule-version-status" data-enabled={rule.enabled !== false}>v{rule.version ?? Math.max(1, rule.revision)} · {rule.enabled !== false ? '已启用' : '已停用'}</span></td>
         <td>{rule.updatedAt ? new Date(rule.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td><td>{rule.updatedBy ?? '—'}</td>
-        <td><div className="rule-table-actions">{allowed && <Button variant="ghost" disabled={busy} onClick={() => edit(rule)}>编辑条件</Button>}<Button variant="ghost" disabled={busy} onClick={() => setFlowRuleId(rule.id)}>{allowed ? '配置审批流程' : '查看审批流程'}</Button>{allowed && <Button variant="ghost" disabled={busy} onClick={() => { setDeleteTarget(rule); setDeleteError(''); }}>删除</Button>}</div></td>
-      </tr>)}{!rules.length && <tr><td colSpan={7} className="approval-empty">{ready ? '暂无特殊审批规则，请新建规则并配置审批流程。' : error ? '规则加载失败，请刷新页面重试。' : '正在读取审批规则…'}</td></tr>}</tbody>
+        <td><div className="rule-table-actions">{allowed && rule.enabled !== false && <Button variant="ghost" disabled={busy} onClick={() => edit(rule)}>编辑条件</Button>}<Button variant="ghost" disabled={busy} onClick={() => setFlowRuleId(rule.id)}>{allowed && rule.enabled !== false ? '配置审批流程' : '查看审批流程'}</Button>{allowed && rule.enabled !== false && <Button variant="ghost" disabled={busy} onClick={() => { setDisableTarget(rule); setDisableError(''); }}>停用</Button>}</div></td>
+      </tr>)}{!activeRules.length && <tr><td colSpan={8} className="approval-empty">{ready ? '暂无启用的特殊审批规则，请新建规则并配置审批流程。' : error ? '规则加载失败，请刷新页面重试。' : '正在读取审批规则…'}</td></tr>}</tbody>
     </table></div>
     </section>
+    <DisabledRuleVersions showName targetLabel="审批节点数量" ready={ready} versions={disabledVersions.map((version, index) => ({
+      key: `${version.id}-${version.version ?? version.revision}-${index}`,
+      name: version.name,
+      priority: version.priority,
+      requirement: approvalRuleConditionLabel(version.conditions),
+      condition: version.conditions.compiled && version.conditions.testedRequirement === version.conditions.requirement.trim()
+        ? describeRoute(version.conditions.compiled, routingDictionary) : '尚未生成有效执行条件。',
+      target: <>{version.flow.nodes.length}<details className="disabled-rule-flow">
+        <summary>查看审批流程</summary>
+        <ol>{version.flow.nodes.map(node => <li key={node.id}>
+          {node.name} · {node.source === 'people' ? node.userIds.map(id => users.find(user => user.id === id)?.name ?? id).join('、')
+            : node.source === 'manager' ? '直属主管' : `逐级主管（${node.stopUserIds.length ? '截止人：' + node.stopUserIds.map(id => users.find(user => user.id === id)?.name ?? id).join('、') : node.depth + ' 级'}）`}
+          <span> · 驳回退回申请人</span>
+        </li>)}</ol>
+        {!version.flow.nodes.length && <p>尚未配置审批节点</p>}
+      </details></>,
+      version: version.version ?? Math.max(1, version.revision),
+      disabledAt: version.archivedAt,
+      disabledBy: version.archivedBy,
+    }))} />
     <ApprovalAllocationPreview refreshKey={JSON.stringify([defaultRevision, rules.map(rule => [rule.id, rule.revision])])} dirty={defaultUserId !== savedDefaultUserId} />
-    <RuleDeleteDialog open={!!deleteTarget} requirement={deleteTarget?.name ?? ''} description="删除后，该规则及其审批流程配置将一并移除。" busy={busy} error={deleteError} onCancel={() => setDeleteTarget(undefined)} onConfirm={() => void remove()} />
+    <RuleDisableDialog
+      open={!!disableTarget}
+      requirement={disableTarget ? `${disableTarget.name} · v${disableTarget.version ?? Math.max(1, disableTarget.revision)}` : ''}
+      description="停用后，新请求将不再匹配此规则，已发起的审批继续按原流程处理。"
+      busy={busy}
+      error={disableError}
+      onCancel={() => { setDisableTarget(undefined); setDisableError(''); }}
+      onConfirm={() => { if (disableTarget) void disable(disableTarget); }}
+    />
     <Dialog open={!!draft} onOpenChange={open => { if (!open && !busy) setDraft(undefined); }}>
       <DialogContent className="submission-rule-dialog" aria-describedby={undefined}><DialogHeader><DialogTitle>{revision === null ? '新建特殊审批规则' : '编辑特殊审批条件'}</DialogTitle></DialogHeader>
         {draft && <form className="submission-rule-form" onSubmit={event => { event.preventDefault(); void save(); }}>
           <fieldset className="submission-rule-form-body approval-rule-fields" disabled={busy}>
             <label htmlFor="approval-rule-name" className="submission-rule-field"><span>规则名称 *</span><Input id="approval-rule-name" required maxLength={80} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} placeholder="例如：金融客户现场服务审批" /></label>
-            <label htmlFor="approval-rule-priority" className="submission-rule-field"><span className="routing-field-heading"><span>优先级</span><em aria-hidden="true">*</em></span><Input id="approval-rule-priority" required type="number" min={1} max={9999} step={1} value={Number.isFinite(draft.priority) ? draft.priority : ''} onChange={event => { setDraft({ ...draft, priority: event.target.value === '' ? NaN : Number(event.target.value) }); setTestResult(undefined); setFormError(''); }} /><small className="sr-help">填写 1–9999 的整数，数字越小越优先，不能与其他规则重复。</small>{duplicate && <p className="sr-error" role="alert">优先级重复，请选择其他数字。</p>}</label>
+            <label htmlFor="approval-rule-priority" className="submission-rule-field"><span className="routing-field-heading"><span>优先级</span><em aria-hidden="true">*</em></span><Input id="approval-rule-priority" required type="number" min={1} max={9999} step={1} value={Number.isFinite(draft.priority) ? draft.priority : ''} onChange={event => { setDraft({ ...draft, priority: event.target.value === '' ? NaN : Number(event.target.value) }); setTestResult(undefined); setFormError(''); }} /><small className="sr-help">填写 1–9999 的整数，数字越小越优先，不能与其他启用规则重复。</small>{duplicate && <p className="sr-error" role="alert">优先级重复，请选择其他数字。</p>}</label>
             <label htmlFor="approval-rule-requirement" className="submission-rule-field">
               <span className="routing-field-heading"><span>自然语言描述</span><em aria-hidden="true">*</em></span>
               <Textarea id="approval-rule-requirement" required aria-required="true" rows={4} maxLength={4000} value={draft.conditions.requirement} onChange={event => { setDraft({ ...draft, conditions: { requirement: event.target.value } }); setTestResult(undefined); setFormError(''); }} placeholder="例如：客户负责团队为金融，且包含现场服务" />

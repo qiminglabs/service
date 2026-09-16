@@ -89,7 +89,7 @@ export function RequestProjectDialog({ record, actor, busy, save, close, objects
               {groups.length > 1 && <Button size="sm" variant="ghost" aria-label={`移除空项目 ${groupIndex + 1}`} title={group.itemIds.length ? '移出全部申请项后可删除项目' : '删除空项目'} disabled={disabled || group.itemIds.length > 0} onClick={() => setGroups(old => old.filter(item => item.id !== group.id))}><Trash2 size={15} /></Button>}
             </div>
             <div className="sr-project-name"><Input aria-label={`项目 ${groupIndex + 1} 名称`} placeholder="填写项目名称" value={group.name} maxLength={100} disabled={disabled} onChange={event => setGroups(old => old.map(item => item.id === group.id ? { ...item, name: event.target.value } : item))} /></div>
-            {!record.expectedServiceDate && <div className="sr-project-name"><DateField id={`project-date-${group.id}`} label="期望服务时间" required value={group.expectedServiceDate || ''} disabled={disabled} onChange={value => setGroups(old => old.map(item => item.id === group.id ? { ...item, expectedServiceDate: value } : item))} /></div>}
+            {!record.expectedServiceDate && <div className="sr-project-name"><DateField id={`project-date-${group.id}`} label="期望服务日期" required value={group.expectedServiceDate || ''} disabled={disabled} onChange={value => setGroups(old => old.map(item => item.id === group.id ? { ...item, expectedServiceDate: value } : item))} /></div>}
             <div className="sr-project-drag-items">
               {group.itemIds.map(itemId => {
                 const item = record.items.find(item => item.id === itemId)!;

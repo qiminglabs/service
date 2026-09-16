@@ -12,7 +12,7 @@ export function RequestDeliveryConversion({ busy, onConfirm, onClose }: {
     <DialogContent className="sr-dialog" showCloseButton={!busy}>
       <DialogHeader>
         <DialogTitle>确定转为服务交付</DialogTitle>
-        <DialogDescription>确定将此售前评估请求转为服务交付？转换后继续关联服务依据，已评估材料和核定结果保留。</DialogDescription>
+        <DialogDescription>确定将此技术评估请求转为服务交付？转换后继续关联服务依据，已评估材料和核定结果保留。</DialogDescription>
       </DialogHeader>
       <DialogFooter>
         <Button variant="outline" disabled={busy} onClick={onClose}>取消</Button>

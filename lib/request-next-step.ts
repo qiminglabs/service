@@ -45,9 +45,9 @@ export function requestNextStep(record: ServiceRequest, users: InternalUser[], c
       : admin('恢复客户协作人的有效账号后，前往客户中心完成确认。');
   }
   const manager = activeUsers.find(user => canPerformAssessmentRole(record, actorOf(user), 'manager', users));
-  if (record.status === '评估完成' && requestTypeOf(record) === '售前评估') return manager
-    ? staff(manager, '负责项目经理', '售前评估已完成；如需继续交付，点击「转为服务交付」。')
-    : { action: '售前评估已完成。如需转为服务交付，请先恢复负责项目经理的有效账号。' };
+  if (record.status === '评估完成' && requestTypeOf(record) === '技术评估') return manager
+    ? staff(manager, '负责项目经理', '技术评估已完成；如需继续交付，点击「转为服务交付」。')
+    : { action: '技术评估已完成。如需转为服务交付，请先恢复负责项目经理的有效账号。' };
   if (record.status === '待受理') return staff(manager, '负责项目经理', serviceProjectCreationEnabled
     ? '点击「创建服务项目」，完成服务项分配。'
     : '待服务项目功能开放后创建服务项目（当前暂不可操作）。');

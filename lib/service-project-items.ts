@@ -1,6 +1,7 @@
 import { assertProjectItemsWritable, preserveProjectReadonlySnapshots, projectItemReadonly } from './service-project-readonly.ts';
 import {
   clearHiddenItemFields,
+  requestFieldIsVisible,
   copyRequestItem,
   itemBasicIssues,
   serviceAvailableForRequest,
@@ -112,7 +113,17 @@ export function editProjectItems(
       throw new Error('项目材料已按转换映射设为只读，不能修改。');
   }
   if (change.type === 'save') assertProjectItemsWritable(previous, (previous.items ?? []).map(item => item.id === change.item.id ? change.item : item));
-  const items = changeProjectItems(previous.items ?? [], change, previous.customerId, context, projectItemAudience(actor), actor);
+  const items = changeProjectItems(previous.items ?? [], change, previous.customerId, context, projectItemAudience(actor), actor).map(item => {
+    const old = previous.items?.find(old => old.id === item.id);
+    if (!old || !previous.requestConversion?.workOrders.some(order => order.sourceItemId === item.id)) return item;
+    const values = { ...item.values };
+    const mappedIds = previous.requestConversion.mapping.itemMappingMode === 'fixed'
+      ? Object.keys(old.values) : (previous.requestConversion.mapping.itemFields ?? []).map(mapping => mapping.target.id);
+    for (const id of mappedIds) {
+      if (Object.hasOwn(old.values, id) && (!item.config.fields.includes(id) || !requestFieldIsVisible(item.config, id, item.method, item.values))) values[id] = old.values[id];
+    }
+    return { ...item, values };
+  });
   assertProjectItemsWritable(previous, items);
   return {
     ...previous,

@@ -6501,14 +6501,40 @@ body:has(.submission-rule-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .backend-settings-panel .rule-table-actions > button { min-width: 0; padding-inline: 0; margin: 0; font-weight: 400; flex-shrink: 0; }
 .routing-table th:first-child { width: 88px; }
 .routing-table th:nth-child(3) { width: 140px; }
-.routing-table th:nth-child(4) { width: 180px; }
-.routing-table th:nth-child(5) { width: 110px; }
+.routing-table th:nth-child(4) { width: 120px; }
+.routing-table th:nth-child(5) { width: 180px; }
+.routing-table th:nth-child(6) { width: 110px; }
 .routing-table th:last-child { width: 160px; }
 .routing-empty { padding: 24px 16px !important; text-align: center; color: var(--muted-foreground); }
 .routing-preview-result { margin-top: 16px; display: grid; gap: 10px; }
 .routing-preview-result p { margin: 0; }
 .routing-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .routing-form-row [data-slot='native-select-wrapper'] { width: 100%; }
+.service-flow-dialog[data-slot='dialog-content'] { width: min(900px, calc(100vw - 32px)); max-width: 900px; }
+.service-flow-settings td { vertical-align: top; }
+.service-flow-settings td p { white-space: normal; overflow-wrap: anywhere; }
+.service-flow-settings td:first-child { max-width: 320px; }
+.service-flow-default { width: min(480px, 100%); flex-wrap: nowrap; }
+.service-flow-default [data-slot='native-select-wrapper'] { flex: 1; min-width: 0; }
+.service-flow-step-heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.service-flow-step-heading > strong { overflow-wrap: anywhere; min-width: 0; }
+.service-flow-step-heading .routing-inline { flex-shrink: 0; }
+.service-flow-step-card { display: grid; gap: 16px; padding: 16px; border: 1px solid var(--border); border-radius: 8px; background: #fafbfd; }
+.service-flow-checkbox { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; margin-right: 16px; }
+.service-flow-checkbox input { width: 16px; height: 16px; }
+.service-flow-conditions { display: grid; gap: 12px; }
+.service-flow-conditions > button { justify-self: start; }
+.service-flow-condition { display: grid; grid-template-columns: 1fr 100px 1.6fr 36px; gap: 8px; align-items: center; }
+.service-flow-condition > * { min-width: 0; }
+.service-flow-step-summary { padding-left: 22px; list-style: decimal; line-height: 1.7; margin-top: 8px; }
+.service-flow-step-summary li { padding: 3px 0; overflow-wrap: anywhere; }
+.service-flow-result { padding: 16px; background: #f2f7fd; border: 1px solid #cdddef; border-radius: 8px; font-size: 14px; line-height: 1.6; }
+.service-flow-result > strong { font-size: 16px; }
+.service-flow-trace { border-bottom: 1px solid var(--border); padding: 12px 0; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.service-flow-trace summary { cursor: pointer; }
+.service-flow-trace summary span { margin-left: 16px; color: var(--muted-foreground); }
+.service-flow-hint { padding: 0 16px 12px; }
+@media (max-width: 640px) { .service-flow-condition { grid-template-columns: 1fr 1fr; } .service-flow-step-card { padding: 12px; } .service-flow-step-heading { flex-wrap: wrap; } }
 @media (max-width: 700px) { .request-flow-settings { padding: 12px; gap: 12px; } .routing-form-row { grid-template-columns: 1fr; } .routing-default { align-items: flex-start; } }
 
 .routing-field-heading { display: flex; align-items: flex-start; justify-content: flex-start; gap: 2px; line-height: 20px; }
@@ -6620,6 +6646,7 @@ body:has(.submission-rule-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .approval-rules-table td:nth-child(2) { min-width: 150px; }
 .approval-rules-table td:nth-child(3) { min-width: 220px; max-width: 360px; white-space: normal; overflow-wrap: anywhere; }
 .approval-rules-table th:nth-child(4) { width: 140px; }
+.approval-rules-table th:nth-child(5) { width: 120px; }
 .approval-rule-fields { border: 0; min-width: 0; margin: 0; }
 
 .approval-allocation-preview > [data-slot='native-select-wrapper'] { max-width: 100%; }
@@ -6719,3 +6746,42 @@ body:has(.submission-rule-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .customer-project-record:last-child { border-bottom: 0; padding-bottom: 0; }
 .customer-project-record h4 { color: #25364d; font-size: 14px; font-weight: 600; }
 .customer-project-record > button { margin: 8px 8px 0 0; }
+
+/* Service flow configuration uses the same canvas/inspector pattern as approval flows. */
+.service-flow-metadata { display: grid; grid-template-columns: minmax(180px, 1fr) 140px minmax(180px, 1fr); gap: 16px; margin-bottom: 20px; }
+.service-flow-metadata [data-slot='native-select-wrapper'] { width: 100%; }
+.service-step-designer { grid-template-columns: minmax(0, 1fr) minmax(360px, 440px); }
+.service-step-node > header { display: flex; justify-content: space-between; gap: 12px; }
+.service-step-node.is-disabled { opacity: .65; border-style: dashed; }
+.service-step-node .approval-node-content small { font-size: 13px; color: var(--text-neutral-secondary); }
+.service-step-inspector { min-width: 0; }
+.service-step-inspector .approval-field { min-width: 0; }
+.service-step-inspector textarea { field-sizing: fixed; width: 100%; min-height: 80px; font-size: 14px; resize: vertical; }
+.service-step-two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+.service-step-section { border-top: 1px solid var(--border); padding-top: 16px; display: grid; gap: 12px; margin-top: 4px; }
+.service-step-section > h4 { font-size: 14px; font-weight: 600; }
+.service-step-section h4 small { display: block; font-size: 13px; font-weight: 400; color: var(--text-neutral-secondary); margin-top: 4px; }
+.service-step-material { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+.service-step-material a, .service-step-attachment button { color: var(--primary); text-decoration: underline; text-align: left; overflow-wrap: anywhere; min-width: 0; }
+.service-step-attachment { display: flex; align-items: center; gap: 8px; }
+.service-step-attachment small, .service-step-attachment svg { flex-shrink: 0; }
+.service-step-section > .sr-help { margin: 0; line-height: 1.6; }
+.service-step-legacy { display: grid; gap: 12px; }
+.service-step-inspector .approval-node-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.service-step-inspector details.service-step-section { display: block; }
+.service-step-inspector details.service-step-section summary { cursor: pointer; font-size: 14px; margin-bottom: 12px; }
+@media (max-width: 1050px) { .service-step-designer { grid-template-columns: 1fr; } .service-flow-metadata { grid-template-columns: 1fr; } }
+
+.rule-version-status { white-space: nowrap; color: #8491a4; font-size: 13px; }
+.rule-version-status[data-enabled='true'] { color: #288665; }
+
+.disabled-rule-flow { margin-top: 8px; line-height: 20px; font-size: 13px; }
+.disabled-rule-flow > summary { color: #1677cc; cursor: pointer; white-space: nowrap; }
+.disabled-rule-flow ol { min-width: 200px; margin-top: 8px; padding-left: 20px; white-space: normal; }
+.disabled-rule-flow li + li { margin-top: 8px; }
+
+.disabled-rule-versions > summary { justify-content: flex-start; gap: 10px; cursor: pointer; list-style: none; }
+.disabled-rule-versions > summary::-webkit-details-marker { display: none; }
+.disabled-rule-versions > summary::before { content: '▶'; color: #8491a4; font-size: 10px; }
+.disabled-rule-versions[open] > summary::before { transform: rotate(90deg); }
+.disabled-rule-versions > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }

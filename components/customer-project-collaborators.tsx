@@ -7,7 +7,7 @@ function CollaboratorCard({ title, people, smartx = false }: { title: string; pe
       {people.length ? <ul className="sr-participants">{people.map(person => <li key={person.id}>
         <span className="sr-collaborator-copy"><span className="sr-participant-name" title={person.name}>{person.name}</span>
           <small title={`${person.phone || '未填写电话'} · ${person.email || '未填写邮箱'}`}>
-            {person.phone ? <a href={`tel:${person.phone.replace(/\s/g, '')}`}>{person.phone}</a> : '未填写电话'}{' · '}{person.email || '未填写邮箱'}
+            {person.phone || '未填写电话'}{' · '}{person.email || '未填写邮箱'}
           </small>
         </span>
         {person.roles.length > 0 && <span className="sr-help">{person.roles.join(' · ')}</span>}
@@ -19,5 +19,6 @@ export function CustomerProjectCollaborators({ project }: { project: CustomerSer
   return <aside className="sr-collaboration-column" aria-label="协作人">
     <CollaboratorCard title="SmartX 联系人" people={project.smartxContacts} smartx />
     <CollaboratorCard title="客户协作人" people={project.collaborators} />
+    {project.showPartnerCollaborators && <CollaboratorCard title="合作伙伴协作人" people={project.partnerCollaborators} />}
   </aside>;
 }

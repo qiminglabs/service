@@ -434,8 +434,8 @@ export function normalizeStoredRequest(
       activities: normalized.operations.activities.map(event => event.category === '评估' && ['转为交付', '转为服务'].includes(event.title)
         ? { ...event, title: '转为服务交付' } : event) } };
   }
-  if (normalized.id.startsWith('SR-DEMO-') && ['售前评估转交付－待关联服务依据', '售前评估转为服务－待关联服务依据'].includes(normalized.title)) {
-    normalized = { ...normalized, title: '售前评估转为服务交付－待关联服务依据' };
+  if (normalized.id.startsWith('SR-DEMO-') && ['技术评估转交付－待关联服务依据', '技术评估转为服务－待关联服务依据'].includes(normalized.title)) {
+    normalized = { ...normalized, title: '技术评估转为服务交付－待关联服务依据' };
   }
   return normalized.requestType === undefined ? { ...normalized, requestType: '服务交付' } : normalized;
 }
@@ -475,7 +475,7 @@ export function requestCancellationStage(record: ServiceRequest): RequestStage {
 export function requestProgressSteps(request: RequestStatus | ServiceRequest) {
   const status = typeof request === 'string' ? request : request.status;
   const stage = status === '已取消' ? (typeof request === 'string' ? '草稿' : requestCancellationStage(request)) : status;
-  const presales = typeof request === 'string' ? request === '评估完成' : requestTypeOf(request) === '售前评估';
+  const presales = typeof request === 'string' ? request === '评估完成' : requestTypeOf(request) === '技术评估';
   const stages = requestStatuses.filter(step => step !== '已取消' && (presales ? !['待确认', '待受理', '已转服务项目'].includes(step) : step !== '评估完成'));
   const current = stages.indexOf(stage);
   return stages
@@ -602,7 +602,7 @@ export function requestIdentityIssue(
   if (!requestTypes.includes(requestTypeOf(record) as RequestType)) return '请选择申请类型。';
   if (existing) {
     if (existing.status !== '草稿' && requestTypeOf(existing) !== requestTypeOf(record)
-      && !(requestTypeOf(existing) === '售前评估' && existing.status === '评估完成' && requestTypeOf(record) === '服务交付' && record.status === '待评估'))
+      && !(requestTypeOf(existing) === '技术评估' && existing.status === '评估完成' && requestTypeOf(record) === '服务交付' && record.status === '待评估'))
       return '提交后申请类型不可直接修改，请通过“转为服务交付”操作变更。';
     if (existing.status === '草稿' && !['草稿', '已取消'].includes(record.status) && (record.status !== '待评估' || !isRequestApplicant(existing, actor))) return '仅创建人可以提交服务请求。';
     if (existing.customerId !== record.customerId)
@@ -1087,9 +1087,10 @@ export async function saveLocal(
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(store === 'requests' ? ['requests', 'references'] : store, 'readwrite');
+      const transaction = db.transaction(store === 'requests' ? ['requests', 'references', 'configs'] : store, 'readwrite');
       const records = transaction.objectStore(store);
       if (store === 'requests') {
+        const itemConfigsRead = transaction.objectStore('configs').getAll();
         let serviceRequest = normalizeStoredRequest(record as ServiceRequest);
         // Keep the submitted list so automatic additions cannot hide an explicit removal.
         const incomingParticipants = serviceRequest.internalParticipants;
@@ -1124,7 +1125,7 @@ export async function saveLocal(
               return;
             }
             const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
-            const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? []);
+            const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? [], savedWorkspace?.contacts ?? []);
             let projectIssue: string | null = null;
             try {
               projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor,
@@ -1185,7 +1186,7 @@ export async function saveLocal(
                       if (!actor || projectActorRoles[actor.id] !== 'SmartX 项目经理' || !users.some((user: InternalUser) => user.id === actor.id && user.status === '启用')) throw new Error('仅已启用的负责项目经理可以创建项目。');
                       const creation = serviceRequest.operations.projectCreation;
                       const mapping = parseProjectMapping(referenceRead.result.find((entry: { id: string }) => entry.id === requestProjectMappingId)?.payload);
-                      const projects = creation.projects.map(project => mappedServiceProject(previous!, project, creation, mapping, workspacePayload?.partners ?? [], workspacePayload ?? {}));
+                      const projects = creation.projects.map(project => mappedServiceProject(previous!, project, creation, mapping, workspacePayload?.partners ?? [], { ...workspacePayload, itemConfigs: itemConfigsRead.result }));
                       for (const project of projects) {
                         const key = `service-project:${project.id}`;
                         if (referenceRead.result.some((entry: { id: string }) => entry.id === key)) throw new Error('项目编号已存在，请重新打开创建弹窗。');

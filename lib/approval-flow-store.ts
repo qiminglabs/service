@@ -49,29 +49,44 @@ export async function saveApprovalRule(actor: OperationActor, rule: ApprovalRule
   return mutate(actor, (collection, _users, dictionary) => {
     const current = collection.rules.find(item => item.id === rule.id);
     if (expectedRevision === null ? !!current : !current || current.revision !== expectedRevision) throw new Error('规则已被修改或删除，请重新加载后再保存。');
+    if (current?.enabled === false) throw new Error('停用规则只读，不可编辑。');
     const issue = approvalRuleIssue(rule); if (issue) throw new Error(issue);
-    if (collection.rules.some(item => item.id !== rule.id && item.priority === rule.priority)) throw new Error('优先级重复，请选择其他数字后重新测试。');
+    if (collection.rules.some(item => item.enabled !== false && item.id !== rule.id && item.priority === rule.priority)) throw new Error('优先级重复，请选择其他数字后重新测试。');
     const conditions = testedApprovalConditions(rule.conditions, dictionary);
-    const saved = { ...structuredClone(rule), conditions, flow: current?.flow ?? { ...rule.flow, name: rule.name.trim(), nodes: [] }, name: rule.name.trim(), revision: (current?.revision ?? 0) + 1, updatedAt: new Date().toISOString(), updatedBy: actor.name };
+    const saved = { ...structuredClone(rule), enabled: true, version: current ? (current.version ?? Math.max(1, current.revision)) + 1 : 1, history: current ? archiveApprovalRule(current, actor) : [], conditions, flow: current?.flow ?? { ...rule.flow, name: rule.name.trim(), nodes: [] }, name: rule.name.trim(), revision: (current?.revision ?? 0) + 1, updatedAt: new Date().toISOString(), updatedBy: actor.name };
     if (current) collection.rules[collection.rules.indexOf(current)] = saved;
     else collection.rules.push(saved);
     collection.rules = sortApprovalRules(collection.rules);
   });
 }
-export async function deleteApprovalRule(actor: OperationActor, rule: ApprovalRule) {
+function archiveApprovalRule(rule: ApprovalRule, actor: OperationActor): NonNullable<ApprovalRule['history']> {
+  const { history = [], ...snapshot } = structuredClone(rule);
+  return [...history, { ...snapshot, version: rule.version ?? Math.max(1, rule.revision), enabled: false, archivedAt: new Date().toISOString(), archivedBy: actor.name }];
+}
+export async function deleteApprovalRule(_actor: OperationActor, _rule: ApprovalRule): Promise<ApprovalRules> {
+  throw new Error('特殊审批规则只能停用，不能删除。');
+}
+export async function disableApprovalRule(actor: OperationActor, rule: ApprovalRule) {
   return mutate(actor, collection => {
     const current = collection.rules.find(item => item.id === rule.id);
-    if (!current || current.revision !== rule.revision) throw new Error('规则已被修改或删除，请重新加载后再删除。');
-    collection.rules = collection.rules.filter(item => item.id !== rule.id);
+    if (!current || current.revision !== rule.revision) throw new Error('规则已被修改，请刷新后重试。');
+    if (current.enabled === false) throw new Error('规则已停用。');
+    current.version = current.version ?? Math.max(1, current.revision);
+    current.enabled = false;
+    current.revision += 1;
+    current.updatedAt = new Date().toISOString(); current.updatedBy = actor.name;
   });
 }
-export async function saveApprovalConfig(actor: OperationActor, ruleId: string, config: ApprovalConfig, expectedRevision: number) {
+export async function saveApprovalConfig(actor: OperationActor, ruleId: string, config: ApprovalConfig, expectedRevision: number, expectedRuleRevision?: number) {
   const collection = await mutate(actor, (collection, users) => {
     const rule = collection.rules.find(item => item.id === ruleId);
     if (!rule) throw new Error('该审批规则已被删除，请返回规则列表。');
-    if (rule.flow.revision !== expectedRevision) throw new Error('审批流程已被其他页面修改，请重新加载后再保存。');
+    if (rule.enabled === false) throw new Error('停用规则只读，不可编辑审批流程。');
+    if (rule.flow.revision !== expectedRevision || (expectedRuleRevision !== undefined && rule.revision !== expectedRuleRevision)) throw new Error('审批流程已被其他页面修改，请重新加载后再保存。');
     const normalized = normalizeApprovalConfig(config);
     const issue = approvalConfigIssue(normalized, users); if (issue) throw new Error(issue);
+    rule.history = archiveApprovalRule(rule, actor);
+    rule.version = (rule.version ?? Math.max(1, rule.revision)) + 1;
     rule.flow = { ...normalized, revision: rule.flow.revision + 1, updatedAt: new Date().toISOString(), updatedBy: actor.name };
     rule.revision += 1; rule.updatedAt = rule.flow.updatedAt; rule.updatedBy = actor.name;
   });

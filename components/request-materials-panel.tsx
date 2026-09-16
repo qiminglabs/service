@@ -10,13 +10,14 @@ import { isInternal } from '@/lib/request-operations';
 import type { ServiceRequest, RequestAudience } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
 
-export function RequestMaterialsPanel({ record, actor, readonly, busy, onMaterial, description, audience, isGroupReadonly, title = '申请材料' }: {
+export function RequestMaterialsPanel({ record, actor, readonly, busy, onMaterial, description, audience, isGroupReadonly, showCustomerVisibility, title = '申请材料' }: {
   record: ServiceRequest;
   actor: OperationActor;
   readonly: boolean;
   busy: boolean;
   description?: string;
   title?: string;
+  showCustomerVisibility?: boolean;
   isGroupReadonly?: (group: RequestMaterialGroup) => boolean;
   audience?: RequestAudience;
   onMaterial: (target: { itemId: string; requirementId: string }) => void;
@@ -32,12 +33,13 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
   }, [record.id, highlightedItem]);
   const internal = audience ? audience === 'internal' : isInternal(actor.role);
   const customerVisible = requestMaterialsCustomerVisible(record);
+  const showVisibilityBadge = showCustomerVisibility ?? customerVisible;
   const groups = requestMaterialGroups(record).map(group => ({ group, files: requestMaterialFiles(record, group.material, internal ? 'internal' : 'customer') }));
   if (!internal && !customerVisible) return null;
-  return <section className={`sr-panel sr-request-materials-panel${customerVisible ? ' sr-customer-visible-panel' : ''}`} aria-label={title}>
+  return <section className={`sr-panel sr-request-materials-panel${showVisibilityBadge ? ' sr-customer-visible-panel' : ''}`} aria-label={title}>
     <div className="sr-panel-heading"><div className="sr-panel-title-with-visibility">
       <h3>{title}</h3>
-      {customerVisible && <CustomerVisibleBadge />}
+      {showVisibilityBadge && <CustomerVisibleBadge />}
     </div></div>
     {description && <p className="sr-request-material-description">{description}</p>}
     {!groups.length ? <div className="sr-materials-empty">{record.items.length ? '当前服务项没有材料要求。' : '添加服务项后，将在此显示材料要求。'}</div> : <div className="sr-request-material-list">

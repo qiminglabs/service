@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import {
@@ -31,6 +32,7 @@ function ProjectCollaboratorCard({
   readonly,
   busy,
   addDisabled = false,
+  showCustomerVisibility = false,
   emptyHint,
   save,
 }: {
@@ -41,6 +43,7 @@ function ProjectCollaboratorCard({
   readonly: boolean;
   busy: boolean;
   addDisabled?: boolean;
+  showCustomerVisibility?: boolean;
   emptyHint?: string;
   save: (ids: string[]) => Promise<string | null>;
 }) {
@@ -89,13 +92,13 @@ function ProjectCollaboratorCard({
       }}
     >
       <section
-        className="sr-panel sr-collaboration-card"
+        className={`sr-panel sr-collaboration-card${showCustomerVisibility ? ' sr-customer-visible-panel' : ''}`}
         aria-labelledby={headingId}
       >
         <div className="sr-panel-heading">
-          <h3 id={headingId}>
+          <div className="sr-panel-title-with-visibility"><h3 id={headingId}>
             {title} <span>{value.length}</span>
-          </h3>
+          </h3>{showCustomerVisibility && <CustomerVisibleBadge />}</div>
           {!readonly && (
             <DialogTrigger
               render={
@@ -254,6 +257,7 @@ function ProjectCollaboratorCard({
 }
 
 export function ServiceProjectCollaborators({
+  showCustomerVisibility = false,
   project,
   directory,
   busy,
@@ -261,6 +265,7 @@ export function ServiceProjectCollaborators({
   readonly,
   save,
 }: {
+  showCustomerVisibility?: boolean;
   project: Pick<
     ServiceProjectRecord,
     'customerId' | 'serviceProviderId' | 'collaborators'
@@ -291,6 +296,7 @@ export function ServiceProjectCollaborators({
                 : group.key
           }
           title={group.title}
+          showCustomerVisibility={showCustomerVisibility && (group.key === 'customer' || (group.key === 'partner' && !!project.serviceProviderId?.startsWith('partner:')))}
           placeholder={
             group.key === 'internal'
               ? '搜索姓名或邮箱'

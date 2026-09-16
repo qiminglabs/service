@@ -16,11 +16,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
+import { MentionOptionLabel } from '@/components/mention-option-label';
+import { internalProjectProvider } from '@/lib/service-project-providers';
 import {
   readLocal,
   storedFile,
   downloadFile,
   type InternalUser,
+  type ContactRef,
+  type CustomerRef,
   type StoredFile,
 } from '@/lib/service-requests';
 import {
@@ -31,6 +35,7 @@ import {
 } from '@/lib/request-operations';
 import {
   canAddProjectSupplement,
+  projectCustomerMentionUsers,
   type ProjectSupplementInput,
   type ProjectSupplement,
 } from '@/lib/service-project-supplements';
@@ -45,11 +50,14 @@ import {
 
 type SupplementPanelProps = {
   record: {
+    customerId?: string;
     supplements?: Omit<ProjectSupplement, 'authorId'>[];
     collaborators?: ServiceProjectRecord['collaborators'];
   };
   actor: OperationActor;
-  users: InternalUser[];
+  users: (InternalUser & { companyName?: string })[];
+  contacts?: ContactRef[];
+  customers?: CustomerRef[];
   busy: boolean;
   publish: (input: ProjectSupplementInput) => Promise<string | null>;
   joinMention: (id: string) => Promise<string | null>;
@@ -63,6 +71,8 @@ export function ProjectSupplementsPanel({
   record,
   actor,
   users,
+  contacts = [],
+  customers = [],
   busy,
   publish,
   joinMention,
@@ -100,14 +110,15 @@ export function ProjectSupplementsPanel({
   const items = (record.supplements ?? []).filter(
     (item) => isInternal(actor.role) || item.externalVisible,
   );
-  const mentionUsers = users.filter(
+  const customerMentionUsers = projectCustomerMentionUsers({ ...record, customerId: record.customerId ?? '' }, actor, contacts);
+  const mentionUsers = [...users.filter(
     (user) =>
       user.status === '启用' &&
       (isInternal(actor.role) ||
         record.collaborators?.internal?.some(
           (person) => person.id === user.id,
-        )),
-  );
+        ) || (actor.role === '客户' && record.collaborators?.partner?.some(person => person.id === user.id))),
+  ), ...customerMentionUsers];
   const matches = query
     ? mentionUsers
         .filter((user) =>
@@ -153,6 +164,7 @@ export function ProjectSupplementsPanel({
     if (!query || disabled) return;
     if (
       isInternal(actor.role) &&
+      !customerMentionUsers.some(person => person.id === user.id) &&
       !record.collaborators?.internal?.some((person) => person.id === user.id)
     ) {
       setPendingMention({ user, start: query.start, end: caret });
@@ -264,7 +276,7 @@ export function ProjectSupplementsPanel({
                 <Textarea
                   ref={commentInput}
                   aria-label="补充说明或评论"
-                  placeholder="填写补充说明或评论，输入 @ 选择内部用户，也可仅上传附件"
+                  placeholder="填写补充说明或评论，输入 @ 选择协作人，也可仅上传附件"
                   value={comment}
                   aria-autocomplete="list"
                   aria-controls={query ? listId : undefined}
@@ -326,17 +338,15 @@ export function ProjectSupplementsPanel({
                       className="sr-mention-picker"
                       initialFocus={false}
                       finalFocus={false}
-                      aria-label="选择 @ 用户"
+                      aria-label="@协作人"
                     >
                       <p>
-                        {isInternal(actor.role)
-                          ? '选择内部用户'
-                          : '选择内部协作人或项目经理'}
+                        @协作人
                       </p>
                       <div
                         role="listbox"
                         id={listId}
-                        aria-label="可 @ 的内部用户"
+                        aria-label="可 @ 的协作人"
                       >
                         {matches.map((user, index) => (
                           <button
@@ -354,14 +364,9 @@ export function ProjectSupplementsPanel({
                             onMouseEnter={() => setActiveOption(index)}
                             onClick={() => chooseMention(user)}
                           >
-                            <strong>{user.name}</strong>
-                            <small>
-                              {isInternal(actor.role)
-                                ? [user.department, user.email]
-                                    .filter(Boolean)
-                                    .join(' · ')
-                                : record.collaborators?.internal?.find(person => person.id === user.id)?.assignmentRoles?.includes('项目经理') ? '项目经理' : '内部协作人'}
-                            </small>
+                            <MentionOptionLabel name={user.name} email={user.email} companyName={customerMentionUsers.some(person => person.id === user.id)
+                              ? customers.find(customer => customer.id === record.customerId)?.name
+                              : users.find(person => person.id === user.id)?.companyName ?? internalProjectProvider.name} />
                           </button>
                         ))}
                       </div>
@@ -411,7 +416,7 @@ export function ProjectSupplementsPanel({
                 <Button
                   variant="ghost"
                   disabled={disabled}
-                  aria-label="@内部用户"
+                  aria-label="@协作人"
                   onClick={() => {
                     const input = commentInput.current;
                     const start = input?.selectionStart ?? comment.length,
@@ -431,7 +436,7 @@ export function ProjectSupplementsPanel({
                   }}
                 >
                   <AtSign size={16} />
-                  内部用户
+                  协作人
                 </Button>
                 <span>单文件不超过 20 MB</span>
                 <input

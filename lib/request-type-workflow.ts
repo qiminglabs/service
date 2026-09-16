@@ -7,11 +7,11 @@ import { requestTypeOf, requestTypes, type RequestType } from './request-types.t
 import { requestMaterialIssues } from './request-materials.ts';
 import { materialFiles } from './service-requests.ts';
 
-const conversionDetail = '售前评估 → 服务交付；沿用评估结论和核定人天，进入服务依据关联。';
+const conversionDetail = '技术评估 → 服务交付；沿用评估结论和核定人天，进入服务依据关联。';
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export function isDeliveryConversion(next: ServiceRequest, previous?: ServiceRequest): boolean {
-  return !!previous && requestTypeOf(previous) === '售前评估' && previous.status === '评估完成'
+  return !!previous && requestTypeOf(previous) === '技术评估' && previous.status === '评估完成'
     && requestTypeOf(next) === '服务交付' && next.status === '待评估';
 }
 
@@ -21,7 +21,7 @@ export function deliveryConversionMaterialIssues(record: ServiceRequest): string
 
 // Completed presales requests may receive additional delivery materials in detail.
 export function canSupplementDeliveryMaterials(record: ServiceRequest, actor?: OperationActor): boolean {
-  return requestTypeOf(record) === '售前评估' && record.status === '评估完成'
+  return requestTypeOf(record) === '技术评估' && record.status === '评估完成'
     && !!actor?.id && actor.role === 'SmartX 项目经理'
     && record.operations?.assessment?.managerId === actor.id;
 }
@@ -42,7 +42,7 @@ export function deliveryConversionItemsIssue(next: ServiceRequest, previous: Ser
 }
 
 export function deliveryConversionIssue(record: ServiceRequest, actor: OperationActor | undefined, users: InternalUser[]): string | null {
-  if (requestTypeOf(record) !== '售前评估' || record.status !== '评估完成') return '仅评估完成的售前评估请求可转为服务交付。';
+  if (requestTypeOf(record) !== '技术评估' || record.status !== '评估完成') return '仅评估完成的技术评估请求可转为服务交付。';
   if (!record.operations?.assessment?.managerId || !canPerformAssessmentRole(record, actor, 'manager', users)
     || !routingUsers(users, 'manager').some(user => user.id === actor?.id)) return '仅负责本请求的项目经理可转为服务交付。';
   const assessment = record.operations?.assessment;
@@ -90,22 +90,22 @@ export function requestTypeSaveIssue(next: ServiceRequest, previous: ServiceRequ
     if (next.status !== '评估完成' || !same(next.operations?.assessment, previous.operations?.assessment))
       return '评估完成后结论和核定人天已锁定，仅可按需转为服务交付。';
   }
-  if (type === '售前评估') {
+  if (type === '技术评估') {
     const assessment = next.operations?.assessment;
     if (!['草稿', '待评估', '评估完成', '已取消'].includes(next.status)
       || assessment?.plans.some(plan => !plan.releasedAt) || assessment?.confirmation
       || assessment?.approvals.some(approval => approval.state !== '已失效') || next.operations?.projectCreation)
-      return '售前评估请求须先完成评估并转为服务交付，再进入后续交付流程。';
+      return '技术评估请求须先完成评估并转为服务交付，再进入后续交付流程。';
     const changedEffort = !same(assessment?.effort, previous?.operations?.assessment?.effort);
-    if (changedEffort && assessment?.effort && next.status !== '评估完成') return '售前评估完成人天核定后应进入“评估完成”。';
+    if (changedEffort && assessment?.effort && next.status !== '评估完成') return '技术评估完成人天核定后应进入“评估完成”。';
     if (next.status === '评估完成' && previous?.status !== '评估完成') {
-      if (previous?.status !== '待评估' || requestTypeOf(previous) !== '售前评估'
+      if (previous?.status !== '待评估' || requestTypeOf(previous) !== '技术评估'
         || !canPerformAssessmentRole(previous, actor, 'manager', users)
         || !previous.operations?.assessment?.rounds.some(round => round.outcome === '评估通过')
         || !same(previous.operations.assessment.rounds, assessment?.rounds)
         || !changedEffort || !assessment?.effort || assessment.effort.author !== actor?.name)
-        return '仅负责项目经理在材料评估通过并完成人天核定后可结束售前评估。';
+        return '仅负责项目经理在材料评估通过并完成人天核定后可结束技术评估。';
     }
-  } else if (next.status === '评估完成') return '服务交付请求不能进入售前评估的结束状态。';
+  } else if (next.status === '评估完成') return '服务交付请求不能进入技术评估的结束状态。';
   return null;
 }

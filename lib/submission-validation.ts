@@ -107,7 +107,7 @@ export function runValidationQueue(record: ServiceRequest, refs: ValidationConte
       if (!rule.active) { if (!['pending', 'error'].includes(rule.status)) throw new Error(); continue; }
       if (typeof rule.active.enabled !== 'boolean') throw new Error();
       const definition = parseRuleDefinition(normalizeStoredSubmissionRule(rule).active);
-      if (!rule.active.enabled || !applies(definition)) continue;
+      if (rule.enabled === false || !rule.active.enabled || !applies(definition)) continue;
       const compiled = parseCompiledRule(rule.active.compiled);
       for (const check of compiled.checks) {
         const results = check.conditions.map(condition => evaluateCondition(condition, facts));

@@ -8,14 +8,17 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
-import { readLocal, storedFile, downloadFile, type InternalUser, type ServiceRequest, type StoredFile } from '@/lib/service-requests';
+import { MentionOptionLabel } from '@/components/mention-option-label';
+import { internalProjectProvider } from '@/lib/service-project-providers';
+import type { CustomerRef } from '@/lib/service-requests';
+import { readLocal, storedFile, downloadFile, type ContactRef, type InternalUser, type ServiceRequest, type StoredFile } from '@/lib/service-requests';
 import { isInternal, meetingAttachmentAccept, meetingAttachmentIssue, type OperationActor } from '@/lib/request-operations';
 import { addSupplement, canAddSupplement, visibleSupplements } from '@/lib/request-supplements';
 
 import { mentionQuery, editMentions, insertMention, supplementMentionUsers, addMentionCollaborator, type SupplementMention } from '@/lib/supplement-mentions';
 
-export function RequestSupplements({ record, actor, customerId, users, busy, save }: {
-  record: ServiceRequest; actor: OperationActor; customerId?: string; users: InternalUser[]; busy: boolean;
+export function RequestSupplements({ record, actor, customerId, users, contacts = [], customers = [], busy, save }: {
+  record: ServiceRequest; actor: OperationActor; customerId?: string; users: InternalUser[]; contacts?: ContactRef[]; customers?: CustomerRef[]; busy: boolean;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
 }) {
   const [comment, setComment] = useState('');
@@ -37,7 +40,7 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
   const disabled = busy || working || !!pendingMention;
   const editable = canAddSupplement(record, actor, customerId);
   const items = visibleSupplements(record, actor);
-  const mentionUsers = supplementMentionUsers(record, actor, users);
+  const mentionUsers = supplementMentionUsers(record, actor, users, contacts);
   const matches = query ? mentionUsers.filter(user => (isInternal(actor.role) ? `${user.name} ${user.email} ${user.department}` : user.name).toLowerCase().includes(query.query.toLowerCase())).slice(0, 12) : [];
   const selectedOption = Math.min(activeOption, Math.max(0, matches.length - 1));
   useEffect(() => { if (query) activeMention.current?.scrollIntoView({ block: 'nearest' }); }, [selectedOption, query?.query]);
@@ -52,7 +55,7 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
   }
   function chooseMention(user: InternalUser) {
     if (!query || disabled) return;
-    if (isInternal(actor.role) && !record.internalParticipants?.some(person => person.userId === user.id)) {
+    if (isInternal(actor.role) && !record.externalCollaborators?.some(person => person.contactId === user.id) && !record.internalParticipants?.some(person => person.userId === user.id)) {
       setPendingMention({ user, start: query.start, end: caret }); setJoiningError(''); setQuery(null);
       return;
     }
@@ -70,7 +73,7 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
     lock.current = true; setWorking(true); setJoiningError('');
     try {
       const [references, requests] = await Promise.all([
-        readLocal<{ id: string; payload?: { users?: InternalUser[] } }>('references'),
+        readLocal<{ id: string; payload?: { users?: InternalUser[]; contacts?: ContactRef[] } }>('references'),
         readLocal<ServiceRequest>('requests'),
       ]);
       const latest = requests.find(item => item.id === record.id);
@@ -106,7 +109,7 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
       {editable ? <div className="sr-supplement-composer">
         <div className="sr-mention-composer">
           <Popover open={!!query && !disabled} modal={false} onOpenChange={open => { if (!open) setQuery(null); }}>
-          <Textarea ref={commentInput} aria-label="补充说明或评论" placeholder="填写补充说明或评论，输入 @ 选择内部用户，也可仅上传附件" value={comment}
+          <Textarea ref={commentInput} aria-label="补充说明或评论" placeholder="填写补充说明或评论，输入 @ 选择协作人，也可仅上传附件" value={comment}
             aria-autocomplete="list" aria-controls={query ? listId : undefined} aria-activedescendant={query && matches.length ? `${listId}-${selectedOption}` : undefined}
             onChange={event => updateComment(event.target.value, event.target.selectionStart)}
             onSelect={event => { const position = event.currentTarget.selectionStart; setCaret(position); setQuery(mentionQuery(event.currentTarget.value, position)); }}
@@ -119,12 +122,14 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
             }} disabled={disabled} rows={4} />
           <PopoverPrimitive.Portal>
           <PopoverPrimitive.Positioner anchor={commentInput} positionMethod="fixed" side="bottom" align="start" sideOffset={6} collisionPadding={16} collisionAvoidance={{ side: 'flip', align: 'shift' }} className="sr-mention-positioner">
-          <PopoverPrimitive.Popup className="sr-mention-picker" initialFocus={false} finalFocus={false} aria-label="选择 @ 用户">
-            <p>{isInternal(actor.role) ? '选择内部用户' : '选择内部协作人或项目经理'}</p>
-            <div role="listbox" id={listId} aria-label="可 @ 的内部用户">
+          <PopoverPrimitive.Popup className="sr-mention-picker" initialFocus={false} finalFocus={false} aria-label="@协作人">
+            <p>@协作人</p>
+            <div role="listbox" id={listId} aria-label="可 @ 的协作人">
               {matches.map((user, index) => <button type="button" role="option" aria-selected={index === selectedOption} id={`${listId}-${index}`} key={user.id} ref={index === selectedOption ? activeMention : undefined}
                 onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveOption(index)} onClick={() => chooseMention(user)}>
-                <strong>{user.name}</strong><small>{isInternal(actor.role) ? [user.department, user.email].filter(Boolean).join(' · ') : user.id === record.operations?.assessment?.managerId ? '项目经理' : '内部协作人'}</small>
+                <MentionOptionLabel name={user.name} email={user.email} companyName={record.externalCollaborators?.some(person => person.contactId === user.id)
+                  ? customers.find(customer => customer.id === contacts.find(contact => contact.id === user.id)?.customerId)?.name
+                  : internalProjectProvider.name} />
               </button>)}
             </div>
             {!matches.length && <span className="sr-mention-empty">没有匹配的可选用户</span>}
@@ -140,7 +145,7 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
         <div className="sr-supplement-toolbar">
           <div className="sr-supplement-upload">
             <Button variant="outline" disabled={disabled} onClick={() => uploadInput.current?.click()}><Paperclip size={16} />上传附件</Button>
-            <Button variant="ghost" disabled={disabled} aria-label="@内部用户" onClick={() => {
+            <Button variant="ghost" disabled={disabled} aria-label="@协作人" onClick={() => {
               const input = commentInput.current;
               const start = input?.selectionStart ?? comment.length, end = input?.selectionEnd ?? start;
               const prefix = start > 0 && !/[\s（(，,。；;]/.test(comment[start - 1]) ? ' @' : '@';
@@ -148,7 +153,7 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
               const position = start + prefix.length;
               updateComment(next, position);
               requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(position, position); });
-            }}><AtSign size={16} />内部用户</Button>
+            }}><AtSign size={16} />协作人</Button>
             <span>单文件不超过 20 MB</span>
             <input ref={uploadInput} hidden aria-label="上传补充资料附件" type="file" multiple accept={meetingAttachmentAccept} disabled={disabled} onChange={event => {
               const selected = Array.from(event.target.files ?? []).map(storedFile);
@@ -163,9 +168,10 @@ export function RequestSupplements({ record, actor, customerId, users, busy, sav
           if (disabled || lock.current) return;
           lock.current = true; setWorking(true); setError('');
           try {
-            const references = await readLocal<{ id: string; payload?: { users?: InternalUser[] } }>('references');
-            const latestUsers = references.find(reference => reference.id === 'workspace')?.payload?.users ?? [];
-            const next = addSupplement(record, actor, customerId, { id: crypto.randomUUID(), authorId: actor.id, author: actor.name, at: new Date().toISOString(), comment, mentions, files, externalVisible: isInternal(actor.role) ? externalVisible : true }, latestUsers);
+            const references = await readLocal<{ id: string; payload?: { users?: InternalUser[]; contacts?: ContactRef[] } }>('references');
+            const workspace = references.find(reference => reference.id === 'workspace')?.payload;
+            const latestUsers = workspace?.users ?? [];
+            const next = addSupplement(record, actor, customerId, { id: crypto.randomUUID(), authorId: actor.id, author: actor.name, at: new Date().toISOString(), comment, mentions, files, externalVisible: isInternal(actor.role) ? externalVisible : true }, latestUsers, workspace?.contacts ?? []);
             if (await save(next, '补充信息已发布')) { setComment(''); setMentions([]); setFiles([]); setQuery(null); setExternalVisible(!isInternal(actor.role)); }
             else setError('保存失败，填写内容已保留，请重试。');
           } catch (error) { setError(error instanceof Error ? error.message : '发布失败'); }

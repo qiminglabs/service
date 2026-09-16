@@ -62,6 +62,7 @@ import type {
 } from '@/lib/request-operations';
 
 type Props = {
+  contacts?: import('@/lib/service-requests').ContactRef[];
   customers: CustomerRef[];
   services: CatalogService[];
   record: ServiceRequest;
@@ -137,6 +138,7 @@ function Summary({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function RequestOperationsTabs({
+  contacts,
   customers,
   services,
   record,
@@ -242,11 +244,11 @@ export function RequestOperationsTabs({
         <div className="sr-detail-layout">
           <div className="sr-detail-main">
             <TabsContent value="overview">
-              {!isInternal(role) && requestTypeOf(record) !== '售前评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
+              {!isInternal(role) && requestTypeOf(record) !== '技术评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
               {children}
             </TabsContent>
             <TabsContent value="supplements">
-              <RequestSupplements users={users} key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
+              <RequestSupplements customers={customers} contacts={contacts} users={users} key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
             </TabsContent>
             <TabsContent value="meetings">
               <section className="sr-panel sr-ops-panel">

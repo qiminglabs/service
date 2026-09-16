@@ -17,6 +17,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import type { RequestField } from '@/components/request-field-settings';
 import type { CustomerRef } from '@/lib/service-requests';
+import { readLocal, type ServiceRequest } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
 import { normalizeProjectFields, isSystemProjectField } from '@/lib/service-project-fields';
 import {
@@ -25,6 +26,7 @@ import {
   type ProjectServiceProvider,
 } from '@/lib/service-project-providers';
 import { ServiceProjectCollaborators } from '@/components/service-project-collaborators';
+import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { ServiceProjectItems } from '@/components/service-project-items';
 import { ServiceProjectMaterials } from '@/components/service-project-materials';
 import { ServiceProjectOperations } from '@/components/service-project-operations';
@@ -105,6 +107,7 @@ export function ServiceProjects({
 }) {
   const openedLink = useRef('');
   const [records, setRecords] = useState<ServiceProjectRecord[]>([]);
+  const [requestNames, setRequestNames] = useState<Record<string, string>>({});
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
@@ -175,10 +178,14 @@ export function ServiceProjects({
 
   useEffect(() => {
     let active = true;
-    readServiceProjects(actor)
-      .then((result) => {
+    Promise.all([
+      readServiceProjects(actor),
+      projectItemAudience(actor) === 'internal' ? readLocal<ServiceRequest>('requests') : Promise.resolve([]),
+    ])
+      .then(([result, requests]) => {
         if (active) {
           setRecords(result);
+          setRequestNames(Object.fromEntries(requests.map(request => [request.id, request.title])));
           setReady(true);
           if (!initialProjectId) setError('');
           if (initialProjectId && openedLink.current !== initialProjectId) {
@@ -203,7 +210,12 @@ export function ServiceProjects({
     setReady(false);
     setError('');
     try {
-      setRecords(await readServiceProjects(actor));
+      const [projects, requests] = await Promise.all([
+        readServiceProjects(actor),
+        projectItemAudience(actor) === 'internal' ? readLocal<ServiceRequest>('requests') : Promise.resolve([]),
+      ]);
+      setRecords(projects);
+      setRequestNames(Object.fromEntries(requests.map(request => [request.id, request.title])));
       setReady(true);
     } catch {
       setError('无法读取服务项目，请刷新后重试。');
@@ -650,11 +662,11 @@ export function ServiceProjects({
                     }}
                   >
                     <section
-                      className="sr-panel"
+                      className={`sr-panel${projectItemAudience(actor) === 'internal' ? ' sr-customer-visible-panel' : ''}`}
                       aria-labelledby="project-basic-heading"
                     >
                       <div className="sr-panel-heading">
-                        <h3 id="project-basic-heading">基本信息</h3>
+                        <div className="sr-panel-title-with-visibility"><h3 id="project-basic-heading">基本信息</h3>{projectItemAudience(actor) === 'internal' && <CustomerVisibleBadge />}</div>
                       </div>
                       {editing?.requestConversion?.mapping.readonly && Object.values(editing.requestConversion.mapping.readonly).some(Boolean) && <p className="sr-project-readonly-notice">部分信息由来源请求带入，已按转换配置设为只读。</p>}
                       <fieldset className="sr-form-grid" disabled={saving || cancelled}>
@@ -890,11 +902,11 @@ export function ServiceProjects({
                   />
                   {editing && (
                     <section
-                      className="sr-panel"
+                      className={`sr-panel${projectItemAudience(actor) === 'internal' ? ' sr-customer-visible-panel' : ''}`}
                       aria-labelledby="project-system-heading"
                     >
                       <div className="sr-panel-heading">
-                        <h3 id="project-system-heading">系统信息</h3>
+                        <div className="sr-panel-title-with-visibility"><h3 id="project-system-heading">系统信息</h3>{projectItemAudience(actor) === 'internal' && <CustomerVisibleBadge />}</div>
                       </div>
                       <dl className="sr-system-info">
                         <div>
@@ -936,6 +948,8 @@ export function ServiceProjects({
                       record={editing}
                       actor={actor}
                       users={collaboratorDirectory.users}
+                      contacts={collaboratorDirectory.contacts}
+                      customers={customers}
                       busy={saving}
                       publish={publishSupplement}
                       joinMention={(id) =>
@@ -967,6 +981,7 @@ export function ServiceProjects({
                 )}
               </div>
               <ServiceProjectCollaborators
+                showCustomerVisibility={projectItemAudience(actor) === 'internal'}
                 project={
                   editing ?? {
                     customerId: form.customerId,
@@ -1047,10 +1062,13 @@ export function ServiceProjects({
                   {labels.name} / {labels.id}
                 </th>
                 <th>{labels.customerId}</th>
+                {projectItemAudience(actor) === 'internal' && <th>服务方</th>}
+                {projectItemAudience(actor) === 'internal' && <th>来源服务请求</th>}
+                <th>服务项</th>
                 <th>{labels.expectedServiceDate}</th>
                 <th>{labels.status}</th>
-                <th>{labels.createdBy}</th>
-                <th>{labels.createdAt}</th>
+                {projectItemAudience(actor) === 'internal' && <th>创建站点</th>}
+                <th>创建时间/创建人</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -1067,6 +1085,11 @@ export function ServiceProjects({
                     <small>{record.id}</small>
                   </td>
                   <td>{customerName(record.customerId)}</td>
+                  {projectItemAudience(actor) === 'internal' && <td>{availableProviders.find(provider => provider.id === record.serviceProviderId)?.name || record.serviceProviderName || '未指定'}</td>}
+                  {projectItemAudience(actor) === 'internal' && <td>{record.sourceServiceRequestId
+                    ? <a className="app-list-link" href={`/?request=${encodeURIComponent(record.sourceServiceRequestId)}&user=${encodeURIComponent(actor.id)}`} target="_blank" rel="noopener noreferrer">{requestNames[record.sourceServiceRequestId] || record.requestConversion?.assessmentSnapshot?.requestTitle || record.sourceServiceRequestId}</a>
+                    : '未关联'}</td>}
+                  <td>{record.items?.length ?? 0} 项</td>
                   <td>{record.expectedServiceDate}</td>
                   <td>
                     <span
@@ -1086,8 +1109,8 @@ export function ServiceProjects({
                       {record.status}
                     </span>
                   </td>
-                  <td>{record.createdBy}</td>
-                  <td>{timeLabel(record.createdAt)}</td>
+                  {projectItemAudience(actor) === 'internal' && <td>{record.createdSite ?? '内部系统'}</td>}
+                  <td>{timeLabel(record.createdAt)}<small>{record.createdBy || '—'}</small></td>
                   <td>
                     <Button
                       variant="ghost"

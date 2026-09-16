@@ -156,7 +156,7 @@ export function serviceProjectIssue(
     !Number.isFinite(date.getTime()) ||
     date.toISOString().slice(0, 10) !== value
   )
-    return '请选择有效的期望服务时间。';
+    return '请选择有效的期望服务日期。';
   if (!input.customerId) return '请选择客户。';
   if (
     input.customerId !== previous?.customerId &&

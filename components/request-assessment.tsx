@@ -142,7 +142,7 @@ export function RequestAssessment({
     plan = currentPlan(record),
     effort = assessedEffort(record);
   const effortTotals = effortTotalsByMethod(record, a.effort?.lines ?? []);
-  const presales = requestTypeOf(record) === '售前评估';
+  const presales = requestTypeOf(record) === '技术评估';
   const entitlementAllocations = activeEntitlementAllocations(record);
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
   const needsHardware = hardwareItems(record).length > 0;
@@ -547,7 +547,7 @@ export function RequestAssessment({
         </section></>}
         {presales && <section className="sr-assessment-plan">
           <div className="sr-assessment-section-title"><strong>评估完成</strong>{record.status === '评估完成' && <Badge>已完成</Badge>}</div>
-          <p className="sr-help">{record.status === '评估完成' ? '售前评估已完成。如需继续交付，由负责项目经理点击页面上方“转为服务交付”。' : '完成人天核定后结束售前评估。'}</p>
+          <p className="sr-help">{record.status === '评估完成' ? '技术评估已完成。如需继续交付，由负责项目经理点击页面上方“转为服务交付”。' : '完成人天核定后结束技术评估。'}</p>
         </section>}
       </div>
       <Dialog

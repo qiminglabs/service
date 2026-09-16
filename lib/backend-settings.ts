@@ -8,7 +8,7 @@ export const backendSettingsSections = [
     { key: 'assessment-hardware', label: '硬件产品经理分配' },
     { key: 'approval-designer', label: '特殊审批' },
   ] },
-  { key: 'execution-flow', label: '服务执行流程', tabs: [{ key: 'project-collaborators', label: '协作人分配' }, { key: 'request-project-mapping', label: '请求转项目映射' }] },
+  { key: 'execution-flow', label: '服务执行流程', tabs: [{ key: 'service-flows', label: '服务流程' }, { key: 'service-flow-assignment', label: '服务流程分配' }, { key: 'project-collaborators', label: '协作人分配' }, { key: 'request-project-mapping', label: '请求转项目映射' }] },
   { key: 'pricing', label: '计价与权益', tabs: [{ key: 'entitlement-conversions', label: '权益换算' }] },
 ] as const;
 

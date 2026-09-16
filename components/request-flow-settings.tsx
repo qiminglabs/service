@@ -9,7 +9,8 @@ import {
 } from '@/lib/hardware-assessment-trigger';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { RuleDeleteDialog } from '@/components/rule-delete-dialog';
+import { RuleDisableDialog } from '@/components/rule-disable-dialog';
+import { DisabledRuleVersions } from '@/components/disabled-rule-versions';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import { UserSearchSelect } from '@/components/user-search-select';
@@ -59,10 +60,10 @@ export function RequestFlowSettings({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
+  const [disableTarget, setDisableTarget] = useState<{ rule: RoutingRule; revision: number }>();
   const [defaultUserId, setDefaultUserId] = useState('');
   const [open, setOpen] = useState(false),
     [target, setTarget] = useState<RoutingRule>();
-  const [deleteTarget, setDeleteTarget] = useState<{ rule: RoutingRule; revision: number }>();
   const [requirement, setRequirement] = useState(''),
     [priority, setPriority] = useState('10'),
     [userId, setUserId] = useState('');
@@ -75,6 +76,11 @@ export function RequestFlowSettings({
     policy = data.config[role],
     eligible = routingUsers(data.workspace.users, role),
     canManage = canManageRouting(actor);
+  const activeRules = policy.rules.filter(rule => rule.enabled);
+  const disabledVersions = policy.rules.flatMap(rule => [
+    ...(!rule.enabled ? [{ ...rule, archivedAt: rule.updatedAt, archivedBy: rule.updatedBy }] : []),
+    ...(rule.history ?? []),
+  ]).sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''));
   const definition = { requirement, priority: Number(priority), userId },
     testCurrent = tested?.key === routingTestKey(definition);
   const hardwareTrigger = parseHardwareAssessmentTrigger(
@@ -343,23 +349,25 @@ export function RequestFlowSettings({
                 <th>优先级</th>
                 <th>自然语言描述</th>
                 <th>分配给</th>
+                <th>版本 / 状态</th>
                 <th>修改时间</th>
                 <th>修改人</th>
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              {policy.rules.map((rule) => (
+              {activeRules.map((rule) => (
                 <tr key={rule.id}>
                   <td>{rule.priority}</td>
                   <td>
                     <div className="submission-rule-requirement">
                       {rule.requirement}
-                      {!rule.enabled && <small className="submission-rule-status-note">历史停用规则，仅可删除</small>}
+
                       <details>
                         <summary>查看执行条件</summary>
                         <p>{describeRoute(rule.compiled, data.workspace)}</p>
                       </details>
+
                     </div>
                   </td>
                   <td>
@@ -368,6 +376,7 @@ export function RequestFlowSettings({
                       <small className="sr-error">（不可用）</small>
                     )}
                   </td>
+                  <td><span className="rule-version-status" data-enabled={rule.enabled}>v{rule.revision ?? 1} · {rule.enabled ? '已启用' : '已停用'}</span></td>
                   <td>{rule.updatedAt ? new Date(rule.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td>
                   <td>{rule.updatedBy ?? '—'}</td>
                   <td>
@@ -380,10 +389,12 @@ export function RequestFlowSettings({
                         >
                           编辑
                         </Button>}
-                        <Button variant="ghost" disabled={busy} onClick={() => {
-                          setDeleteTarget({ rule, revision: data.config.revision });
-                          setFormError(''); dialogActive.current = true;
-                        }}>删除</Button>
+                        {rule.enabled && <Button variant="ghost" disabled={busy} onClick={() => {
+                          setFormError('');
+                          setDisableTarget({ rule, revision: data.config.revision });
+                          dialogActive.current = true;
+                        }}>停用</Button>}
+                        {!rule.enabled && <span className="sr-help">只读</span>}
                       </div>
                     ) : (
                       '—'
@@ -391,11 +402,11 @@ export function RequestFlowSettings({
                   </td>
                 </tr>
               ))}
-              {!policy.rules.length && (
+              {!activeRules.length && (
                 <tr>
-                  <td colSpan={6} className="routing-empty">
+                  <td colSpan={7} className="routing-empty">
                     {ready
-                      ? '尚无条件规则，将使用默认负责人。'
+                      ? '暂无启用的条件规则，将使用默认负责人。'
                       : '正在读取配置…'}
                   </td>
                 </tr>
@@ -404,16 +415,16 @@ export function RequestFlowSettings({
           </table>
         </div>
       </section>
-      <RuleDeleteDialog open={!!deleteTarget} requirement={deleteTarget ? `优先级 ${deleteTarget.rule.priority} · ${deleteTarget.rule.requirement}` : ''}
-        description="删除后，新请求按剩余规则及默认负责人分配；已有请求的负责人保持不变。"
-        busy={busy} error={formError}
-        onCancel={() => { setDeleteTarget(undefined); dialogActive.current = false; }}
-        onConfirm={() => void run(async () => {
-          if (!deleteTarget) return;
-          await persistPolicy({ ...policy, rules: policy.rules.filter(rule => rule.id !== deleteTarget.rule.id) }, undefined, deleteTarget.revision);
-          setDeleteTarget(undefined); dialogActive.current = false;
-          setNotice('分配规则已删除，后续分配使用剩余规则及默认负责人。');
-        }, true)} />
+      <DisabledRuleVersions targetLabel="分配给" ready={ready} versions={disabledVersions.map((version, index) => ({
+        key: `${version.id}-${version.revision ?? 1}-${index}`,
+        priority: version.priority,
+        requirement: version.requirement,
+        condition: describeRoute(version.compiled, data.workspace),
+        target: personName(version.userId),
+        version: version.revision ?? 1,
+        disabledAt: version.archivedAt,
+        disabledBy: version.archivedBy,
+      }))} />
       <section className="routing-preview" aria-label="分配预览">
         <strong>分配预览</strong>
         <NativeSelect
@@ -480,6 +491,20 @@ export function RequestFlowSettings({
           </div>
         )}
       </section>
+      <RuleDisableDialog
+        open={!!disableTarget}
+        requirement={disableTarget ? `v${disableTarget.rule.revision ?? 1} · ${disableTarget.rule.requirement}` : ''}
+        description="停用后，新请求将不再匹配此规则，已有请求的负责人保持不变。"
+        busy={busy}
+        error={formError}
+        onCancel={() => { setDisableTarget(undefined); setFormError(''); dialogActive.current = false; }}
+        onConfirm={() => { if (disableTarget) void run(async () => {
+          await persistPolicy({ ...policy, rules: policy.rules.map(item => item.id === disableTarget.rule.id ? { ...item, enabled: false } : item) }, undefined, disableTarget.revision);
+          setDisableTarget(undefined);
+          dialogActive.current = false;
+          setNotice('分配规则已停用，已有请求的负责人保持不变。');
+        }, true); }}
+      />
       <Dialog
         open={open}
         onOpenChange={(value) => {
