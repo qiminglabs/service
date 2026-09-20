@@ -3,7 +3,7 @@ import type { CustomerServiceProject } from './customer-service-projects';
 import type { ProjectCollaboratorDirectory } from './service-project-collaborators';
 import type { CustomerRef } from './service-requests';
 import { fixedIdentityRoles } from './internal-users.ts';
-import { canSubmitProjectReview, isPartnerCreatedProject, isResponsibleProjectManager } from './service-project-work-order-policy.ts';
+import { canSubmitProjectReview, isAssignedProjectEngineer, isPartnerCreatedProject, isResponsibleProjectManager } from './service-project-work-order-policy.ts';
 import { assignedEngineers, canExecuteSpecificWorkOrder } from './service-work-orders.ts';
 import { currentProjectReviewApproval, pendingProjectWorklogs, projectReviewStale } from './service-project-review.ts';
 
@@ -58,12 +58,15 @@ export function serviceProjectNextStep(project: ServiceProjectRecord, directory:
       const engineer = engineers.find(actor => executable.some(order => canExecuteSpecificWorkOrder(project, order, actor)));
       return engineer ? engineerHint(engineer, '在「工单执行」中完成已指派工单的服务步骤。') : deliveryOwner('检查工单执行工程师是否有效，按资质规则重新指派后继续执行。');
     }
-    if (partnerCreated) return deliveryOwner('工单已全部完成，在「客户确认」中点击「发送报告并发起确认」。');
+    if (partnerCreated) return deliveryOwner('工单已全部完成，创建人或已指派的执行工程师可在「客户确认」中点击「发送报告并发起确认」。');
     const engineer = engineers.find(actor => canSubmitProjectReview(project, actor));
     return engineer ? engineerHint(engineer, '工单已全部完成，由任意已指派的执行工程师点击「提交复核」。') : admin('恢复项目已指派执行工程师的有效账号后，由工程师提交复核。');
   }
   if (partnerCreated) return deliveryOwner('在「客户确认」中核对交付内容，发送报告并发起客户确认。');
-  if (external) return pm('完成交付核对及内部审核后，发起客户确认。');
+  if (external) {
+    const engineer = engineers.find(actor => actor.role === '合作伙伴服务工程师' && isAssignedProjectEngineer(project, actor));
+    return engineer ? engineerHint(engineer, '完成内部审核后，在「客户确认」中发送报告并发起客户确认。') : pm('完成交付核对及内部审核后，发起客户确认。');
+  }
   if (pendingProjectWorklogs(project).length) return pm('在「工时」中确认待确认工时，再进行人天核定。');
   if (!project.review?.effort || projectReviewStale(project) || project.review.effort.stage === '过程')
     return pm('在「复核」中点击「核定人天」，核对各工单的最终计价人天。');
@@ -74,7 +77,7 @@ export function serviceProjectNextStep(project: ServiceProjectRecord, directory:
     return approver ? staff(named(approver.name, '当前审批人'), '在「复核」中处理项目额度审批。') : admin('恢复当前审批人的有效账号后继续处理项目额度审批。');
   }
   const owner = users.find(user => user.id === customers.find(customer => customer.id === project.customerId)?.ownerUserId);
-  return staff(named(owner?.name, owner ? '客户所有人' : '内部申请人或客户所有人'), '在「复核」中核对服务依据；额度不足时补充依据或发起额度审批，足额后发送报告并发起客户确认。');
+  return staff(named(owner?.name, owner ? '客户所有人' : '内部申请人或客户所有人'), '在「复核」中核对服务依据；额度不足时补充依据或发起额度审批，足额后发送报告并发起客户确认，也可由已指派的执行工程师办理。');
 }
 
 // Customer guidance uses only the public projection; no internal assessments or approvals are exposed.

@@ -2,6 +2,7 @@ import {
   openDatabase,
   readLocal,
   type InternalUser,
+  type CustomerRef,
 } from './service-requests.ts';
 import { canManageRouting } from './assessment-routing-store.ts';
 import { validateProjectReportTemplate } from './flow-report-templates.ts';
@@ -17,7 +18,11 @@ import {
 export async function readReportTemplateData() {
   const rows = await readLocal<{ id: string; payload?: unknown }>('references');
   const workspace = rows.find((r) => r.id === 'workspace')?.payload as
-    | { projectFields?: RequestField[]; requestFields?: RequestField[] }
+    | {
+        projectFields?: RequestField[];
+        requestFields?: RequestField[];
+        customers?: CustomerRef[];
+      }
     | undefined;
   return {
     library: parseReportLibrary(
@@ -25,6 +30,7 @@ export async function readReportTemplateData() {
         | ReportTemplateLibrary
         | undefined,
     ),
+    customers: workspace?.customers ?? [],
     projectFields: normalizeProjectFields(workspace?.projectFields),
     orderFields: workspace?.requestFields ?? [],
     forms: executionFormsFromRows(rows).library.forms,

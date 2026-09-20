@@ -12,7 +12,7 @@ import type { EntitlementAllocation } from './request-entitlement-reservations';
 import type { EffortPricingLine } from './request-pricing';
 import { isInternal } from './request-operations.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
-import { isPartnerCreatedProject, canManagePartnerProjectConfirmation, partnerProjectConfirmationIssue, canManageProjectAsManager, projectReviewIssue, projectCustomerConfirmationLocked } from './service-project-work-order-policy.ts';
+import { isPartnerCreatedProject, isAssignedProjectEngineer, canManagePartnerProjectConfirmation, partnerProjectConfirmationIssue, canManageProjectAsManager, projectReviewIssue, projectCustomerConfirmationLocked } from './service-project-work-order-policy.ts';
 import { assetAvailable } from './request-assessment.ts';
 import { assetDayMethod } from './request-asset-coverage.ts';
 import { entitlementAvailable, effortEntitlementAllocations, activeEntitlementAllocations } from './request-entitlement-reservations.ts';
@@ -66,6 +66,15 @@ export function canManageProjectReviewBasis(p: ServiceProjectRecord, actor: Oper
   const source = ctx.requests.find(r => r.id === p.sourceServiceRequestId);
   const applicant = source ? source.createdById : p.createdSite !== '合作伙伴中心' ? p.createdById : '';
   return actor.id === applicant || actor.id === ctx.customers.find(c => c.id === p.customerId)?.ownerUserId;
+}
+export function canInitiateProjectConfirmation(p: ServiceProjectRecord, actor: OperationActor, ctx: ProjectReviewContext) {
+  if (actor.role === '合作伙伴服务工程师') {
+    const user = ctx.partnerUsers?.find(person => person.id === actor.id && person.status === '启用');
+    if (!user || !ctx.partners?.some(partner => partner.id === user.partnerId && partner.status === '启用')) return false;
+    if (isPartnerCreatedProject(p) && p.serviceProviderId !== `partner:${user.partnerId}`) return false;
+  } else if (fixedIdentityRoles[actor.id] !== actor.role || !ctx.users.some(user => user.id === actor.id && user.status === '启用')) return false;
+  return isPartnerCreatedProject(p) ? canManagePartnerProjectConfirmation(p, actor)
+    : canManageProjectReviewBasis(p, actor, ctx) || isAssignedProjectEngineer(p, actor);
 }
 export function sourceBasis(p: ServiceProjectRecord, ctx: ProjectReviewContext) {
   const source = ctx.requests.find(r => r.id === p.sourceServiceRequestId && r.status !== '已取消');
@@ -286,6 +295,8 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
     if (!isDemoAdministrator(actor, ctx.users) && (actor.role !== '客户' || !p.collaborators?.customer?.some(person => person.id === actor.id)
       || !ctx.contacts.some(person => person.id === actor.id && person.customerId === p.customerId && person.status === '启用')
       || !ctx.customers.some(c => c.id === p.customerId && c.status === '启用'))) throw new Error('仅本项目有效客户协作人可确认。');
+  } else if (action.type === 'confirm') {
+    if (!canInitiateProjectConfirmation(p, actor, ctx)) throw new Error('仅内部申请人、客户所有人、已指派工单的有效执行工程师或系统管理员可发起客户确认。');
   } else if (!isInternal(actor.role) || fixedIdentityRoles[actor.id] !== actor.role || !ctx.users.some(user => user.id === actor.id && user.status === '启用')) throw new Error('仅有效内部人员可处理项目复核。');
   if (p.status === '待确认' && ['effort', 'basis', 'gap-submit', 'gap-decide'].includes(action.type))
     throw new Error('已发起客户确认，人天核定和服务依据已锁定；客户拒绝并返回待复核后才能调整。');
@@ -359,7 +370,7 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
     decideApprovalExecution(approval, actor, ctx.users, action.approve, action.note, now);
     title = action.approve ? '项目额度审批通过' : '项目额度审批拒绝';
   } else if (action.type === 'confirm') {
-    if (!basisOwner || p.status !== '待复核') throw new Error('仅内部申请人或客户所有人可在待复核阶段发起客户确认。');
+    if (p.status !== '待复核') throw new Error('仅可在待复核阶段发起客户确认。');
     if (waiting) throw new Error('请先完成正在进行的额度审批，再发起客户确认。');
     const issue = projectReviewIssue(p); if (issue) throw new Error(issue);
     if (review.effort?.stage === '过程') throw new Error('请先确认最终人天核定。');
@@ -398,7 +409,7 @@ function applyPartnerConfirmation(p: ServiceProjectRecord, action: ProjectReview
       !ctx.contacts.some(person => person.id === actor.id && person.customerId === p.customerId && person.status === '启用') ||
       !ctx.customers.some(customer => customer.id === p.customerId && customer.status === '启用'))) throw new Error('仅本项目有效客户协作人可以确认项目。');
   } else {
-    if (!canManagePartnerProjectConfirmation(p, actor)) throw new Error('仅项目创建人、负责项目经理或系统管理员可以发起确认。');
+    if (!canInitiateProjectConfirmation(p, actor, ctx)) throw new Error('当前身份无权或账号已失效；仅项目创建人、负责项目经理、已指派工单的有效执行工程师或系统管理员可以发起确认。');
     if (actor.role === '合作伙伴服务工程师') {
       const user = ctx.partnerUsers?.find(person => person.id === actor.id && person.status === '启用');
       if (!user || p.serviceProviderId !== `partner:${user.partnerId}` || !ctx.partners?.some(partner => partner.id === user.partnerId && partner.status === '启用')) throw new Error('合作伙伴账号或所属企业已失效。');

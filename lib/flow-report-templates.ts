@@ -158,12 +158,55 @@ export function validateFlowReportTemplates(flow: ServiceFlow) {
     }
 }
 
+export function reportTemplateSteps(flow: ServiceFlow, templateId: string) {
+  return flow.steps.filter((step) =>
+    step.documents?.some(
+      (doc) => doc.reportTemplate?.template.id === templateId,
+    ),
+  );
+}
+
+export function validateFlowTemplateChanges(
+  previous: ServiceFlow | undefined,
+  next: ServiceFlow,
+) {
+  for (const template of next.reportTemplates ?? []) {
+    if (template.enabled) continue;
+    const references = reportTemplateSteps(next, template.id);
+    if (!references.length) continue;
+    // Keep existing legacy bindings readable; reject disabling or adding bindings.
+    const wasDisabled =
+      previous?.reportTemplates?.find((row) => row.id === template.id)
+        ?.enabled === false;
+    const unchangedBindings =
+      wasDisabled &&
+      references.every((step) =>
+        step.documents
+          ?.filter((doc) => doc.reportTemplate?.template.id === template.id)
+          .every((doc) =>
+            previous?.steps
+              .find((row) => row.id === step.id)
+              ?.documents?.some(
+                (old) =>
+                  old.id === doc.id &&
+                  old.reportTemplate?.template.id === template.id,
+              ),
+          ),
+      );
+    if (!unchangedBindings)
+      throw new Error(
+        `模板「${template.name}」被步骤「${references.map((step) => step.name).join('」、「')}」引用，请先替换或解除绑定后再停用。`,
+      );
+  }
+}
+
 export function setFlowReportTemplates(
   flow: ServiceFlow,
   templates: ReportTemplate[],
 ): ServiceFlow {
   const next = structuredClone(flow);
   next.reportTemplates = structuredClone(templates);
+  validateFlowTemplateChanges(flow, next);
   for (const step of next.steps)
     for (const doc of step.documents ?? []) {
       if (!doc.reportTemplate) continue;

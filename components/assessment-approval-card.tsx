@@ -27,7 +27,6 @@ export function AssessmentApprovalCard({ approval, fallbackGaps = [], children }
         {step.fallback && <small>默认审批人兜底：{step.fallbackReason}</small>}
         {step.note && <p>{step.note} · {stamp(step.decidedAt)}</p>}
       </li>)}</ol>}
-      {approval.note && <p className="sr-ops-decision">{approval.decidedBy}：{approval.note}</p>}
     </div>
     {children}
   </article>;

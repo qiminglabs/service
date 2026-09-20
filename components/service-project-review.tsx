@@ -1,6 +1,5 @@
 'use client';
 
-import { AdministratorCustomerDecision } from '@/components/administrator-customer-decision';
 import { canActForUser } from '@/lib/demo-permissions';
 import { useEffect, useRef, useState } from 'react';
 import { ProjectConfirmationPreview } from '@/components/project-confirmation-preview';
@@ -14,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ProjectConfirmationRecord } from '@/components/project-confirmation-record';
 import { canManageProjectAsManager } from '@/lib/service-project-work-order-policy';
-import { calculateProjectReviewEffort, canManageProjectReviewBasis, currentProjectReviewApproval, projectReviewCoverage, projectReviewCovered, projectReviewOf, projectReviewStale, projectAssetAvailable, projectBaselineLine, projectReviewCapacities, projectReviewProjection, projectSourceIssue, projectCustomerConfirmationStale, pendingProjectWorklogs, type ProjectReviewContext, type ProjectReviewAction } from '@/lib/service-project-review';
+import { calculateProjectReviewEffort, canManageProjectReviewBasis, canInitiateProjectConfirmation, currentProjectReviewApproval, projectReviewCoverage, projectReviewCovered, projectReviewOf, projectReviewStale, projectAssetAvailable, projectBaselineLine, projectReviewCapacities, projectReviewProjection, projectSourceIssue, projectCustomerConfirmationStale, pendingProjectWorklogs, type ProjectReviewContext, type ProjectReviewAction } from '@/lib/service-project-review';
 import { projectAssetBasisRows, type ProjectAssetBasisRow } from '@/lib/service-project-basis-rows';
 import { readProjectReviewContext, saveProjectReview } from '@/lib/service-project-review-store';
 import { formatDays, parseDayQuantity, sumDays, roundDays } from '@/lib/day-quantity';
@@ -96,7 +95,6 @@ export function ServiceProjectReview({ project, actor, busy, onBusy, onSaved, on
   }
   return <section className="sr-panel sr-assessment project-review" aria-label="项目复核">
     <div className="sr-ops-heading"><h3>复核</h3></div>
-    <AdministratorCustomerDecision project={project} actor={actor} busy={busy} onBusy={onBusy} onSaved={onSaved} />
     <div className="sr-assessment-body">
       <div className="project-review-source"><div><span>来源申请</span><strong>{snapshot ? `${snapshot.requestTitle} · ${snapshot.requestId}` : project.sourceServiceRequestId || '无来源基准'}</strong>{snapshot?.effort && <Meta author={snapshot.effort.author} at={snapshot.effort.at} />}</div>{(project.sourceServiceRequestId || snapshot?.requestId) && <Button variant="outline" nativeButton={false} render={<a aria-label="查看服务请求" href={`/?request=${encodeURIComponent(project.sourceServiceRequestId || snapshot!.requestId)}&user=${encodeURIComponent(actor.id)}`} target="_blank" rel="noopener noreferrer" />}>查看服务请求</Button>}</div>
       {(error && !mode || sourceIssue) && <p className="sr-error" role="alert">{error && !mode ? error : sourceIssue}</p>}
@@ -109,7 +107,7 @@ export function ServiceProjectReview({ project, actor, busy, onBusy, onSaved, on
             <div key={total.method} className="sr-pricing-primary"><span>计价{total.method}总人天</span><strong>{formatDays(total.billableDays)} <small>人天</small></strong></div>
           ))}
         </div>}
-        <div className="sr-table-scroll"><table className="sr-table app-list-table project-review-aligned-table"><colgroup><col style={{ width: 'var(--review-name-width)' }} /><col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '14%' }} /><col style={{ width: '10%' }} /><col style={{ width: 'var(--review-days-width)' }} /></colgroup><thead><tr><th>工单</th><th>服务方式</th><th>原核定计价人天</th><th>当前累计人天</th><th>计价系数</th><th>最终计价人天</th></tr></thead><tbody>{effortRows.map(line => (
+        <div className="sr-table-scroll"><table className="sr-table app-list-table project-review-aligned-table"><colgroup><col style={{ width: 'var(--review-name-width)' }} /><col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} /><col style={{ width: '10%' }} /><col style={{ width: 'var(--review-days-width)' }} /></colgroup><thead><tr><th>工单</th><th>服务方式</th><th>原核定计价人天</th><th>当前累计人天</th><th>计价系数</th><th>最终计价人天</th></tr></thead><tbody>{effortRows.map(line => (
           <tr key={line.itemId}><td><button className="project-review-link" onClick={() => onViewOrder(line.itemId)}>{line.serviceName}</button></td><td>{line.method}</td><td>{line.baselineDays === undefined ? '—' : formatDays(line.baselineDays)}</td><td>{formatDays(line.currentDays)}{line.hasPending && <span className="project-review-pending-days">（待确定 {line.pendingDays.toFixed(1)}）</span>}</td><td>{line.kind === 'entitlement' ? '—' : line.priceCoefficient ?? '—'}</td><td>{line.kind === 'entitlement' ? '—' : line.finalDays === null ? '待核定' : formatDays(line.finalDays)}</td></tr>
         ))}{!effortRows.length && <tr><td colSpan={6}>暂无可核定工单</td></tr>}</tbody></table></div>
         {review.effort?.note && <div className="sr-assessment-note"><strong>核定备注／调整原因</strong><p>{review.effort.note}</p></div>}
@@ -129,7 +127,7 @@ export function ServiceProjectReview({ project, actor, busy, onBusy, onSaved, on
         {review.settlement && <div className="sr-assessment-note"><strong>已完成核销 · {stamp(review.settlement.at)}</strong>{review.settlement.released.map(row => <p key={row.assetId}>{row.name} · 已释放 {formatDays(row.days)} 人天</p>)}{review.settlement.releasedEntitlements.map((row, i) => <p key={`${row.objectId}:${i}`}>{row.name} · 已释放 {entitlementLabel(row.kind)} {row.quantity} 份</p>)}</div>}
       </section>
       <section className="sr-assessment-plan">
-        <div className="sr-assessment-section-title"><Step index={3} done={confirmation?.state === '已确认' && !confirmedStale}>客户确认</Step>{owner && project.status === '待复核' && <Button disabled={busy || !effective || needsFinal || !covered || waiting} onClick={() => void open('confirm')}>{confirmation && !confirmation.invalidatedAt && confirmation.state !== '已拒绝' ? '核对并沿用确认' : '发送报告并发起确认'}</Button>}</div>
+        <div className="sr-assessment-section-title"><Step index={3} done={confirmation?.state === '已确认' && !confirmedStale}>客户确认</Step>{ctx && canInitiateProjectConfirmation(project, actor, ctx) && project.status === '待复核' && <Button disabled={busy || !effective || needsFinal || !covered || waiting} onClick={() => void open('confirm')}>{confirmation && !confirmation.invalidatedAt && confirmation.state !== '已拒绝' ? '核对并沿用确认' : '发送报告并发起确认'}</Button>}</div>
         {!confirmation && <p className="sr-help">{project.status === '进行中' ? '工单完成并最终核定后，发起客户确认。' : '尚未发起客户确认'}</p>}
         {review.confirmations.slice().reverse().map((entry, i) => <ProjectConfirmationRecord key={entry.id} entry={entry} version={review.confirmations.length - i} />)}
       </section>

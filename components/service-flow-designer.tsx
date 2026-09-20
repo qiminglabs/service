@@ -288,6 +288,7 @@ export function ServiceFlowDesigner({
             actor={actor}
             flow={flow}
             readonly={!editable}
+            onViewStep={(stepId) => { setSelected(stepId); setTab('steps'); }}
             onTemplatesChange={(templates) =>
               edit(setFlowReportTemplates(flow, templates))
             }

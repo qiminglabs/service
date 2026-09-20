@@ -1,13 +1,12 @@
 'use client';
 
-import { AdministratorCustomerDecision } from '@/components/administrator-customer-decision';
 import { ProjectConfirmationMail } from '@/components/project-confirmation-mail';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ServiceProjectDeliverables } from '@/components/service-project-deliverables';
-import { canManagePartnerProjectConfirmation, partnerProjectConfirmationIssue } from '@/lib/service-project-work-order-policy';
+import { canManagePartnerProjectConfirmation, partnerProjectConfirmationIssue, isPartnerCreatedProject, isAssignedProjectEngineer } from '@/lib/service-project-work-order-policy';
 import { projectConfirmationContent, projectCustomerConfirmationStale } from '@/lib/service-project-review';
 import type { ServiceProjectRecord } from '@/lib/service-projects';
 import type { OperationActor } from '@/lib/request-operations';
@@ -19,21 +18,21 @@ export function PartnerProjectConfirmation({ project, actor, busy, onBusy, onSav
   const [mailOpen, setMailOpen] = useState(false);
   const [open, setOpen] = useState(false), [note, setNote] = useState(''), [error, setError] = useState('');
   const confirmation = project.review?.confirmations.at(-1);
-  const manager = canManagePartnerProjectConfirmation(project, actor);
-  const stale = projectCustomerConfirmationStale(project);
-  const canStart = manager && confirmation?.state !== '已确认' && (['进行中', '待复核'].includes(project.status) || project.status === '待确认' && stale);
+  const partnerCreated = isPartnerCreatedProject(project);
+  const manager = partnerCreated ? canManagePartnerProjectConfirmation(project, actor) : isAssignedProjectEngineer(project, actor);
+  const stale = partnerCreated && projectCustomerConfirmationStale(project);
+  const canStart = manager && !project.customerConfirmationLocked && confirmation?.state !== '已确认' && (partnerCreated ? ['进行中', '待复核'].includes(project.status) || project.status === '待确认' && stale : project.status === '待复核');
   const issue = partnerProjectConfirmationIssue(project);
   const content = projectConfirmationContent(project);
   return <section className="sr-panel sr-assessment" aria-label="项目客户确认">
     <div className="sr-ops-heading"><h3>客户确认</h3>
       {canStart && <Button disabled={busy || !!issue} onClick={() => { setError(''); setNote(''); setOpen(true); }}>发送报告并发起确认</Button>}
     </div>
-    <AdministratorCustomerDecision project={project} actor={actor} busy={busy} onBusy={onBusy} onSaved={onSaved} />
     <div className="sr-assessment-body">
       {error && !open && <p className="sr-error" role="alert">{error}</p>}
       {canStart && issue && <p className="sr-help">{issue}</p>}
       {stale && confirmation && <p className="sr-error">交付内容已变化，请重新发起客户确认。</p>}
-      {!confirmation && !issue && <p className="sr-help">尚未发起客户确认</p>}
+      {!confirmation && !issue && !['待确认', '已完成'].includes(project.status) && <p className="sr-help">尚未发起客户确认</p>}
       {project.review?.confirmations.slice().reverse().map(entry => <article className="sr-assessment-note" key={entry.id}>
         <strong>{entry.invalidatedAt ? '已失效' : entry.state}</strong>
         <div className="sr-assessment-record-meta">{entry.by} · {new Date(entry.at).toLocaleString('zh-CN', { hour12: false })}</div>

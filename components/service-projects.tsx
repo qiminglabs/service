@@ -1,7 +1,5 @@
 'use client';
 
-import { operationIdentities } from '@/lib/internal-users';
-import { isDemoAdministrator } from '@/lib/demo-permissions';
 import { ServiceProjectDailyReports } from '@/components/service-project-daily-reports';
 import { PartnerProjectConfirmation } from '@/components/partner-project-confirmation';
 import { isPartnerCreatedProject } from '@/lib/service-project-work-order-policy';
@@ -152,9 +150,6 @@ export function ServiceProjects({
   const [workOrderSectionMemory, setWorkOrderSectionMemory] = useState<Record<string, WorkOrderSections>>({});
   const [editing, setEditing] = useState<ServiceProjectRecord | null>(null);
   const [form, setForm] = useState(emptyForm);
-  const [creatorId, setCreatorId] = useState(actor.id);
-  const creationActors = operationIdentities(collaboratorDirectory.users, { ...collaboratorDirectory, customers }).filter(person => canManageServiceProjects(person));
-  const creator = !editing && isDemoAdministrator(actor) ? creationActors.find(person => person.id === creatorId) ?? actor : actor;
   const [basicDialogOpen, setBasicDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
@@ -191,8 +186,8 @@ export function ServiceProjects({
     });
   const selectedCustomer =
     options.find((customer) => customer.id === form.customerId) ?? null;
-  const providerLocked = creator.role === '合作伙伴服务工程师' || editing?.createdSite === '合作伙伴中心';
-  const ownProvider = ownProjectServiceProvider(creator.id, collaboratorDirectory.partners, collaboratorDirectory.partnerUsers);
+  const providerLocked = actor.role === '合作伙伴服务工程师' || editing?.createdSite === '合作伙伴中心';
+  const ownProvider = ownProjectServiceProvider(actor.id, collaboratorDirectory.partners, collaboratorDirectory.partnerUsers);
   const availableProviders = projectServiceProviders(
     collaboratorDirectory.partners,
   );
@@ -284,7 +279,6 @@ export function ServiceProjects({
     workOrderDirty.current = false;
     setSelectedWorkOrderId('');
     setDetailTab('overview');
-    setCreatorId(actor.id);
     setEditing(project ?? null);
     setBasicDialogOpen(!project);
     setForm(
@@ -329,7 +323,7 @@ export function ServiceProjects({
           )
         : await createStoredServiceProject(
             form,
-            actor, {}, [], creator.id,
+            actor,
           );
       setRecords((current) =>
         [result, ...current.filter((record) => record.id !== result.id)].sort(
@@ -540,7 +534,6 @@ export function ServiceProjects({
       <DialogHeader><DialogTitle>{editing ? '编辑基本信息' : '新建服务项目'}</DialogTitle></DialogHeader>
       <form id="service-project-basic-form" onSubmit={event => { event.preventDefault(); void save(); }}>
                       <fieldset className="sr-form-grid" disabled={saving || editing?.status === '已取消'}>
-                        {!editing && isDemoAdministrator(actor) && <label>发起人<select value={creator.id} onChange={event => { const person = creationActors.find(person => person.id === event.target.value); setCreatorId(event.target.value); setForm(current => ({ ...current, serviceProviderId: person?.role === '合作伙伴服务工程师' ? ownProjectServiceProvider(person.id, collaboratorDirectory.partners, collaboratorDirectory.partnerUsers)?.id ?? '' : '' })); }}>{creationActors.map(person => <option key={person.id} value={person.id}>{person.name} · {person.role}</option>)}</select></label>}
                         <label htmlFor="project-name">
                           {labels.name} <em>*</em>
                           <Input
@@ -869,7 +862,7 @@ export function ServiceProjects({
                     会议
                     <span>{projectOperationsOf(editing).meetings.length}</span>
                   </TabsTrigger>
-                  {isPartnerCreatedProject(editing) && <TabsTrigger value="confirmation">客户确认</TabsTrigger>}
+                  {(isPartnerCreatedProject(editing) || projectItemAudience(actor) === 'partner') && <TabsTrigger value="confirmation">客户确认</TabsTrigger>}
                   {projectItemAudience(actor) === 'internal' && <>
                   {!isPartnerCreatedProject(editing) && <TabsTrigger value="review">复核</TabsTrigger>}
                   </>}
@@ -903,7 +896,7 @@ export function ServiceProjects({
                     }} />
                   </div>
                 </TabsContent>}
-                {editing && isPartnerCreatedProject(editing) && <TabsContent value="confirmation"><PartnerProjectConfirmation project={editing} actor={actor} busy={saving} onBusy={setSaving} beforeSubmit={() => !workOrderDirty.current} onSaved={result => {
+                {editing && (isPartnerCreatedProject(editing) || projectItemAudience(actor) === 'partner') && <TabsContent value="confirmation"><PartnerProjectConfirmation project={editing} actor={actor} busy={saving} onBusy={setSaving} beforeSubmit={() => !workOrderDirty.current} onSaved={result => {
                   setEditing(result); setForm(current => ({ ...current, status: result.status })); setRecords(current => current.map(project => project.id === result.id ? result : project)); setNotice(result.status === '已完成' ? '项目已完成。' : '已发起客户确认。');
                 }} /></TabsContent>}
                 {editing && !isPartnerCreatedProject(editing) && projectItemAudience(actor) === 'internal' && <TabsContent value="review"><ServiceProjectReview onViewOrder={id => { setSelectedWorkOrderId(id); setDetailTab('work-orders'); }} project={editing} actor={actor} busy={saving} onBusy={setSaving} onSaved={result => {

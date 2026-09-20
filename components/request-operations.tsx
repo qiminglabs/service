@@ -1,6 +1,6 @@
 'use client';
 
-import { isDemoAdministrator, canActForUser } from '@/lib/demo-permissions';
+import { canActForUser } from '@/lib/demo-permissions';
 import { requestTypeOf } from '@/lib/request-types';
 import { RequestSupplements } from '@/components/request-supplements';
 import { visibleSupplements } from '@/lib/request-supplements';
@@ -241,7 +241,7 @@ export function RequestOperationsTabs({
         <div className="sr-detail-layout">
           <div className="sr-detail-main">
             <TabsContent value="overview">
-              {(!isInternal(role) || isDemoAdministrator(actor)) && requestTypeOf(record) !== '技术评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
+              {!isInternal(role) && requestTypeOf(record) !== '技术评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
               {children}
             </TabsContent>
             <TabsContent value="supplements">

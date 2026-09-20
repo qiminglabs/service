@@ -61,8 +61,14 @@ export function projectReviewIssue(
 }
 
 export const isPartnerCreatedProject = (project: Pick<ServiceProjectRecord, 'createdSite'>) => project.createdSite === '合作伙伴中心';
+export function isAssignedProjectEngineer(project: ServiceProjectRecord, actor: OperationActor) {
+  const group = actor.role === 'SmartX 服务工程师' ? 'internal' : actor.role === '合作伙伴服务工程师' ? 'partner' : undefined;
+  return !!actor.id && !!group && !!project.collaborators?.[group]?.some(person => person.id === actor.id)
+    && !!project.workOrders?.some(order => order.status !== '已取消'
+      && (order.assignees ?? (order.assignee ? [order.assignee] : [])).some(person => person.id === actor.id && person.group === group));
+}
 export function canManagePartnerProjectConfirmation(project: ServiceProjectRecord, actor: OperationActor) {
-  return isPartnerCreatedProject(project) && (canManageProjectAsManager(project, actor) ||
+  return isPartnerCreatedProject(project) && (isAssignedProjectEngineer(project, actor) || canManageProjectAsManager(project, actor) ||
     actor.role === '合作伙伴服务工程师' && !!actor.id && actor.id === project.createdById);
 }
 export function partnerProjectConfirmationIssue(project: ServiceProjectRecord) {

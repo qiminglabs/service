@@ -63,7 +63,7 @@ export function StepReportTemplateSelect({
       <div className="report-template-version">
         <span>{current ? `已绑定 v${current.version}` : '当前流程模板'}</span>
         <Button size="sm" variant="ghost" onClick={onManage}>
-          {editable ? '管理模板' : '查看模板'}
+          前往文档模板
         </Button>
       </div>
     </section>

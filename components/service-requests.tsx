@@ -1,7 +1,6 @@
 'use client';
 import { withRequestCollaborators, applicantRemovalIssue } from '@/lib/request-collaboration';
 
-import { isDemoAdministrator } from '@/lib/demo-permissions';
 import { canSubmitRequest, requestCollaboratorsLocked } from '@/lib/request-collaboration';
 import { isSystemApplicationField } from '@/lib/request-application-fields';
 import { isConvertedRequest, convertedRequestReadonlyMessage } from '@/lib/request-readonly';
@@ -57,7 +56,6 @@ import {
 emptyAssessment,
 applyAssessmentAction
 } from '@/lib/request-assessment';
-import { operationIdentities } from '@/lib/internal-users';
 import {
 requestReturnNotice,
 appendActivity,
@@ -292,7 +290,6 @@ export function RequestWorkspace(props: Props) {
   const [creation, setCreation] = useState<ServiceRequest | null>(null);
   const audience = draft ? requestAudience(draft) : customerPortal ? 'customer' : 'internal';
   const availableServices = props.services.filter(service => serviceAvailableForRequest(service, audience));
-  const creationActors = operationIdentities(props.users, { customers: props.customers, contacts: props.contacts }).filter(person => person.role !== '合作伙伴服务工程师');
   const [basicEditing, setBasicEditing] = useState<ServiceRequest | null>(null);
   const basicOriginal = useRef<ServiceRequest | null>(null);
   const creationOriginal = useRef<ServiceRequest | null>(null);
@@ -356,20 +353,13 @@ export function RequestWorkspace(props: Props) {
     setAddOpen(false); setPendingItem(null);
     setCatalogQuery(''); setError(''); setCreateOpen(true);
   }
-  function changeCreationActor(id: string) {
-    const person = creationActors.find(person => person.id === id);
-    if (!person || !creation || !isDemoAdministrator(props.currentActor)) return;
-    const customerId = person.role === '客户' ? props.contacts.find(contact => contact.id === id)?.customerId ?? '' : creation.customerId;
-    const initial = newRequest(creation.title, customerId, person.name, person.id, person.role);
-    setCreation(withRequestCollaborators({ ...initial, id: creation.id, requestType: creation.requestType, ...(id !== props.currentActor.id ? { createdViaAdmin: { id: props.currentActor.id!, name: props.currentActor.name } } : {}) }, props.contacts, props.customers, props.users));
-  }
   function updateCreation(patch: Partial<ServiceRequest>) {
     setCreation(current => current ? { ...current, ...patch } : current);
     setError('');
   }
   function changeCreationCustomer(customerId: string) {
     if (!creation) return;
-    const creator = creationActors.find(person => person.id === creation.createdById) ?? props.currentActor;
+    const creator = props.currentActor;
     const defaults = newRequest('', customerId, creator.name, creator.id, creator.role);
     setCreation(withRequestCollaborators({ ...creation, customerId, internalParticipants: defaults.internalParticipants, externalCollaborators: defaults.externalCollaborators, items: [] }, props.contacts, props.customers, props.users));
     setError('');
@@ -1167,7 +1157,6 @@ export function RequestWorkspace(props: Props) {
           <DialogHeader><DialogTitle>新建服务请求</DialogTitle></DialogHeader>
           <form id="request-create-basic-form" onSubmit={event => { event.preventDefault(); void createDraft(); }}>
           <fieldset className="sr-form-grid" disabled={busy}>
-            {isDemoAdministrator(props.currentActor) && <label>发起人<select value={creation.createdById} onChange={event => changeCreationActor(event.target.value)}>{creationActors.map(person => <option key={person.id} value={person.id}>{person.name} · {person.role}</option>)}</select></label>}
             <label htmlFor="sr-create-title">
               {applicationLabel('title', '申请主题')} <em>*</em>
               <Input

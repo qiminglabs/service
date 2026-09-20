@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { canManageRouting } from '@/lib/assessment-routing-store';
@@ -27,9 +28,11 @@ import {
   type ReportNode,
   type ReportTemplate,
 } from '@/lib/report-templates';
+import { ReportTemplatePreview } from '@/components/report-template-preview';
 import { ReportFieldSettings } from '@/components/report-field-settings';
 import {
   localizeReportTemplate,
+  reportTemplateSteps,
   validateFlowReportTemplates,
   validateProjectReportTemplate,
 } from '@/lib/flow-report-templates';
@@ -47,16 +50,19 @@ export function ReportTemplateSettings({
   flow,
   readonly = false,
   onTemplatesChange,
+  onViewStep,
 }: {
   actor: OperationActor;
   flow?: ServiceFlow;
   readonly?: boolean;
   onTemplatesChange?: (templates: ReportTemplate[]) => void;
+  onViewStep?: (stepId: string) => void;
 }) {
   const [data, setData] =
     useState<Awaited<ReturnType<typeof readReportTemplateData>>>();
   const [draft, setDraft] = useState<ReportTemplate>();
   const [query, setQuery] = useState('');
+  const [blockedTemplate, setBlockedTemplate] = useState<ReportTemplate>();
   const templateKind = flow ? '工单文档模板' : '项目报告模板';
   const [fieldSettings, setFieldSettings] = useState(false);
   const [busy, setBusy] = useState(false),
@@ -125,6 +131,15 @@ export function ReportTemplateSettings({
     data?.library.templates.filter((t) => t.scope === 'project') ??
     [];
   const matches = templates.filter((t) => t.name.includes(query));
+  function toggleTemplate(t: ReportTemplate) {
+    setError('');
+    setNotice('');
+    if (flow && t.enabled && reportTemplateSteps(flow, t.id).length) {
+      setBlockedTemplate(t);
+      return;
+    }
+    void save({ ...t, enabled: !t.enabled }, false);
+  }
   function open(t: ReportTemplate) {
     setDraft(structuredClone(t));
     setBaseline(JSON.stringify(t));
@@ -141,11 +156,11 @@ export function ReportTemplateSettings({
       .then(setData)
       .catch((e) => setError(e.message));
   }
-  async function save() {
-    if (!data || !draft || busy || lock.current || !editable) return;
+  async function save(input: ReportTemplate, closeEditor = true) {
+    if (!data || busy || lock.current || !editable) return;
     setError('');
     try {
-      const checked = parseReportTemplate(draft);
+      const checked = parseReportTemplate(input);
       if (flow) {
         const old = templates.find((t) => t.id === checked.id);
         const next = {
@@ -175,25 +190,33 @@ export function ReportTemplateSettings({
           })),
         });
         onTemplatesChange?.(updated);
-        setDraft(undefined);
-        setNotice('模板已更新，保存流程后生效。');
+        if (closeEditor) setDraft(undefined);
+        setNotice(
+          closeEditor
+            ? '模板已更新，保存流程后生效。'
+            : `模板已${checked.enabled ? '启用' : '停用'}，保存流程后生效。`,
+        );
         return;
       }
       validateProjectReportTemplate(checked);
       lock.current = true;
       setBusy(true);
       const nextGlobalTemplates = data.library.templates.some(
-        (t) => t.id === draft.id,
+        (t) => t.id === input.id,
       )
-        ? data.library.templates.map((t) => (t.id === draft.id ? checked : t))
+        ? data.library.templates.map((t) => (t.id === input.id ? checked : t))
         : [...data.library.templates, checked];
       const library = await saveReportTemplates(
         { ...data.library, templates: nextGlobalTemplates },
         actor,
       );
       setData({ ...data, library });
-      setDraft(undefined);
-      setNotice(`${templateKind}已保存。`);
+      if (closeEditor) setDraft(undefined);
+      setNotice(
+        closeEditor
+          ? `${templateKind}已保存。`
+          : `模板已${checked.enabled ? '启用' : '停用'}。`,
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : '保存失败。');
     } finally {
@@ -284,7 +307,7 @@ export function ReportTemplateSettings({
               <th>模板名称</th>
               <th>适用范围</th>
               <th>状态</th>
-              <th>引用字段</th>
+              <th>{flow ? '引用步骤' : '引用字段'}</th>
               <th>版本</th>
               <th>修改时间</th>
               <th>操作</th>
@@ -303,7 +326,31 @@ export function ReportTemplateSettings({
                     {t.enabled ? '启用' : '停用'}
                   </span>
                 </td>
-                <td>{reportFields(t.body).length}</td>
+                <td>
+                  {flow ? (
+                    <div className="report-template-step-links">
+                      {reportTemplateSteps(flow, t.id).length ? (
+                        reportTemplateSteps(flow, t.id).map((step) =>
+                          onViewStep ? (
+                            <button
+                              type="button"
+                              key={step.id}
+                              onClick={() => onViewStep(step.id)}
+                            >
+                              {step.name}
+                            </button>
+                          ) : (
+                            <span key={step.id}>{step.name}</span>
+                          ),
+                        )
+                      ) : (
+                        <span className="sr-help">未被引用</span>
+                      )}
+                    </div>
+                  ) : (
+                    reportFields(t.body).length
+                  )}
+                </td>
                 <td>v{t.version}</td>
                 <td>
                   {t.updatedAt
@@ -313,12 +360,16 @@ export function ReportTemplateSettings({
                     : '—'}
                 </td>
                 <td>
-                  <Button variant="ghost" onClick={() => open(t)}>
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => open(t)}
+                  >
                     {editable ? '编辑模板' : '查看模板'}
                   </Button>
                   <Button
                     variant="ghost"
-                    disabled={!editable}
+                    disabled={!editable || busy}
                     onClick={() =>
                       open({
                         ...structuredClone(t),
@@ -330,6 +381,15 @@ export function ReportTemplateSettings({
                   >
                     复制
                   </Button>
+                  {editable && (
+                    <Button
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => toggleTemplate(t)}
+                    >
+                      {t.enabled ? '停用' : '启用'}
+                    </Button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -347,6 +407,50 @@ export function ReportTemplateSettings({
           </tbody>
         </table>
       </div>
+      {blockedTemplate && flow && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setBlockedTemplate(undefined);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>模板正在使用</DialogTitle>
+              <DialogDescription>
+                模板「{blockedTemplate.name}
+                」被以下步骤引用，请先替换或解除绑定后再停用。
+              </DialogDescription>
+            </DialogHeader>
+            <div className="report-template-step-links">
+              {reportTemplateSteps(flow, blockedTemplate.id).map((step) =>
+                onViewStep ? (
+                  <button
+                    type="button"
+                    key={step.id}
+                    onClick={() => {
+                      setBlockedTemplate(undefined);
+                      onViewStep(step.id);
+                    }}
+                  >
+                    {step.name}
+                  </button>
+                ) : (
+                  <span key={step.id}>{step.name}</span>
+                ),
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setBlockedTemplate(undefined)}
+              >
+                关闭
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
       {draft && (
         <Dialog
           open
@@ -362,46 +466,40 @@ export function ReportTemplateSettings({
               <DialogTitle>{draft.name || `新建${templateKind}`} </DialogTitle>
             </DialogHeader>
             <div className="report-template-config">
-              <label htmlFor="report-template-scope">
-                适用范围
-                <Input
-                  id="report-template-scope"
-                  readOnly
-                  value={flow ? flow.name : '通用项目报告'}
-                />
-              </label>
-              <label htmlFor="report-template-enabled">
-                状态
-                <NativeSelect
-                  id="report-template-enabled"
-                  aria-label="模板状态"
-                  disabled={!editable || busy || preview}
-                  value={String(draft.enabled)}
-                  onChange={(e) =>
-                    setDraft({ ...draft, enabled: e.target.value === 'true' })
-                  }
+              {preview ? (
+                <div className="report-template-preview-scope">
+                  <span>适用范围</span>
+                  <strong>{flow ? flow.name : '通用项目报告'}</strong>
+                </div>
+              ) : (
+                <label htmlFor="report-template-scope">
+                  适用范围
+                  <Input
+                    id="report-template-scope"
+                    readOnly
+                    value={flow ? flow.name : '通用项目报告'}
+                  />
+                </label>
+              )}
+              {!preview && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setFieldSettings((v) => !v);
+                    setPreview(false);
+                  }}
                 >
-                  <option value="true">启用</option>
-                  <option value="false">停用</option>
-                </NativeSelect>
-              </label>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setFieldSettings((v) => !v);
-                  setPreview(false);
-                }}
-              >
-                {fieldSettings
-                  ? '返回正文'
-                  : `引用字段（${reportFields(draft.body).length}）`}
-              </Button>
+                  {fieldSettings
+                    ? '返回正文'
+                    : `引用字段（${reportFields(draft.body).length}）`}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 disabled={fieldSettings}
                 onClick={() => setPreview((v) => !v)}
               >
-                {preview ? '返回编辑' : '预览排版'}
+                {preview ? '返回编辑' : flow ? '预览工单' : '预览报告'}
               </Button>
             </div>
             <div className="report-editor-host">
@@ -411,6 +509,13 @@ export function ReportTemplateSettings({
                   options={options}
                   disabled={!editable || busy}
                   onChange={setDraft}
+                />
+              ) : preview ? (
+                <ReportTemplatePreview
+                  actor={actor}
+                  template={draft}
+                  flowId={flow?.id}
+                  customers={data?.customers ?? []}
                 />
               ) : (
                 <Suspense fallback={<p className="sr-help">正在打开编辑器…</p>}>
@@ -447,8 +552,8 @@ export function ReportTemplateSettings({
               <Button variant="outline" disabled={busy} onClick={close}>
                 关闭
               </Button>
-              {editable && (
-                <Button disabled={busy} onClick={() => void save()}>
+              {editable && !preview && (
+                <Button disabled={busy} onClick={() => void save(draft)}>
                   保存模板
                 </Button>
               )}

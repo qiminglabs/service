@@ -1,4 +1,5 @@
 import { executionFormsFromRows } from './service-execution-form-store.ts';
+import { validateFlowTemplateChanges } from './flow-report-templates.ts';
 import {
   bindExecutionForms,
   executionFormsId,
@@ -95,6 +96,11 @@ export async function saveServiceFlowConfig(
           if (current.config.revision !== checked.revision)
             throw new Error(
               '配置已被其他页面修改，请关闭编辑窗口并重新加载后再保存。',
+            );
+          for (const flow of checked.flows)
+            validateFlowTemplateChanges(
+              current.config.flows.find((row) => row.id === flow.id),
+              flow,
             );
           for (const rule of checked.assignment.rules.filter(
             (rule) => rule.enabled,

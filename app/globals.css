@@ -3642,6 +3642,8 @@ body {
   margin: 5px 0 0;
 }
 .sr-table-scroll {
+  min-width: 0;
+  max-width: 100%;
   overflow: auto;
 }
 .sr-request-material-description { margin: 0; padding: 16px 28px 0; color: #8491a4; font-size: 13px; }
@@ -5681,7 +5683,8 @@ body:has(.request-field-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .sr-assessment-summary { display: flex; gap: 44px; padding: 22px 24px; background: #fafbfd; flex-wrap: wrap; }
 .sr-assessment-summary > span, .sr-assessment-amounts > span { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #8491a4; }
 .sr-assessment-summary strong { font-size: 16px; font-weight: 500; color: #26374f; }
-.sr-assessment-body { display: grid; gap: 16px; padding: 24px; }
+/* Keep nested assessment tables inside the card; wide tables scroll locally. */
+.sr-assessment-body { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 16px; padding: 24px; }
 .sr-assessment-section-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; font-size: 16px; font-weight: 500; }
 .sr-assessment-section-title h4 { margin: 0; font: inherit; }
 .sr-assessment-section-title > span { font-size: 13px; color: #8491a4; font-weight: 400; }
@@ -5706,7 +5709,7 @@ body:has(.request-field-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .sr-assessment-rounds dt { font-size: 12px; color: #8491a4; }
 .sr-assessment-rounds dd { margin: 4px 0 12px; }
 .sr-assessment-rounds dd:last-child { margin-bottom: 0; }
-.sr-assessment-plan { border: 1px solid #dce6f3; border-radius: 8px; padding: 20px; }
+.sr-assessment-plan { min-width: 0; border: 1px solid #dce6f3; border-radius: 8px; padding: 20px; }
 .sr-assessment-amounts { display: flex; gap: 48px; padding: 6px 0 22px; flex-wrap: wrap; }
 .sr-assessment-amounts strong { font-size: 26px; color: #26374f; font-weight: 500; }
 .sr-assessment-allocations > div { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid #edf0f5; font-size: 14px; }
@@ -7055,9 +7058,17 @@ fieldset:disabled :is([role='combobox'], [role='checkbox'], [role='radio'], [rol
 @media (max-width: 760px) { .wo-basic-grid { padding: 20px 16px; gap: 20px 24px; } .wo-basic-actions + .wo-basic-grid { border-top: 0; } }
 @media (max-width: 520px) { .wo-basic-grid { grid-template-columns: minmax(0, 1fr); } .wo-basic-grid > [data-address] { grid-column: 1 / -1; } }
 
-.sr-project-worklog-table { min-width: 1360px; }
-.sr-project-worklog-order-col { width: 250px; }
-.sr-project-worklog-pricing-col { width: 180px; }
+.sr-project-worklog-table { min-width: 1120px; }
+.sr-project-worklog-table .sr-worklog-name-col { width: 88px; }
+.sr-project-worklog-table .sr-worklog-date-col { width: 128px; }
+.sr-project-worklog-order-col { width: 176px; }
+.sr-project-worklog-table .sr-worklog-hours-col { width: 100px; }
+.sr-project-worklog-pricing-col { width: 142px; }
+.sr-project-worklog-table .sr-worklog-type-col { width: 88px; }
+.sr-project-worklog-table .sr-worklog-actions-col { width: 112px; }
+.sr-table.sr-project-worklog-table > :is(thead, tbody) > tr > :is(th, td) { padding-inline: 12px; }
+.sr-project-worklog-table td { white-space: normal; overflow-wrap: anywhere; }
+.sr-project-worklog-table td:nth-child(2) { white-space: nowrap; }
 
 /* Project review compares the inherited baseline with delivery actuals. */
 .project-review-source { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; border: 1px solid #e4eaf2; background: #f8faff; border-radius: 8px; }
@@ -7074,8 +7085,16 @@ fieldset:disabled :is([role='combobox'], [role='checkbox'], [role='radio'], [rol
 .project-review-pending-days { margin-left: 4px; color: #8491a4; font-size: 12px; font-weight: 400; white-space: nowrap; }
 .project-review .sr-table > .project-review-total > tr > :is(th, td) { padding: 20px; background: #f7f9fc; border: 0; border-top: 1px solid #e8edf4; color: #263b54; font-size: 13px; font-weight: 600; text-align: left; vertical-align: middle; }
 .project-review-basis-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.project-review { --review-name-width: 34%; --review-days-width: 18%; }
-.project-review-aligned-table { table-layout: fixed; min-width: 900px; }
+.project-review { --review-name-width: 30%; --review-days-width: 18%; }
+.project-review-aligned-table { table-layout: fixed; min-width: 700px; }
+.project-review-basis-table { min-width: 640px; }
+.sr-table.project-review-aligned-table > :is(thead, tbody) > tr > :is(th, td) { padding-inline: 12px; }
+.sr-table.project-review-aligned-table > thead > tr > th { white-space: normal; }
+@media (min-width: 1101px) and (max-width: 1600px) {
+  .project-review > .sr-assessment-body { padding: 20px; }
+  .project-review .sr-assessment-plan { padding: 16px; }
+  .project-review .sr-assessment-section-title { flex-wrap: wrap; }
+}
 .project-review-aligned-table td { vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
 .project-review-aligned-table td:first-child { min-width: 0; }
 .project-review-detail { margin-top: 8px; font-size: 12px; white-space: normal; min-width: 180px; }
@@ -7086,7 +7105,7 @@ fieldset:disabled :is([role='combobox'], [role='checkbox'], [role='radio'], [rol
 .project-review td > small { display: block; color: #8491a4; margin-top: 5px; }
 @media (max-width: 900px) { .project-review-metrics { grid-template-columns: 1fr; } .project-review-source { flex-wrap: wrap; } }
 .sr-project-worklog-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.sr-project-worklog-confirm-col { width: 170px; }
+.sr-project-worklog-confirm-col { width: 92px; }
 
 /* Service daily reports: history alongside a readable email, with a split composer. */
 .daily-reports { container-type: inline-size; min-width: 0; border: 1px solid #e1e7ef; border-radius: 10px; background: #fff; overflow: hidden; }
@@ -7506,3 +7525,20 @@ body:has(.report-template-dialog) [data-slot='dialog-overlay'] { z-index: 240; }
 @media(max-width: 580px) { .permission-filters { grid-template-columns: 1fr; padding: 16px; } .permission-summary { gap: 12px; flex-wrap: wrap; padding: 10px 16px; } .permission-pagination { align-items: flex-start; flex-direction: column; } }
 .permission-filters [data-slot='native-select-wrapper'] { width: 100%; }
 .permission-filters select { padding-right: 32px; }
+
+.report-data-preview { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.report-data-preview-toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(280px, 2fr); gap: 12px; padding: 16px; border-bottom: 1px solid #e4eaf2; background: #fff; }
+.report-data-preview-toolbar > * { min-width: 0; width: 100%; }
+.report-data-preview > .sr-help, .report-data-preview > .sr-error { margin: 0; padding: 10px 16px; max-height: 100px; overflow-y: auto; flex-shrink: 0; }
+.report-data-preview-document { flex: 1; min-height: 0; overflow: auto; padding: 24px; background: #f7f9fc; }
+.report-template-reader { max-width: 860px; min-height: 100%; margin: 0 auto; background: #fff; border: 1px solid #e4eaf2; border-radius: 6px; box-shadow: 0 2px 10px #1e293b06; }
+.report-template-reader > .report-paper { padding: 44px 52px; background: #fff; border-radius: inherit; }
+.report-template-preview-scope { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-right: auto; align-self: center; }
+.report-template-preview-scope > span { color: #68778d; font-size: 13px; }
+.report-template-preview-scope > strong { color: #273b50; font-size: 14px; font-weight: 500; }
+@media (max-width: 700px) { .report-data-preview-document { padding: 12px; } .report-template-reader > .report-paper { padding: 24px 20px; } }
+@media (max-width: 700px) { .report-data-preview-toolbar { grid-template-columns: minmax(0, 1fr); } }
+
+.report-template-step-links { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.report-template-step-links > button { border: 0; padding: 0; background: transparent; color: #008aff; font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+.report-template-step-links > button:hover { text-decoration: underline; }
