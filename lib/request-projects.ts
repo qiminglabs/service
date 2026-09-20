@@ -1,3 +1,4 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
 import { defaultProjectMapping, parseProjectMapping, type RequestProjectMapping } from './request-project-mapping.ts';
 import type { EffortPricingLine } from './request-pricing';
 import type { ServiceRequest, RequestItem } from './service-requests';
@@ -16,8 +17,8 @@ export type ProjectCreation = { id: string; at: string; actorId: string; actor: 
 export const serviceProjectCreationEnabled: boolean = true;
 export const serviceProjectPendingMessage = '服务项目待开发，暂不可创建。';
 export function isProjectCreationEligible(record: ServiceRequest, actor: OperationActor) {
-  return record.status === '待受理' && actor.role === 'SmartX 项目经理' && Boolean(actor.id)
-    && (!record.operations?.assessment?.managerId || record.operations.assessment.managerId === actor.id)
+  return record.status === '待受理' && Boolean(actor.id)
+    && (isDemoAdministrator(actor) || actor.role === 'SmartX 项目经理' && (!record.operations?.assessment?.managerId || record.operations.assessment.managerId === actor.id))
     && !record.operations?.projectCreation;
 }
 export function canCreateServiceProjects(record: ServiceRequest, actor: OperationActor) {
@@ -51,7 +52,7 @@ export function createServiceProjects(record: ServiceRequest, actor: OperationAc
   let orderNumber = 0;
   const projects: ServiceProject[] = groups.map(group => ({
     id: group.id, name: group.name.trim(), note: group.note.trim(), requestId: record.id, customerId: record.customerId,
-    managerId: actor.id, manager: actor.name, ...(group.expectedServiceDate ? { expectedServiceDate: group.expectedServiceDate } : {}), createdAt: at, status: '待启动',
+    managerId: record.operations?.assessment?.managerId || actor.id, manager: record.operations?.assessment?.manager || actor.name, ...(group.expectedServiceDate ? { expectedServiceDate: group.expectedServiceDate } : {}), createdAt: at, status: '待启动',
     workOrders: group.itemIds.map(itemId => {
       const item = record.items.find(item => item.id === itemId)!;
       const pricing = record.operations?.assessment?.effort?.lines?.find(line => line.itemId === itemId);

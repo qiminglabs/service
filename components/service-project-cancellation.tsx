@@ -24,7 +24,7 @@ export function ServiceProjectCancellation({ record, actor, users, busy, cancel 
       <DialogContent className="sr-ops-dialog" showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>取消服务项目</DialogTitle>
-          <DialogDescription>取消后将释放当前项目已冻结的资产，当前项目的特批额度作废，保留项目资料及操作历史。此项目将结束，如需继续服务请新建项目。</DialogDescription>
+          <DialogDescription>取消后全部工单也将取消，且不可恢复。将释放当前项目已冻结的资产，当前项目的特批额度作废，保留项目资料及操作历史。此项目将结束，如需继续服务请新建项目。</DialogDescription>
         </DialogHeader>
         <div className="sr-confirmation-preview"><section className="sr-customer-visible-panel">
           <div className="sr-confirmation-note-label">

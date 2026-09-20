@@ -1,5 +1,7 @@
 'use client';
 
+import { ReportFieldExtension } from '@/components/report-field-extension';
+import type { ReportField } from '@/lib/report-templates';
 import { useEffect, useState } from 'react';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -30,7 +32,11 @@ export function LocalDocumentEditor({
   dirty,
   onChange,
   onBack,
+  fieldOptions,
+  compact = false,
 }: {
+  compact?: boolean;
+  fieldOptions?: (ReportField & { group: string })[];
   value: OnlineDocument;
   readonly: boolean;
   busy: boolean;
@@ -40,7 +46,7 @@ export function LocalDocumentEditor({
 }) {
   const [zoom, setZoom] = useState(100);
   const editor = useEditor({
-    extensions: [StarterKit.configure({ link: false })],
+    extensions: [StarterKit.configure({ link: false }), ReportFieldExtension],
     immediatelyRender: false,
     editable: !readonly && !busy,
     content: value.richText ?? {
@@ -162,34 +168,77 @@ export function LocalDocumentEditor({
     },
   ];
   return (
-    <section className="sr-doc-sdk" aria-label="在线文档编辑器（本地模拟）">
-      <header className="sr-doc-topbar">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="返回材料"
-          title="返回材料"
-          disabled={busy}
-          onClick={onBack}
-        >
-          <ArrowLeft size={18} />
-        </Button>
-        <FileText className="sr-doc-symbol" size={30} />
-        <div className="sr-doc-title">
-          <Input
-            aria-label="文档名称"
-            value={value.title}
-            readOnly={readonly}
+    <section
+      className={`sr-doc-sdk${value.reportSource ? ' sr-doc-sdk--report' : ''}`}
+      data-readonly={readonly || undefined}
+      data-compact={compact || undefined}
+      aria-label={compact ? '邮件正文编辑器' : '在线文档编辑器（本地模拟）'}
+    >
+      {!compact && (
+        <header className="sr-doc-topbar">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="返回材料"
+            title="返回材料"
             disabled={busy}
-            onChange={(e) => onChange({ ...value, title: e.target.value })}
-          />
-          <span>
-            {readonly ? '只读文档' : dirty ? '有未保存的修改' : '已保存到本机'}
-          </span>
-        </div>
-        <span className="sr-doc-simulation">腾讯文档风格 · 本地模拟</span>
-      </header>
+            onClick={onBack}
+          >
+            <ArrowLeft size={18} />
+          </Button>
+          <FileText className="sr-doc-symbol" size={30} />
+          <div className="sr-doc-title">
+            <Input
+              aria-label="文档名称"
+              value={value.title}
+              readOnly={readonly}
+              disabled={busy}
+              onChange={(e) => onChange({ ...value, title: e.target.value })}
+            />
+            <span>
+              {!readonly && (dirty ? '有未保存的修改' : '已保存到本机')}
+            </span>
+          </div>
+          <span className="sr-doc-simulation">腾讯文档风格 · 本地模拟</span>
+        </header>
+      )}
       <div className="sr-doc-toolbar" role="toolbar" aria-label="文档格式">
+        {fieldOptions && (
+          <select
+            aria-label="插入字段"
+            value=""
+            disabled={readonly || busy || !editor}
+            onChange={(event) => {
+              const field = fieldOptions.find(
+                (f) => f.id === event.target.value,
+              );
+              if (field) {
+                const { group: _group, ...attrs } = field;
+                editor
+                  ?.chain()
+                  .focus()
+                  .insertContent({
+                    type: 'reportField',
+                    attrs: { ...attrs, id: crypto.randomUUID() },
+                  })
+                  .run();
+              }
+            }}
+          >
+            <option value="">＋ 插入字段</option>
+            {[...new Set(fieldOptions.map((f) => f.group))].map((group) => (
+              <optgroup key={group} label={group}>
+                {fieldOptions
+                  .filter((f) => f.group === group)
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.label}
+                    </option>
+                  ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
         <select
           aria-label="段落样式"
           value={state?.heading ?? '0'}
@@ -223,29 +272,31 @@ export function LocalDocumentEditor({
         ))}
       </div>
       <div className="sr-doc-workspace">
-        <aside className="sr-doc-outline">
-          <h4>文档目录</h4>
-          {state?.headings.length ? (
-            state.headings.map((heading) => (
-              <button
-                key={heading.pos}
-                style={{ paddingLeft: (heading.level - 1) * 12 }}
-                disabled={busy}
-                onClick={() =>
-                  editor
-                    ?.chain()
-                    .setTextSelection(heading.pos + 1)
-                    .scrollIntoView()
-                    .run()
-                }
-              >
-                {heading.text}
-              </button>
-            ))
-          ) : (
-            <p>设置标题后显示目录</p>
-          )}
-        </aside>
+        {!compact && (
+          <aside className="sr-doc-outline">
+            <h4>文档目录</h4>
+            {state?.headings.length ? (
+              state.headings.map((heading) => (
+                <button
+                  key={heading.pos}
+                  style={{ paddingLeft: (heading.level - 1) * 12 }}
+                  disabled={busy}
+                  onClick={() =>
+                    editor
+                      ?.chain()
+                      .setTextSelection(heading.pos + 1)
+                      .scrollIntoView()
+                      .run()
+                  }
+                >
+                  {heading.text}
+                </button>
+              ))
+            ) : (
+              <p>设置标题后显示目录</p>
+            )}
+          </aside>
+        )}
         <div className="sr-doc-canvas">
           <div className="sr-doc-paper" style={{ zoom: zoom / 100 }}>
             <EditorContent editor={editor} />
@@ -254,19 +305,21 @@ export function LocalDocumentEditor({
       </div>
       <footer className="sr-doc-status">
         <span>{value.content.replace(/\s/g, '').length} 字</span>
-        <span>{readonly ? '只读' : '编辑模式'}</span>
-        <label>
-          缩放
-          <select
-            aria-label="文档缩放"
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
-          >
-            <option value={75}>75%</option>
-            <option value={100}>100%</option>
-            <option value={125}>125%</option>
-          </select>
-        </label>
+        {!readonly && <span>编辑模式</span>}
+        {!compact && (
+          <label>
+            缩放
+            <select
+              aria-label="文档缩放"
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+            >
+              <option value={75}>75%</option>
+              <option value={100}>100%</option>
+              <option value={125}>125%</option>
+            </select>
+          </label>
+        )}
       </footer>
     </section>
   );

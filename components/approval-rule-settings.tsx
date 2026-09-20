@@ -13,13 +13,14 @@ import { RuleDisableDialog } from '@/components/rule-disable-dialog';
 import { DisabledRuleVersions } from '@/components/disabled-rule-versions';
 import { ApprovalFlowSettings } from '@/components/approval-flow-settings';
 import { canManageRouting } from '@/lib/assessment-routing-store';
-import { readApprovalRules, saveApprovalRule, disableApprovalRule, saveDefaultApprovalUser } from '@/lib/approval-flow-store';
+import type { ApprovalScope } from '@/lib/approval-scope';
+import { readApprovalPreviewData, readApprovalRules, saveApprovalRule, disableApprovalRule, saveDefaultApprovalUser } from '@/lib/approval-flow-store';
 import { approvalRuleIssue, approvalRuleConditionLabel, newApprovalRule, sortApprovalRules, resolveApprovalRule, type ApprovalRule } from '@/lib/approval-rules';
 import { describeRoute, matchesRoute, parseRoutePredicate, routesOverlap, type RoutingDictionary } from '@/lib/assessment-routing-schema';
 import { readRoutingData } from '@/lib/assessment-routing-store';
 import type { OperationActor } from '@/lib/request-operations';
 
-export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
+export function ApprovalRuleSettings({ actor, scope = 'request' }: { actor: OperationActor; scope?: ApprovalScope }) {
   const [users, setUsers] = useState<InternalUser[]>([]);
   const [routingDictionary, setRoutingDictionary] = useState<RoutingDictionary>({ customers: [], services: [] });
   const [defaultUserId, setDefaultUserId] = useState(''), [savedDefaultUserId, setSavedDefaultUserId] = useState(''), [defaultRevision, setDefaultRevision] = useState(0);
@@ -49,20 +50,20 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     if (!allowed || !ready || lock.current) return;
     lock.current = true; setBusy(true); setError(''); setNotice('');
     try {
-      const saved = await saveDefaultApprovalUser(actor, defaultUserId, defaultRevision);
+      const saved = await saveDefaultApprovalUser(actor, defaultUserId, defaultRevision, scope);
       setRules(saved.rules); setSavedDefaultUserId(saved.defaultUserId ?? ''); setDefaultRevision(saved.defaultRevision ?? 0); setNotice('默认审批人已保存。');
     } catch (issue) { setError(issue instanceof Error ? issue.message : '默认审批人保存失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
   }
   async function reload() {
-    try { applyData(await readApprovalRules()); setError(''); }
+    try { applyData(await readApprovalRules(scope)); setError(''); }
     catch (issue) { setError(issue instanceof Error ? issue.message : '规则读取失败，请重试。'); }
   }
   useEffect(() => {
     let active = true;
-    void readApprovalRules().then(data => { if (active) { applyData(data); } }).catch(issue => { if (active) setError(issue instanceof Error ? issue.message : '规则读取失败，请重试。'); });
+    void readApprovalRules(scope).then(data => { if (active) { applyData(data); } }).catch(issue => { if (active) setError(issue instanceof Error ? issue.message : '规则读取失败，请重试。'); });
     return () => { active = false; };
-  }, []);
+  }, [scope]);
   function edit(rule?: ApprovalRule) {
     setRevision(rule?.revision ?? null);
     setDraft(rule ? { ...structuredClone(rule), conditions: { requirement: rule.conditions.requirement } } : newApprovalRule(rules)); setFormError(''); setTestResult(undefined);
@@ -74,7 +75,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     lock.current = true; setBusy(true); setTesting(true); setFormError(''); setTestResult(undefined);
     setDraft({ ...draft, conditions: { requirement: draft.conditions.requirement } });
     try {
-      const [latest, latestRules] = await Promise.all([readRoutingData(), readApprovalRules()]);
+      const [latest, latestRules] = await Promise.all([readRoutingData(), readApprovalRules(scope)]);
       setRules(latestRules.collection.rules);
       setRoutingDictionary(latestRules.dictionary);
       if (latestRules.collection.rules.some(rule => rule.enabled !== false && rule.id !== draft.id && rule.priority === draft.priority)) throw new Error('优先级重复，请选择其他数字。');
@@ -90,7 +91,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
       if (!response.ok || result.error) throw new Error(result.error || '转译失败，请重试。');
       const compiled = parseRoutePredicate(result.compiled, dictionary);
       if (!routesOverlap(compiled, compiled, 'manager')) throw new Error('匹配条件互相矛盾，请修改后重新测试。');
-      const samples = latest.requests.filter(request => request.status !== '草稿');
+      const samples = scope === 'project' ? (await readApprovalPreviewData(scope)).requests : latest.requests.filter(request => request.status !== '草稿');
       const candidate = { ...draft, conditions: { requirement: draft.conditions.requirement, compiled, testedRequirement: draft.conditions.requirement.trim() } };
       const others = latestRules.collection.rules.filter(rule => rule.enabled !== false && rule.id !== draft.id);
       const matches = samples.filter(request => matchesRoute(request, compiled, dictionary.customers));
@@ -109,7 +110,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
     if (!testResult || testResult.priority !== draft.priority || draft.conditions.testedRequirement !== draft.conditions.requirement.trim()) { setFormError('请先转译并测试当前匹配条件，再保存规则。'); return; }
     lock.current = true; setBusy(true); setFormError('');
     try {
-      const result = await saveApprovalRule(actor, draft, revision);
+      const result = await saveApprovalRule(actor, draft, revision, scope);
       setRules(result.rules); setDraft(undefined); setError(''); setNotice('审批规则已保存。');
       if (configure) setFlowRuleId(draft.id);
     } catch (issue) { setFormError(issue instanceof Error ? issue.message : '保存失败，请重试。'); }
@@ -118,11 +119,11 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
   async function disable(rule: ApprovalRule) {
     if (lock.current || !allowed) return;
     lock.current = true; setBusy(true); setDisableError('');
-    try { setRules((await disableApprovalRule(actor, rule)).rules); setDisableTarget(undefined); setError(''); setNotice('审批规则已停用，已发起的审批继续按原流程处理。'); }
+    try { setRules((await disableApprovalRule(actor, rule, scope)).rules); setDisableTarget(undefined); setError(''); setNotice('审批规则已停用，已发起的审批继续按原流程处理。'); }
     catch (issue) { setDisableError(issue instanceof Error ? issue.message : '停用失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
   }
-  if (flowRuleId) return <ApprovalFlowSettings key={flowRuleId} actor={actor} ruleId={flowRuleId} onBack={() => { setFlowRuleId(''); setNotice(''); void reload(); }} />;
+  if (flowRuleId) return <ApprovalFlowSettings scope={scope} key={`${scope}:${flowRuleId}`} actor={actor} ruleId={flowRuleId} onBack={() => { setFlowRuleId(''); setNotice(''); void reload(); }} />;
   return <div className="request-flow-settings">
     {error && <p className="sr-error" role="alert">{error}</p>}{notice && <output className="submission-rule-notice block">{notice}</output>}
     {!allowed && <p className="sr-help">仅系统管理员可维护特殊审批规则。</p>}
@@ -130,7 +131,7 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
       <div><strong>默认审批人</strong></div>
       <div className="routing-inline routing-default-controls">
         <UserSearchSelect label="默认审批人" users={users} value={defaultUserId} onChange={setDefaultUserId}
-          disabled={!allowed || busy || !ready} emptyHint="未设置时，无法匹配的请求将待分配。" />
+          disabled={!allowed || busy || !ready} emptyHint={scope === 'project' ? '未设置时，无法匹配的项目将待分配。' : '未设置时，无法匹配的请求将待分配。'} />
         {allowed && <Button variant="outline" disabled={!ready || busy || defaultUserId === savedDefaultUserId} onClick={() => void saveDefault()}>保存</Button>}
       </div>
     </section>
@@ -178,11 +179,11 @@ export function ApprovalRuleSettings({ actor }: { actor: OperationActor }) {
       disabledAt: version.archivedAt,
       disabledBy: version.archivedBy,
     }))} />
-    <ApprovalAllocationPreview refreshKey={JSON.stringify([defaultRevision, rules.map(rule => [rule.id, rule.revision])])} dirty={defaultUserId !== savedDefaultUserId} />
+    <ApprovalAllocationPreview scope={scope} refreshKey={JSON.stringify([defaultRevision, rules.map(rule => [rule.id, rule.revision])])} dirty={defaultUserId !== savedDefaultUserId} />
     <RuleDisableDialog
       open={!!disableTarget}
       requirement={disableTarget ? `${disableTarget.name} · v${disableTarget.version ?? Math.max(1, disableTarget.revision)}` : ''}
-      description="停用后，新请求将不再匹配此规则，已发起的审批继续按原流程处理。"
+      description={scope === 'project' ? '停用后，新项目审批将不再匹配此规则，已发起的审批继续按原流程处理。' : '停用后，新请求将不再匹配此规则，已发起的审批继续按原流程处理。'}
       busy={busy}
       error={disableError}
       onCancel={() => { setDisableTarget(undefined); setDisableError(''); }}

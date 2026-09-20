@@ -1,0 +1,461 @@
+'use client';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { canManageRouting } from '@/lib/assessment-routing-store';
+import {
+  readReportTemplateData,
+  saveReportTemplates,
+} from '@/lib/report-template-store';
+import {
+  orderReportFields,
+  projectReportFields,
+  parseReportTemplate,
+  parseReportLibrary,
+  reportFields,
+  reportText,
+  type ReportField,
+  type ReportNode,
+  type ReportTemplate,
+} from '@/lib/report-templates';
+import { ReportFieldSettings } from '@/components/report-field-settings';
+import {
+  localizeReportTemplate,
+  validateFlowReportTemplates,
+  validateProjectReportTemplate,
+} from '@/lib/flow-report-templates';
+import { stepFieldOptions } from '@/lib/report-templates';
+import type { ServiceFlow } from '@/lib/service-flows';
+import type { OperationActor } from '@/lib/request-operations';
+const LocalDocumentEditor = lazy(() =>
+  import('@/components/local-document-editor').then((module) => ({
+    default: module.LocalDocumentEditor,
+  })),
+);
+
+export function ReportTemplateSettings({
+  actor,
+  flow,
+  readonly = false,
+  onTemplatesChange,
+}: {
+  actor: OperationActor;
+  flow?: ServiceFlow;
+  readonly?: boolean;
+  onTemplatesChange?: (templates: ReportTemplate[]) => void;
+}) {
+  const [data, setData] =
+    useState<Awaited<ReturnType<typeof readReportTemplateData>>>();
+  const [draft, setDraft] = useState<ReportTemplate>();
+  const [query, setQuery] = useState('');
+  const templateKind = flow ? '工单文档模板' : '项目报告模板';
+  const [fieldSettings, setFieldSettings] = useState(false);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState(''),
+    [notice, setNotice] = useState(''),
+    [preview, setPreview] = useState(false);
+  const [baseline, setBaseline] = useState('');
+  const lock = useRef(false);
+  useEffect(() => {
+    let active = true;
+    void readReportTemplateData()
+      .then((d) => {
+        if (active) setData(d);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const editable = !readonly && canManageRouting(actor),
+    dirty = !!draft && baseline !== JSON.stringify(draft);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  const options: (ReportField & { group: string })[] = [
+    ...(data?.projectFields ?? []).map((f) => ({
+      id: `p:${f.id}`,
+      label: f.name,
+      scope: 'project' as const,
+      fieldId: projectReportFields.some(([id]) => id === f.id)
+        ? f.id
+        : `custom:${f.id}`,
+      group: '服务项目',
+    })),
+    ...(flow ? orderReportFields : []).map(([id, label]) => ({
+      id: `o:${id}`,
+      label,
+      scope: 'order' as const,
+      fieldId: id,
+      group: '工单基本信息',
+    })),
+    ...(flow ? (data?.orderFields ?? []) : []).map((f) => ({
+      id: `i:${f.id}`,
+      label: f.name,
+      scope: 'order' as const,
+      fieldId: `item:${f.id}`,
+      group: '工单服务字段',
+    })),
+    ...stepFieldOptions(flow?.steps ?? []).map((source) => ({
+      id: `s:${source.stepId}:${source.fieldId}`,
+      label: source.label,
+      scope: 'step' as const,
+      fieldId: source.fieldId,
+      stepId: source.stepId,
+      formId: source.formId,
+      group: `流程步骤 · ${flow?.steps.find((step) => step.id === source.stepId)?.name}`,
+    })),
+  ];
+  const templates =
+    flow?.reportTemplates ??
+    data?.library.templates.filter((t) => t.scope === 'project') ??
+    [];
+  const matches = templates.filter((t) => t.name.includes(query));
+  function open(t: ReportTemplate) {
+    setDraft(structuredClone(t));
+    setBaseline(JSON.stringify(t));
+    setError('');
+    setPreview(false);
+    setFieldSettings(false);
+  }
+  function close() {
+    if (busy) return;
+    if (dirty && !window.confirm('模板尚未保存，确定放弃修改？')) return;
+    setDraft(undefined);
+    setError('');
+    void readReportTemplateData()
+      .then(setData)
+      .catch((e) => setError(e.message));
+  }
+  async function save() {
+    if (!data || !draft || busy || lock.current || !editable) return;
+    setError('');
+    try {
+      const checked = parseReportTemplate(draft);
+      if (flow) {
+        const old = templates.find((t) => t.id === checked.id);
+        const next = {
+          ...checked,
+          scope: 'step' as const,
+          flowId: flow.id,
+          version: old
+            ? JSON.stringify(old) === JSON.stringify(checked)
+              ? old.version
+              : old.version + 1
+            : 1,
+          updatedAt: new Date().toISOString(),
+        };
+        const updated = old
+          ? templates.map((t) => (t.id === next.id ? next : t))
+          : [...templates, next];
+        parseReportLibrary({ revision: 0, templates: updated });
+        validateFlowReportTemplates({
+          ...flow,
+          reportTemplates: [next],
+          steps: flow.steps.map((step) => ({
+            ...step,
+            documents: step.documents?.map((doc) => ({
+              ...doc,
+              reportTemplate: undefined,
+            })),
+          })),
+        });
+        onTemplatesChange?.(updated);
+        setDraft(undefined);
+        setNotice('模板已更新，保存流程后生效。');
+        return;
+      }
+      validateProjectReportTemplate(checked);
+      lock.current = true;
+      setBusy(true);
+      const nextGlobalTemplates = data.library.templates.some(
+        (t) => t.id === draft.id,
+      )
+        ? data.library.templates.map((t) => (t.id === draft.id ? checked : t))
+        : [...data.library.templates, checked];
+      const library = await saveReportTemplates(
+        { ...data.library, templates: nextGlobalTemplates },
+        actor,
+      );
+      setData({ ...data, library });
+      setDraft(undefined);
+      setNotice(`${templateKind}已保存。`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '保存失败。');
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  return (
+    <section
+      className="report-template-settings execution-form-settings"
+      aria-label={templateKind}
+    >
+      <div className="submission-rules-toolbar">
+        <Input
+          className="execution-form-search"
+          aria-label={`搜索${templateKind}`}
+          placeholder="搜索模板名称"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <div className="approval-toolbar-actions">
+          {flow &&
+            data?.library.templates.some(
+              (t) =>
+                t.scope === 'step' ||
+                reportFields(t.body).some((f) => f.scope !== 'project'),
+            ) && (
+              <NativeSelect
+                aria-label="从已有模板创建"
+                value=""
+                disabled={!editable}
+                onChange={(event) => {
+                  const source = data.library.templates.find(
+                    (t) => t.id === event.target.value,
+                  );
+                  if (source)
+                    open({
+                      ...localizeReportTemplate(source, flow),
+                      id: crypto.randomUUID(),
+                      name: `${source.name.slice(0, 100)}（导入）`,
+                      version: 1,
+                    });
+                }}
+              >
+                <option value="">从已有模板创建</option>
+                {data.library.templates
+                  .filter(
+                    (t) =>
+                      t.scope === 'step' ||
+                      reportFields(t.body).some((f) => f.scope !== 'project'),
+                  )
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+              </NativeSelect>
+            )}
+          <Button
+            disabled={!editable || !data}
+            onClick={() =>
+              open({
+                id: crypto.randomUUID(),
+                name: '',
+                scope: flow ? 'step' : 'project',
+                ...(flow ? { flowId: flow.id } : {}),
+                version: 1,
+                enabled: true,
+                body: { type: 'doc', content: [{ type: 'paragraph' }] },
+              })
+            }
+          >
+            <Plus size={16} />
+            新建模板
+          </Button>
+        </div>
+      </div>
+      {notice && <output className="sr-notice">{notice}</output>}
+      {!draft && error && (
+        <p className="sr-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="table-scroll">
+        <table className="reference-table app-list-table report-template-table">
+          <thead>
+            <tr>
+              <th>模板名称</th>
+              <th>适用范围</th>
+              <th>状态</th>
+              <th>引用字段</th>
+              <th>版本</th>
+              <th>修改时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {matches.map((t) => (
+              <tr key={t.id}>
+                <td>{t.name}</td>
+                <td>{t.scope === 'project' ? '项目报告' : '工单文档'}</td>
+                <td>
+                  <span
+                    className="sr-badge"
+                    data-tone={t.enabled ? 'green' : 'muted'}
+                  >
+                    {t.enabled ? '启用' : '停用'}
+                  </span>
+                </td>
+                <td>{reportFields(t.body).length}</td>
+                <td>v{t.version}</td>
+                <td>
+                  {t.updatedAt
+                    ? new Date(t.updatedAt).toLocaleString('zh-CN', {
+                        hour12: false,
+                      })
+                    : '—'}
+                </td>
+                <td>
+                  <Button variant="ghost" onClick={() => open(t)}>
+                    {editable ? '编辑模板' : '查看模板'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    disabled={!editable}
+                    onClick={() =>
+                      open({
+                        ...structuredClone(t),
+                        id: crypto.randomUUID(),
+                        name: `${t.name}（副本）`,
+                        version: 1,
+                      })
+                    }
+                  >
+                    复制
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            {(!data || !matches.length) && (
+              <tr>
+                <td colSpan={7} className="routing-empty">
+                  {data
+                    ? '暂无匹配的模板'
+                    : error
+                      ? '模板读取失败'
+                      : '正在读取模板…'}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+      {draft && (
+        <Dialog
+          open
+          onOpenChange={(value) => {
+            if (!value) close();
+          }}
+        >
+          <DialogContent
+            className="report-template-dialog"
+            showCloseButton={false}
+          >
+            <DialogHeader>
+              <DialogTitle>{draft.name || `新建${templateKind}`} </DialogTitle>
+            </DialogHeader>
+            <div className="report-template-config">
+              <label htmlFor="report-template-scope">
+                适用范围
+                <Input
+                  id="report-template-scope"
+                  readOnly
+                  value={flow ? flow.name : '通用项目报告'}
+                />
+              </label>
+              <label htmlFor="report-template-enabled">
+                状态
+                <NativeSelect
+                  id="report-template-enabled"
+                  aria-label="模板状态"
+                  disabled={!editable || busy || preview}
+                  value={String(draft.enabled)}
+                  onChange={(e) =>
+                    setDraft({ ...draft, enabled: e.target.value === 'true' })
+                  }
+                >
+                  <option value="true">启用</option>
+                  <option value="false">停用</option>
+                </NativeSelect>
+              </label>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFieldSettings((v) => !v);
+                  setPreview(false);
+                }}
+              >
+                {fieldSettings
+                  ? '返回正文'
+                  : `引用字段（${reportFields(draft.body).length}）`}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={fieldSettings}
+                onClick={() => setPreview((v) => !v)}
+              >
+                {preview ? '返回编辑' : '预览排版'}
+              </Button>
+            </div>
+            <div className="report-editor-host">
+              {fieldSettings ? (
+                <ReportFieldSettings
+                  template={draft}
+                  options={options}
+                  disabled={!editable || busy}
+                  onChange={setDraft}
+                />
+              ) : (
+                <Suspense fallback={<p className="sr-help">正在打开编辑器…</p>}>
+                  <LocalDocumentEditor
+                    key={draft.id}
+                    value={{
+                      title: draft.name,
+                      content: reportText(draft.body),
+                      richText: draft.body as Record<string, unknown>,
+                      source: 'template',
+                    }}
+                    readonly={!editable || preview}
+                    busy={busy}
+                    dirty={dirty}
+                    fieldOptions={options}
+                    onChange={(doc) =>
+                      setDraft({
+                        ...draft,
+                        name: doc.title,
+                        body: doc.richText as ReportNode,
+                      })
+                    }
+                    onBack={close}
+                  />
+                </Suspense>
+              )}
+            </div>
+            {error && (
+              <p className="sr-error" role="alert">
+                {error}
+              </p>
+            )}
+            <DialogFooter>
+              <Button variant="outline" disabled={busy} onClick={close}>
+                关闭
+              </Button>
+              {editable && (
+                <Button disabled={busy} onClick={() => void save()}>
+                  保存模板
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </section>
+  );
+}

@@ -1,3 +1,4 @@
+import { isDemoAdministrator, canActForUser } from './demo-permissions.ts';
 import type { Assessment } from './request-assessment';
 import { isDayQuantity } from './day-quantity.ts';
 import type { ServiceRequest, StoredFile } from './service-requests';
@@ -20,6 +21,8 @@ export function formatWorklogHours(hours: number): string {
 }
 
 export type RequestAsset = {
+  projectReservations?: { projectId: string; days: number }[];
+  projectConsumptions?: { projectId: string; days: number; at: string }[];
   id: string;
   customerId: string;
   name: string;
@@ -166,20 +169,6 @@ export const emptyOperations = (): RequestOperations => ({
 });
 export function operationsOf(record: ServiceRequest): RequestOperations {
   return { ...emptyOperations(), ...record.operations };
-}
-export function migrateRoleLabel(value: string): string {
-  const legacy: Record<string, string> = {
-    'SmartX 员工': 'SmartX 销售经理',
-    销售经理: 'SmartX 销售经理',
-    系统管理员: 'SmartX 系统管理员',
-    销售: 'SmartX 销售经理',
-    售前: 'SmartX 售前工程师',
-    PMO: 'SmartX 销售经理',
-    审批人: 'SmartX 销售经理',
-    项目经理: 'SmartX 项目经理',
-    服务工程师: 'SmartX 服务工程师',
-  };
-  return Object.hasOwn(legacy, value) ? legacy[value] : value;
 }
 export function isAdministrator(role: string) {
   return role === 'SmartX 系统管理员';
@@ -568,7 +557,7 @@ export function applyRequestAction(
           : undefined;
       if (
         action.type === 'worklog-edit' &&
-        (!existing || existing.voidedAt || existing.userId !== actor.id)
+        (!existing || existing.voidedAt || !canActForUser(actor, existing.userId))
       )
         throw new Error('只能编辑自己的有效工时记录。');
       if (!canRecordWorklog(record, actor))
@@ -589,7 +578,7 @@ export function applyRequestAction(
       const dayTotal = ops.worklogs
         .filter(
           (w) =>
-            w.userId === actor.id &&
+            w.userId === (existing?.userId ?? actor.id) &&
             w.date === action.date &&
             !w.voidedAt &&
             w.id !== existing?.id,
@@ -601,8 +590,8 @@ export function applyRequestAction(
       requireText(action.category, '工作类型');
       const updatedLog = {
         id: existing?.id ?? crypto.randomUUID(),
-        userId: actor.id,
-        userName: actor.name,
+        userId: existing?.userId ?? actor.id,
+        userName: existing?.userName ?? actor.name,
         date: action.date,
         startTime: action.startTime,
         endTime: action.endTime,
@@ -620,7 +609,7 @@ export function applyRequestAction(
     }
     case 'worklog-void': {
       const log = ops.worklogs.find((w) => w.id === action.id);
-      if (!log || log.voidedAt || log.userId !== actor.id)
+      if (!log || log.voidedAt || !canActForUser(actor, log.userId))
         throw new Error('只能作废自己的有效工时记录。');
       requireText(action.reason, '作废原因');
       log.voidedAt = now;
@@ -845,5 +834,5 @@ export function requestReturnNotice(record: ServiceRequest): { title: string; re
 export function canRecordWorklog(record: ServiceRequest, actor: OperationActor): boolean {
   return Boolean(actor.id) && isInternal(actor.role)
     && !['草稿', '已取消', '已转服务项目', '评估完成'].includes(record.status)
-    && (actor.role === 'SmartX 项目经理' || Boolean(record.internalParticipants?.some(person => person.userId === actor.id)));
+    && (isDemoAdministrator(actor) || actor.role === 'SmartX 项目经理' || Boolean(record.internalParticipants?.some(person => person.userId === actor.id)));
 }

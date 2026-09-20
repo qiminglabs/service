@@ -1,3 +1,4 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
 import { withAssessmentCollaborators } from './request-collaboration.ts';
 import {
   hardwareItems,
@@ -26,7 +27,7 @@ export type AssessmentAllocation = {
   at: string;
   configRevision: number;
   ruleId?: string;
-  matchedBy: 'rule' | 'default' | 'legacy';
+  matchedBy: 'rule' | 'default';
   reason: string;
 };
 export type AssessmentRouting = {
@@ -54,6 +55,7 @@ export function canPerformAssessmentRole(
   role: RoutingRole,
   users?: InternalUser[],
 ): boolean {
+  if (isDemoAdministrator(actor, users)) return true;
   if (!actor?.id || actor.role !== roleIdentity[role]) return false;
   const assessment = record.operations?.assessment;
   if (!assessment?.routing)
@@ -263,35 +265,6 @@ export function routeAssessmentOnSave(
       '提交申请',
     );
   } else if (addedHardware) {
-    // Preserve an existing legacy project manager while enabling routed hardware review.
-    if (!assessment.routing) {
-      assessment.routing = {};
-      installAllocation(
-        record,
-        'manager',
-        assessment.managerId
-          ? {
-              id: crypto.randomUUID(),
-              userId: assessment.managerId,
-              userName: assessment.manager,
-              at: now,
-              configRevision: config.revision,
-              matchedBy: 'legacy',
-              reason: '保留原项目经理',
-            }
-          : resolveAssessmentRoute(
-              record,
-              'manager',
-              config,
-              users,
-              now,
-              customers,
-            ),
-        now,
-        '系统',
-        '补充分配',
-      );
-    }
     installAllocation(
       record,
       'hardware',
@@ -310,91 +283,4 @@ export function routeAssessmentOnSave(
       '申请项不再命中硬件评估触发条件',
     );
   return withAssessmentCollaborators(record, users);
-}
-export function reassignAssessment(
-  record: ServiceRequest,
-  role: RoutingRole,
-  config: RoutingConfig,
-  users: InternalUser[],
-  actor: OperationActor,
-  reason: string,
-  now = new Date().toISOString(),
-  customers: RoutingDictionary['customers'] = [],
-): ServiceRequest {
-  if (
-    fixedIdentityRoles[actor.id ?? ''] !== 'SmartX 系统管理员' ||
-    actor.role !== 'SmartX 系统管理员' ||
-    !users.some((u) => u.id === actor.id && u.status === '启用')
-  )
-    throw new Error('仅已启用的系统管理员可重新分配。');
-  if (record.status !== '待评估' || materialAssessmentPassed(record))
-    throw new Error('仅整体材料评估通过前可重新分配。');
-  if (!reason.trim()) throw new Error('请填写重新分配原因。');
-  if (
-    role === 'hardware' &&
-    !needsHardware(record) &&
-    !matchesHardwareTrigger(
-      record,
-      parseHardwareAssessmentTrigger(config.hardware.trigger),
-    )
-  )
-    throw new Error('此请求无需硬件产品经理评估。');
-  const result = structuredClone(record);
-  result.operations ??= {
-    meetings: [],
-    worklogs: [],
-    bases: [],
-    evaluations: [],
-    activities: [],
-  };
-  result.operations.assessment ??= {
-    managerId: '',
-    manager: '',
-    rounds: [],
-    tasks: [],
-    plans: [],
-    approvals: [],
-  };
-  const assessment = result.operations.assessment;
-  assessment.hardwareRequirement =
-    role === 'hardware'
-      ? captureHardwareRequirement(
-          parseHardwareAssessmentTrigger(config.hardware.trigger),
-          config.revision,
-        )
-      : structuredClone(hardwareRequirement(record));
-  if (!assessment.routing) {
-    assessment.routing = {};
-    // Adopt existing owners without changing the other role's completed work.
-    if (assessment.managerId)
-      assessment.routing.manager = {
-        id: crypto.randomUUID(),
-        userId: assessment.managerId,
-        userName: assessment.manager,
-        at: now,
-        configRevision: config.revision,
-        matchedBy: 'legacy',
-        reason: '保留原项目经理',
-      };
-    if (assessment.hardware?.reviewerId)
-      assessment.routing.hardware = {
-        id: crypto.randomUUID(),
-        userId: assessment.hardware.reviewerId,
-        userName: assessment.hardware.reviewer,
-        at: now,
-        configRevision: config.revision,
-        matchedBy: 'legacy',
-        reason: '保留原硬件产品经理',
-      };
-  }
-  installAllocation(
-    result,
-    role,
-    resolveAssessmentRoute(result, role, config, users, now, customers),
-    now,
-    actor.name,
-    reason.trim(),
-  );
-  result.updatedAt = now;
-  return withAssessmentCollaborators(result, users);
 }

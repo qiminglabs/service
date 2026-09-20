@@ -1,0 +1,185 @@
+'use client';
+import { useState } from 'react';
+import { Download, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { downloadFile } from '@/lib/service-requests';
+import {
+  maxProjectReportFileDescription,
+  maxProjectReportFiles,
+  type ProjectReportFile,
+  type ProjectReportFileSelection,
+} from '@/lib/project-report-files';
+import type { ProjectDeliverable } from '@/lib/service-project-deliverables';
+
+export function ProjectReportFilesSection({
+  files,
+  title = '项目文件',
+}: {
+  files: ProjectReportFile[];
+  title?: string;
+}) {
+  return (
+    <section className="report-project-files" aria-label={title}>
+      <h3>
+        {title} <span>{files.length}</span>
+      </h3>
+      {files.length ? (
+        <ol>
+          {files.map((item) => (
+            <li key={item.id}>
+              <div className="report-project-file-title">
+                <FileText size={18} aria-hidden="true" />
+                <strong>{item.file.name}</strong>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => downloadFile(item.file)}
+                  aria-label={`下载 ${item.file.name}`}
+                >
+                  <Download size={14} />
+                  下载
+                </Button>
+              </div>
+              {item.description && <p>{item.description}</p>}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="sr-help">暂无{title}</p>
+      )}
+    </section>
+  );
+}
+
+export function ProjectReportFilePicker({
+  items,
+  selections,
+  disabled,
+  onChange,
+}: {
+  items: ProjectDeliverable[];
+  selections: ProjectReportFileSelection[];
+  disabled: boolean;
+  onChange: (selections: ProjectReportFileSelection[]) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const available = new Set(items.map((item) => item.id));
+  const unavailable = selections.some(
+    (item) => !available.has(item.deliverableId),
+  );
+  const visible = items.filter((item) =>
+    `${item.file.name} ${item.serviceName} ${item.stepName}`.includes(query),
+  );
+  return (
+    <section className="report-file-picker" aria-label="选择客户交付物">
+      <div className="report-file-picker-toolbar">
+        <Input
+          aria-label="搜索客户交付物"
+          placeholder="搜索文件名称、服务或步骤"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <span>已选 {selections.length} 个文件</span>
+      </div>
+      {unavailable && (
+        <div className="report-file-picker-invalid">
+          <p className="sr-error" role="alert">
+            部分已选文件不再属于客户交付物。
+          </p>
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={() =>
+              onChange(
+                selections.filter((item) => available.has(item.deliverableId)),
+              )
+            }
+          >
+            移除失效文件
+          </Button>
+        </div>
+      )}
+      <div className="report-file-picker-list">
+        {visible.map((item) => {
+          const selected = selections.find(
+            (selection) => selection.deliverableId === item.id,
+          );
+          return (
+            <section
+              key={item.id}
+              className="report-file-choice"
+              data-selected={!!selected || undefined}
+            >
+              <label
+                className="report-file-choice-heading"
+                htmlFor={`report-file-${encodeURIComponent(item.id)}`}
+              >
+                <Checkbox
+                  id={`report-file-${encodeURIComponent(item.id)}`}
+                  aria-label={`选择 ${item.file.name} · ${item.stepName}`}
+                  checked={!!selected}
+                  disabled={
+                    disabled ||
+                    (!selected && selections.length >= maxProjectReportFiles)
+                  }
+                  onCheckedChange={(checked) =>
+                    onChange(
+                      checked
+                        ? [
+                            ...selections,
+                            { deliverableId: item.id, description: '' },
+                          ]
+                        : selections.filter(
+                            (selection) => selection.deliverableId !== item.id,
+                          ),
+                    )
+                  }
+                />
+                <span>
+                  <strong>{item.file.name}</strong>
+                  <small>
+                    {item.serviceName} · {item.stepName} ·{' '}
+                    {item.requirementName}
+                  </small>
+                </span>
+              </label>
+              {selected && (
+                <label
+                  className="report-file-description"
+                  htmlFor={`file-description-${encodeURIComponent(item.id)}`}
+                >
+                  <span>文件说明</span>
+                  <Textarea
+                    id={`file-description-${encodeURIComponent(item.id)}`}
+                    aria-label={`${item.file.name} 文件说明`}
+                    value={selected.description}
+                    maxLength={maxProjectReportFileDescription}
+                    rows={3}
+                    disabled={disabled}
+                    onChange={(event) =>
+                      onChange(
+                        selections.map((selection) =>
+                          selection.deliverableId === item.id
+                            ? { ...selection, description: event.target.value }
+                            : selection,
+                        ),
+                      )
+                    }
+                  />
+                </label>
+              )}
+            </section>
+          );
+        })}
+        {!visible.length && (
+          <p className="routing-empty">
+            {items.length ? '暂无匹配的客户交付物' : '暂无客户交付物'}
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}

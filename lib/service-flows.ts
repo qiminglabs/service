@@ -1,3 +1,17 @@
+import type { ReportTemplate } from './report-templates';
+import {
+  withFlowReportTemplates,
+  validateFlowReportTemplates,
+} from './flow-report-templates.ts';
+import {
+  validateServiceFlowPhases,
+  type ServiceFlowPhase,
+} from './service-flow-phases.ts';
+import {
+  serviceFlowConditionTrace,
+  validateServiceFlowLanguage,
+} from './service-flow-conditions.ts';
+import type { RoutePredicate } from './assessment-routing-schema';
 import {
   parseServiceFlowSteps,
   type ServiceFlowStep,
@@ -17,6 +31,8 @@ export type ServiceFlow = {
   description: string;
   enabled: boolean;
   steps: ServiceFlowStep[];
+  phases?: ServiceFlowPhase[];
+  reportTemplates?: ReportTemplate[];
 };
 export type FlowCondition = {
   field: FlowConditionField;
@@ -31,6 +47,12 @@ export type ServiceFlowRule = {
   match: 'all' | 'any';
   conditions: FlowCondition[];
   flowId: string;
+  serviceScope?: { mode: 'all' | 'selected'; serviceIds: string[] };
+  naturalLanguage?: {
+    requirement: string;
+    testedRequirement?: string;
+    compiled?: RoutePredicate;
+  };
 };
 export type ServiceFlowAssignment = {
   defaultFlowId: string;
@@ -43,9 +65,22 @@ export type ServiceFlowConfig = {
   assignment: ServiceFlowAssignment;
   updatedAt?: string;
   updatedBy?: string;
+  history?: ServiceFlowHistory[];
+};
+export type ServiceFlowHistory = {
+  id: string;
+  kind: 'rule' | 'default';
+  name: string;
+  rule?: ServiceFlowRule;
+  flow: ServiceFlow;
+  revision: number;
+  reason: string;
+  disabledAt?: string;
+  disabledBy?: string;
 };
 export type FlowContext = Record<FlowConditionField, string>;
 export type FlowDictionary = {
+  workOrderFields?: import('../components/request-field-settings').RequestField[];
   services: { id: string; name: string }[];
   customers: { id: string; name: string; team?: string }[];
 };
@@ -59,6 +94,61 @@ export const sortedFlowRules = (rules: ServiceFlowRule[]) =>
   [...rules].sort(
     (a, b) => a.priority - b.priority || a.id.localeCompare(b.id),
   );
+
+export function validateServiceFlowScope(
+  rule: ServiceFlowRule,
+  dictionary?: FlowDictionary,
+) {
+  const scope = rule.serviceScope;
+  if (scope === undefined) return; // Existing rules retain their original unrestricted scope.
+  if (
+    !scope ||
+    !['all', 'selected'].includes(scope.mode) ||
+    !Array.isArray(scope.serviceIds) ||
+    scope.serviceIds.some(
+      (id) => typeof id !== 'string' || !id.trim() || id.length > 150,
+    ) ||
+    new Set(scope.serviceIds).size !== scope.serviceIds.length
+  )
+    throw new Error('适用服务目录配置无效，请重新选择。');
+  if (scope.mode === 'all' && scope.serviceIds.length)
+    throw new Error('全部服务目录不能同时指定目录。');
+  if (scope.mode === 'selected' && !scope.serviceIds.length)
+    throw new Error('请至少选择一个适用服务目录。');
+  if (
+    dictionary &&
+    scope.serviceIds.some(
+      (id) => !dictionary.services.some((service) => service.id === id),
+    )
+  )
+    throw new Error('所选服务目录已不存在，请重新选择。');
+}
+export function serviceFlowScopeMatches(
+  rule: ServiceFlowRule,
+  serviceId: string,
+) {
+  return (
+    rule.serviceScope === undefined ||
+    rule.serviceScope.mode === 'all' ||
+    (!!serviceId && rule.serviceScope.serviceIds.includes(serviceId))
+  );
+}
+export function serviceFlowScopeLabel(
+  rule: ServiceFlowRule,
+  dictionary: FlowDictionary,
+) {
+  if (!rule.serviceScope || rule.serviceScope.mode === 'all')
+    return '全部服务目录';
+  return (
+    rule.serviceScope.serviceIds
+      .map(
+        (id) =>
+          dictionary.services.find((service) => service.id === id)?.name ??
+          `${id}（已不存在）`,
+      )
+      .join('、') || '尚未选择服务目录'
+  );
+}
 
 // Validate saved configuration too: damaged records must never silently become defaults.
 export function parseServiceFlowConfig(value: unknown): ServiceFlowConfig {
@@ -86,6 +176,26 @@ export function parseServiceFlowConfig(value: unknown): ServiceFlowConfig {
     fail('服务流程配置格式无效。');
   if (!unique(config.flows) || !unique(config.assignment.rules))
     fail('流程或规则标识重复或无效。');
+  if (config.history !== undefined) {
+    if (!Array.isArray(config.history) || !unique(config.history))
+      fail('服务流程历史记录格式无效。');
+    for (const entry of config.history) {
+      if (
+        !['rule', 'default'].includes(entry.kind) ||
+        !required(entry.name) ||
+        !entry.flow ||
+        !required(entry.flow.id) ||
+        !required(entry.flow.name) ||
+        !Number.isInteger(entry.revision) ||
+        entry.revision < 0 ||
+        !required(entry.reason) ||
+        (entry.kind === 'rule' && !entry.rule?.id)
+      )
+        fail('服务流程历史记录格式无效。');
+      entry.flow.steps = parseServiceFlowSteps(entry.flow.steps);
+      validateServiceFlowPhases(entry.flow);
+    }
+  }
   const names = new Set<string>();
   for (const flow of config.flows) {
     if (
@@ -98,6 +208,9 @@ export function parseServiceFlowConfig(value: unknown): ServiceFlowConfig {
     if (names.has(flow.name)) fail('流程名称已存在，请使用其他名称。');
     names.add(flow.name);
     flow.steps = parseServiceFlowSteps(flow.steps);
+    Object.assign(flow, withFlowReportTemplates(flow));
+    validateFlowReportTemplates(flow);
+    validateServiceFlowPhases(flow);
   }
   const active = (id: string) =>
     config.flows.some((flow) => flow.id === id && flow.enabled);
@@ -109,6 +222,7 @@ export function parseServiceFlowConfig(value: unknown): ServiceFlowConfig {
     fail('默认流程不存在或已停用，请先调整默认服务流程。');
   const priorities = new Set<number>();
   for (const rule of config.assignment.rules) {
+    validateServiceFlowScope(rule);
     if (
       !required(rule.name) ||
       typeof rule.enabled !== 'boolean' ||
@@ -118,13 +232,18 @@ export function parseServiceFlowConfig(value: unknown): ServiceFlowConfig {
       rule.priority > 9999
     )
       fail('请填写规则名称，优先级须为 1–9999 的整数。');
-    if (priorities.has(rule.priority)) fail('规则优先级重复，请使用其他数字。');
-    priorities.add(rule.priority);
+    if (rule.enabled && priorities.has(rule.priority))
+      fail('规则优先级重复，请使用其他数字。');
+    if (rule.enabled) priorities.add(rule.priority);
     rule.name = rule.name.trim();
     if (!config.flows.some((flow) => flow.id === rule.flowId))
       fail('规则引用的流程不存在，请先调整或删除相关规则。');
     if (rule.enabled && !active(rule.flowId))
       fail('启用的规则不能分配停用流程，请先调整相关规则。');
+    if (rule.naturalLanguage) {
+      validateServiceFlowLanguage(rule);
+      continue;
+    }
     if (
       !Array.isArray(rule.conditions) ||
       !rule.conditions.length ||
@@ -154,41 +273,26 @@ export function parseServiceFlowConfig(value: unknown): ServiceFlowConfig {
   config.assignment.rules = sortedFlowRules(config.assignment.rules);
   return config;
 }
-
-export function flowConditionMatches(
-  condition: FlowCondition,
-  context: FlowContext,
-) {
-  const actual = context[condition.field];
-  // Unknown data does not satisfy either equality or inequality.
-  return (
-    !!actual &&
-    (condition.operator === 'eq'
-      ? actual === condition.value
-      : actual !== condition.value)
-  );
-}
 export function resolveServiceFlow(
   config: ServiceFlowConfig,
   context: FlowContext,
 ) {
   const trace = sortedFlowRules(config.assignment.rules).map((rule) => {
-    const conditions = rule.conditions.map((condition) => ({
-      ...condition,
-      actual: context[condition.field],
-      matched: flowConditionMatches(condition, context),
-    }));
+    const groups = serviceFlowConditionTrace(rule, context);
+    const conditions = groups.flat();
     const available = config.flows.some(
       (flow) => flow.id === rule.flowId && flow.enabled,
     );
+    const scopeMatched = serviceFlowScopeMatches(rule, context.serviceId);
     const matched =
       rule.enabled &&
       available &&
-      conditions.length > 0 &&
-      (rule.match === 'all'
-        ? conditions.every((row) => row.matched)
-        : conditions.some((row) => row.matched));
-    return { rule, conditions, available, matched };
+      scopeMatched &&
+      groups.some(
+        (group) =>
+          group.length > 0 && group.every((condition) => condition.matched),
+      );
+    return { rule, conditions, groups, available, scopeMatched, matched };
   });
   const selected = trace.find((row) => row.matched);
   const flowId = selected?.rule.flowId ?? config.assignment.defaultFlowId;

@@ -1,3 +1,4 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
 import { canPerformAssessmentRole } from './assessment-routing.ts';
 import { routingUsers } from './assessment-routing-schema.ts';
@@ -22,8 +23,8 @@ export function deliveryConversionMaterialIssues(record: ServiceRequest): string
 // Completed presales requests may receive additional delivery materials in detail.
 export function canSupplementDeliveryMaterials(record: ServiceRequest, actor?: OperationActor): boolean {
   return requestTypeOf(record) === '技术评估' && record.status === '评估完成'
-    && !!actor?.id && actor.role === 'SmartX 项目经理'
-    && record.operations?.assessment?.managerId === actor.id;
+    && (isDemoAdministrator(actor) || !!actor?.id && actor.role === 'SmartX 项目经理'
+    && record.operations?.assessment?.managerId === actor.id);
 }
 
 // Conversion may add files, but preserves assessed items and existing materials.
@@ -44,7 +45,7 @@ export function deliveryConversionItemsIssue(next: ServiceRequest, previous: Ser
 export function deliveryConversionIssue(record: ServiceRequest, actor: OperationActor | undefined, users: InternalUser[]): string | null {
   if (requestTypeOf(record) !== '技术评估' || record.status !== '评估完成') return '仅评估完成的技术评估请求可转为服务交付。';
   if (!record.operations?.assessment?.managerId || !canPerformAssessmentRole(record, actor, 'manager', users)
-    || !routingUsers(users, 'manager').some(user => user.id === actor?.id)) return '仅负责本请求的项目经理可转为服务交付。';
+    || (!isDemoAdministrator(actor, users) && !routingUsers(users, 'manager').some(user => user.id === actor?.id))) return '仅负责本请求的项目经理可转为服务交付。';
   const assessment = record.operations?.assessment;
   if (!assessment?.rounds.some(round => round.outcome === '评估通过') || !assessment.effort
     || !isDayQuantity(assessment.effort.days) || assessment.effort.days < 0) return '请先完成有效的材料评估和人天核定。';

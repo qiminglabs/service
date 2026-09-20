@@ -1,4 +1,5 @@
 import type { InternalUser } from './service-requests';
+import { partnerUserRole } from './partner-directory.ts';
 import type { OperationActor } from './request-operations';
 
 // Local prototype directory only; these are not provisioned accounts.
@@ -134,7 +135,7 @@ export function operationIdentities(
       .map((user) => ({
         id: user.id,
         name: user.name,
-        role: '合作伙伴服务工程师',
+        role: partnerUserRole,
       })),
     ...(sources.contacts ?? [])
       .filter(
@@ -148,19 +149,6 @@ export function operationIdentities(
       )
       .map((contact) => ({ id: contact.id, name: contact.name, role: '客户' })),
   ];
-}
-
-// Menu-only deduplication; approval and collaboration retain the full directory.
-export function roleSwitchIdentities(
-  identities: OperationActor[],
-  selectedId: string,
-): OperationActor[] {
-  const byRole = new Map<string, OperationActor>();
-  for (const identity of identities) {
-    if (!byRole.has(identity.role) || identity.id === selectedId)
-      byRole.set(identity.role, identity);
-  }
-  return [...byRole.values()];
 }
 
 export function resolveOperationActor(

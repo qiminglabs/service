@@ -1,4 +1,8 @@
 'use client';
+import { withRequestCollaborators, applicantRemovalIssue } from '@/lib/request-collaboration';
+
+import { isDemoAdministrator } from '@/lib/demo-permissions';
+import { canSubmitRequest, requestCollaboratorsLocked } from '@/lib/request-collaboration';
 import { isSystemApplicationField } from '@/lib/request-application-fields';
 import { isConvertedRequest, convertedRequestReadonlyMessage } from '@/lib/request-readonly';
 import { requestTypeOf, requestTypes, type RequestType } from '@/lib/request-types';
@@ -11,30 +15,25 @@ import { RequestDeliveryConversion } from '@/components/request-delivery-convers
 import { checkSubmissionQueue, SubmissionValidationError, submissionEvent, validationHeading } from '@/lib/submission-validation';
 import type { ValidationFailure } from '@/lib/submission-validation';
 import type { RuleEvent } from '@/lib/submission-rule-schema';
-import { isRequestApplicant, requestAudience, managerCollaboratorId, hardwareCollaboratorId, assessmentCollaboratorRemovalIssue } from '@/lib/request-collaboration';
-import { commitCatalogVersion } from '@/lib/catalog-versions';
-import { initializePartnerCatalogConfigs } from '@/lib/partner-catalog-config';
+import { requestAudience,managerCollaboratorId,hardwareCollaboratorId,assessmentCollaboratorRemovalIssue } from '@/lib/request-collaboration';
+import { commitCatalogVersion, canManageCatalog } from '@/lib/catalog-versions';
 import { RequestFormBuilder } from '@/components/request-form-builder';
 import { requestFormOrder } from '@/lib/request-form-layout';
 import { RequestFormLayout } from '@/components/request-form-layout';
-import { initializeRequestSamples } from '@/lib/demo-service-requests';
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
-  CircleAlert,
-  ArrowLeft,
-  ChevronRight,
-  FileText,
-  Plus,
-  Save,
-  Search,
-  Settings2,
+CircleAlert,
+ArrowLeft,FileText,
+Plus,
+Save,
+Search,
+Settings2
 } from 'lucide-react';
 import {
-  fieldTypes,
-  RequestFieldControl,
-  RequestFieldsContext,
-  ApplicationFieldsContext,
+RequestFieldControl,
+RequestFieldsContext,
+ApplicationFieldsContext
 } from '@/components/request-field-settings';
 import type { RequestField } from '@/components/request-field-settings';
 import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -45,6 +44,8 @@ import { prepareMaterialDeduplication, requestMaterialGroup, materialDialogItem,
 import { RequestStatusProgress } from '@/components/request-status-progress';
 import { RequestNextStepBanner } from '@/components/request-next-step';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
+import { ServiceProjectBasicInfo as RequestBasicInfo, projectFieldText } from '@/components/service-project-basic-info';
+import { requestBasicInfo, requestIdentityIssue, type RequestSaveOptions } from '@/lib/service-requests';
 import { DateField } from '@/components/date-field';
 import {
   RequestProjectDialog,
@@ -53,23 +54,21 @@ import {
 import { isProjectCreationEligible } from '@/lib/request-projects';
 import { RequestOperationsTabs } from '@/components/request-operations';
 import {
-  emptyAssessment,
-  applyAssessmentAction,
-  isProjectManager,
-  repairCustomerRequestApprover,
+emptyAssessment,
+applyAssessmentAction
 } from '@/lib/request-assessment';
-import { fixedIdentityRoles, operationIdentities } from '@/lib/internal-users';
+import { operationIdentities } from '@/lib/internal-users';
 import {
-  requestReturnNotice,
-  appendActivity,
-  operationsOf,
-  isInternal,
-  migrateRoleLabel,
+requestReturnNotice,
+appendActivity,
+operationsOf,
+isInternal
 } from '@/lib/request-operations';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import {
   RequestExternalCollaborators,
   RequestInternalInfo,
+  RequestPartnerCollaborators,
 } from '@/components/request-internal-info';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -91,42 +90,40 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
-  canAccessRequest,
-  canEditRequestItems,
-  canCheckRequestCompleteness,
-  canAddExternalCollaborators,
-  customerCollaborationIssue,
-  customerOwnerRemovalIssue,
-  withRequestContact,
-  requestContactRemovalIssue,
-  canCreateRequest,
-  requestCreationAccessIssue,
-  requestCreationIssue,
-  requestStatuses,
-  requestStatusTone,
-  RequestIdentityError,
-  businessObjectsEnabled,
-  matchesObjectProduct,
-  objectEntitlementAvailability,
-  snapshotItemBusinessObjects,
-  clearHiddenRequestFields,
-  savedItemBusinessObjects,
-  defaultConfig,
-  readRequestConfigs,
-  resolveRequestConfig,
-  serviceAvailableForRequest,
-  fieldLabels,
-  requestMaterialsCustomerVisible,
-  itemSummaryFields,
-  itemBasicIssues,
-  requestFieldIsRequired,
-  requestFieldIsVisible,
-  newItem,
-  copyRequestItem,
-  newRequest,
-  normalizeRequestConfig,
-  readLocal,
-  saveLocal,
+canAccessRequest,
+canEditRequestItems,
+canCheckRequestCompleteness,
+canAddExternalCollaborators,
+customerCollaborationIssue,
+customerOwnerRemovalIssue,
+canCreateRequest,
+requestCreationAccessIssue,
+requestCreationIssue,
+requestStatuses,
+requestStatusTone,
+RequestIdentityError,
+businessObjectsEnabled,
+matchesObjectProduct,
+objectEntitlementAvailability,
+snapshotItemBusinessObjects,
+clearHiddenRequestFields,
+savedItemBusinessObjects,
+defaultConfig,
+readRequestConfigs,
+resolveRequestConfig,
+serviceAvailableForRequest,
+fieldLabels,
+requestMaterialsCustomerVisible,
+itemSummaryFields,
+itemBasicIssues,
+requestFieldIsRequired,
+requestFieldIsVisible,
+newItem,
+copyRequestItem,
+newRequest,
+normalizeRequestConfig,
+readLocal,
+saveLocal,
 } from '@/lib/service-requests';
 import type {
   CatalogService,
@@ -153,13 +150,8 @@ type Props = {
   currentActor: OperationActor;
   identityDirectory: { id: string; name: string }[];
   currentCustomerId?: string;
-  partnerCollaborators: {
-    id: string;
-    name: string;
-    phone: string;
-    email: string;
-    status: string;
-  }[];
+  partnerCollaborators: import('@/lib/partner-directory').PartnerUser[];
+  partners: import('@/lib/partner-directory').Partner[];
   initialRequestId?: string;
   createToken: number;
 };
@@ -203,46 +195,14 @@ function configForEditing(
   };
 }
 
-function RequestFormPage({ title, description, backLabel, busy, onClose, actions, children, sectioned = false }: {
-  title: string;
-  description?: string;
-  backLabel: string;
-  busy: boolean;
-  onClose: () => void;
-  actions: ReactNode;
-  children: ReactNode;
-  sectioned?: boolean;
-}) {
-  const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => {
-    heading.current?.focus({ preventScroll: true });
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, []);
-  return (
-    <section className="sr-form-page" aria-label={title}>
-      <header className="detail-heading sr-form-page-heading">
-        <div>
-          <button type="button" className="detail-back" disabled={busy} onClick={onClose}>
-            <ArrowLeft aria-hidden="true" />{backLabel}
-          </button>
-          <h2 ref={heading} tabIndex={-1}>{title}</h2>
-          {description && <p>{description}</p>}
-        </div>
-        <div className="detail-actions">{actions}</div>
-      </header>
-      <div className={sectioned ? 'sr-form-page-sections' : 'sr-panel sr-form-page-content'}>{children}</div>
-    </section>
-  );
-}
-
-function RequestCustomerLabel({ required = false, hint = '创建后不可修改客户。' }: { required?: boolean; hint?: string }) {
+function RequestCustomerLabel({ required = false, hint = '' }: { required?: boolean; hint?: string }) {
   const label = useContext(ApplicationFieldsContext).find(field => field.id === 'customerId')?.name ?? '客户';
   return <span className="sr-customer-label">
     {label}{required && <em>*</em>}
-    <TooltipProvider><Tooltip>
+    {hint && <TooltipProvider><Tooltip>
       <TooltipTrigger render={<span tabIndex={0} role="img" className="sr-description-hint" aria-label="客户说明" onClick={event => event.preventDefault()}><CircleAlert size={16} aria-hidden="true" /></span>} />
       <TooltipContent className="sr-description-tooltip" side="top">{hint}</TooltipContent>
-    </Tooltip></TooltipProvider>
+    </Tooltip></TooltipProvider>}
   </span>;
 }
 
@@ -315,10 +275,7 @@ export function RequestWorkspace(props: Props) {
     contacts: props.contacts,
   };
   const customerPortal = props.currentActor.role === '客户';
-  const audience = customerPortal ? 'customer' : 'internal';
-  const availableServices = props.services.filter((service) =>
-    serviceAvailableForRequest(service, audience),
-  );
+
   const canCreate = canCreateRequest(access);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [ready, setReady] = useState(false);
@@ -333,12 +290,17 @@ export function RequestWorkspace(props: Props) {
   const [conversion, setConversion] = useState<ServiceRequest | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creation, setCreation] = useState<ServiceRequest | null>(null);
-  const [createMaterialTarget, setCreateMaterialTarget] = useState<{ itemId: string; requirementId: string } | null>(null);
+  const audience = draft ? requestAudience(draft) : customerPortal ? 'customer' : 'internal';
+  const availableServices = props.services.filter(service => serviceAvailableForRequest(service, audience));
+  const creationActors = operationIdentities(props.users, { customers: props.customers, contacts: props.contacts }).filter(person => person.role !== '合作伙伴服务工程师');
+  const [basicEditing, setBasicEditing] = useState<ServiceRequest | null>(null);
+  const basicOriginal = useRef<ServiceRequest | null>(null);
+  const creationOriginal = useRef<ServiceRequest | null>(null);
   const createCustomer = creation?.customerId ?? '';
   const [addOpen, setAddOpen] = useState(false);
   const [catalogQuery, setCatalogQuery] = useState('');
   const [pendingItem, setPendingItem] = useState<RequestItem | null>(null);
-  const itemParent = createOpen ? creation : draft;
+  const itemParent = draft;
   const pendingReadonly = !itemParent || !canEditRequestItems(itemParent, props.currentActor);
   const pendingService = props.services.find(
     (service) => service.id === pendingItem?.serviceId,
@@ -389,9 +351,17 @@ export function RequestWorkspace(props: Props) {
 
   function beginCreate() {
     const customerId = customerPortal ? props.currentCustomerId ?? '' : '';
-    setCreation(withRequestContact({ ...newRequest('', customerId, props.currentActor.name || props.currentRole, '', props.currentActor.id, props.currentActor.role), requestType: '' }, props.contacts, props.customers, props.users));
-    setAddOpen(false); setPendingItem(null); setCreateMaterialTarget(null);
+    const initial = withRequestCollaborators({ ...newRequest('', customerId, props.currentActor.name || props.currentRole, props.currentActor.id, props.currentActor.role), requestType: '' }, props.contacts, props.customers, props.users);
+    setCreation(initial); creationOriginal.current = structuredClone(initial);
+    setAddOpen(false); setPendingItem(null);
     setCatalogQuery(''); setError(''); setCreateOpen(true);
+  }
+  function changeCreationActor(id: string) {
+    const person = creationActors.find(person => person.id === id);
+    if (!person || !creation || !isDemoAdministrator(props.currentActor)) return;
+    const customerId = person.role === '客户' ? props.contacts.find(contact => contact.id === id)?.customerId ?? '' : creation.customerId;
+    const initial = newRequest(creation.title, customerId, person.name, person.id, person.role);
+    setCreation(withRequestCollaborators({ ...initial, id: creation.id, requestType: creation.requestType, ...(id !== props.currentActor.id ? { createdViaAdmin: { id: props.currentActor.id!, name: props.currentActor.name } } : {}) }, props.contacts, props.customers, props.users));
   }
   function updateCreation(patch: Partial<ServiceRequest>) {
     setCreation(current => current ? { ...current, ...patch } : current);
@@ -399,34 +369,18 @@ export function RequestWorkspace(props: Props) {
   }
   function changeCreationCustomer(customerId: string) {
     if (!creation) return;
-    const defaults = newRequest('', customerId, props.currentActor.name || props.currentRole, '', props.currentActor.id, props.currentActor.role);
-    setCreation(withRequestContact({ ...creation, customerId, internalParticipants: defaults.internalParticipants, externalCollaborators: defaults.externalCollaborators, items: creation.items.map(item => ({ ...item, businessObjectIds: [], businessObjectSnapshot: undefined, materials: [] })) }, props.contacts, props.customers, props.users));
-    setCreateMaterialTarget(null); setError('');
+    const creator = creationActors.find(person => person.id === creation.createdById) ?? props.currentActor;
+    const defaults = newRequest('', customerId, creator.name, creator.id, creator.role);
+    setCreation(withRequestCollaborators({ ...creation, customerId, internalParticipants: defaults.internalParticipants, externalCollaborators: defaults.externalCollaborators, items: [] }, props.contacts, props.customers, props.users));
+    setError('');
   }
   function load() {
-    return initializeRequestSamples(props)
-      .catch((error) =>
-        setNotice(
-          error instanceof Error
-            ? `样例初始化暂未完成：${error.message}`
-            : '样例初始化暂未完成，请刷新后重试。',
-        ),
-      )
-      .then(() => readLocal<ServiceRequest>('requests'))
+    return readLocal<ServiceRequest>('requests')
       .then(async (records) => {
         records = records.map((record) =>
-          withRequestContact(record, props.contacts, props.customers, props.users),
+          withRequestCollaborators(record, props.contacts, props.customers, props.users),
         );
         setReservationRecords(records);
-        const repair = repairCustomerRequestApprover(records, props.users);
-        if (repair && canAccessRequest(repair, access)) {
-          await saveLocal('requests', repair, access);
-          const savedRepair = clearHiddenRequestFields(repair);
-          records = records.map((record) =>
-            record.id === repair.id ? savedRepair : record,
-          );
-          setDraft((current) => (current?.id === repair.id ? savedRepair : current));
-        }
         const visible = records.filter((record) =>
           canAccessRequest(record, access),
         );
@@ -475,18 +429,18 @@ export function RequestWorkspace(props: Props) {
     }
   }, [props.createToken]);
 
-  async function persist(record: ServiceRequest, message = '草稿已保存到本机', failureHeading?: string) {
+  async function persist(record: ServiceRequest, message = '草稿已保存到本机', failureHeading?: string, options?: RequestSaveOptions) {
     if (saveLock.current) return false;
     if (draft?.id === record.id && isConvertedRequest(draft)) { setError(convertedRequestReadonlyMessage); return false; }
     saveLock.current = true;
     setBusy(true);
     setError('');
-    let next = withRequestContact(
+    let next = withRequestCollaborators(
       { ...record, updatedAt: new Date().toISOString() },
       props.contacts, props.customers, props.users,
     );
     try {
-      await saveLocal('requests', next, access);
+      await saveLocal('requests', next, access, options);
       next = (await readLocal<ServiceRequest>('requests')).find(record => record.id === next.id) ?? clearHiddenRequestFields(next);
       setReservationRecords((previous) => [
         next,
@@ -541,7 +495,7 @@ export function RequestWorkspace(props: Props) {
       setShowIssues(true);
     }
   }
-  async function duplicateItem(record: ServiceRequest, id: string, creating: boolean) {
+  async function duplicateItem(record: ServiceRequest, id: string) {
     if (!ready || busy || saveLock.current || !canEditRequestItems(record, props.currentActor)) return;
     const source = record.items.find(item => item.id === id);
     if (!source) return;
@@ -551,8 +505,7 @@ export function RequestWorkspace(props: Props) {
     const items = [...synchronizeRequestMaterials(record).items];
     items.splice(items.findIndex(item => item.id === id) + 1, 0, copyRequestItem(source));
     const copied = synchronizeRequestMaterials({ ...record, items });
-    if (creating) updateCreation({ items: copied.items });
-    else await persist(copied, '已复制服务项，请按需修改内容并补充材料');
+    await persist(copied, '已复制服务项，请按需修改内容并补充材料');
   }
   async function createDraft() {
     if (!ready || busy || !canCreate || !creation) return;
@@ -564,18 +517,10 @@ export function RequestWorkspace(props: Props) {
       setError(issue);
       return;
     }
-    for (const item of record.items) {
-      const missing = itemBasicIssues(item);
-      if (missing.length) { setError(`${item.serviceName}：请补充${missing.join('、')}`); return; }
-      if (!availableServices.some(service => service.id === item.serviceId)) { setError(`${item.serviceName}：目录已停用或不再允许申请，请移除后重新选择。`); return; }
-      if (businessObjectsEnabled(item.config) && item.businessObjectIds.some(id => !props.businessObjects.some(object => object.id === id && object.customerId === record.customerId && object.status === '启用' && matchesObjectProduct(object, item.config)))) {
-        setError(`${item.serviceName}：请重新选择当前客户有效且符合产品要求的业务对象。`); return;
-      }
-    }
-    if (await persist(record, '服务请求草稿已创建，填写内容已一并保存')) {
+    if (await persist(record, '服务请求草稿已创建')) {
       setCreateOpen(false);
       setCreation(null);
-      setCreateMaterialTarget(null);
+
       setMaterialTarget(null);
       setShowIssues(false);
     }
@@ -658,11 +603,6 @@ export function RequestWorkspace(props: Props) {
           ? itemParent.items.map(item => item.id === savedItem.id ? savedItem : item)
           : [...itemParent.items, savedItem],
       });
-      if (createOpen) {
-        updateCreation({ items: next.items });
-        setAddOpen(false); setPendingItem(null); setItemError('');
-        return;
-      }
       if (
         await persistItemChanges(
           next,
@@ -712,21 +652,6 @@ export function RequestWorkspace(props: Props) {
   const lockedMaterialFileIds = preparingDeliveryMaterials && draft
     ? draft.items.flatMap(item => item.materials.flatMap(material => materialFiles(material).map(file => file.id))) : [];
   const returnNotice = draft ? requestReturnNotice(draft) : null;
-  const customerSalesManager = props.users.find(
-    (user) => user.id === props.customers.find(
-      (customer) => customer.id === draft?.customerId,
-    )?.ownerUserId,
-  );
-  const customerProjectManager = props.users.find(
-    (user) => fixedIdentityRoles[user.id] === 'SmartX 项目经理'
-      && draft?.internalParticipants?.some(person => person.userId === user.id),
-  );
-  const customerInternalApplicant = draft && requestAudience(draft) === 'internal'
-    ? props.users.find(user => user.id === draft.createdById)
-    : undefined;
-  const customerSmartxContacts = [customerSalesManager, customerProjectManager, customerInternalApplicant]
-    .filter((user): user is InternalUser => !!user)
-    .filter((user, index, contacts) => contacts.findIndex(contact => contact.id === user.id) === index);
   const selectedMaterialGroup = materialsRecord && materialTarget ? requestMaterialGroup(materialsRecord, materialTarget.itemId, materialTarget.requirementId) : undefined;
   const materialItem = selectedMaterialGroup ? materialDialogItem(selectedMaterialGroup) : undefined;
   const materialRequirement = selectedMaterialGroup?.requirement;
@@ -741,39 +666,38 @@ export function RequestWorkspace(props: Props) {
         .includes(query.toLowerCase().trim())
     );
   });
-  function updateDraft(
-    patch: Partial<
-      Pick<
-        ServiceRequest,
-        | 'title'
-        | 'requestType'
-        | 'description'
-        | 'expectedServiceDate'
-        | 'expectedServiceDateUncertain'
-        | 'customValues'
-        | 'externalCollaborators'
-        | 'internalParticipants'
-      >
-    >,
-  ) {
-    if (isConvertedRequest(draft)) return;
-    setDraft((record) =>
-      record && !isConvertedRequest(record)
-        ? withRequestContact({ ...record, ...patch }, props.contacts, props.customers, props.users)
-        : record,
-    );
-    setNotice('有未保存的修改');
+  function updateBasic(patch: Partial<ServiceRequest>) {
+    setBasicEditing(current => current ? { ...current, ...patch } : null);
+    setError('');
+  }
+  function closeBasicDialog() {
+    if (busy) return;
+    if (basicEditing && basicOriginal.current && JSON.stringify(requestBasicInfo(basicEditing)) !== JSON.stringify(requestBasicInfo(basicOriginal.current)) && !window.confirm('基本信息有未保存的修改，是否放弃？')) return;
+    setBasicEditing(null); basicOriginal.current = null; setError('');
+  }
+  function closeCreateDialog() {
+    if (busy) return;
+    if (creation && JSON.stringify({ ...requestBasicInfo(creation), customerId: creation.customerId }) !== JSON.stringify({ ...requestBasicInfo(creationOriginal.current!), customerId: creationOriginal.current?.customerId }) && !window.confirm('基本信息有未保存的修改，是否放弃？')) return;
+    setCreateOpen(false); setCreation(null); setError('');
+  }
+  async function saveBasicInfo() {
+    if (!basicEditing || !basicOriginal.current || !draft || readonly || busy) return;
+    const issue = requestIdentityIssue(basicEditing) ?? requestIdentityIssue(basicEditing, draft, props.currentActor);
+    if (issue) { setError(issue); return; }
+    if (await persist(basicEditing, '基本信息已保存', undefined, { basicInfo: { expectedUpdatedAt: basicOriginal.current.updatedAt } })) {
+      setBasicEditing(null); basicOriginal.current = null;
+    }
   }
 
   function updateCollaborators(
     patch: Partial<
-      Pick<ServiceRequest, 'externalCollaborators' | 'internalParticipants'>
+      Pick<ServiceRequest, 'externalCollaborators' | 'internalParticipants' | 'partnerCollaborators'>
     >,
   ) {
     if (!draft || busy) return;
-    if (isConvertedRequest(draft)) { setError(convertedRequestReadonlyMessage); return; }
+    if (requestCollaboratorsLocked(draft)) { setError('当前申请阶段不可维护协作人。'); return; }
     const removalIssue =
-      requestContactRemovalIssue({ ...draft, ...patch }, draft) ??
+      applicantRemovalIssue({ ...draft, ...patch }) ??
       customerOwnerRemovalIssue({ ...draft, ...patch }, draft, props.customers) ??
       assessmentCollaboratorRemovalIssue({ ...draft, ...patch }, draft);
     if (removalIssue) {
@@ -811,15 +735,12 @@ export function RequestWorkspace(props: Props) {
       setError('请先在右上角选择一个启用的内部用户。');
       return;
     }
-    if (!readonly && !customerAddition) {
-      updateDraft(patch);
-      return;
-    }
+    const partner = 'partnerCollaborators' in patch;
     const external = 'externalCollaborators' in patch;
-    const before = external
+    const before = partner ? (draft.partnerCollaborators ?? []).map(person => person.name) : external
       ? (draft.externalCollaborators ?? []).map((p) => p.name)
       : (draft.internalParticipants ?? []).map((p) => p.name);
-    const after = external
+    const after = partner ? (patch.partnerCollaborators ?? []).map(person => person.name) : external
       ? (patch.externalCollaborators ?? []).map((p) => p.name)
       : (patch.internalParticipants ?? []).map((p) => p.name);
     const detail = `变更前：${before.join('、') || '无'}；变更后：${after.join('、') || '无'}`;
@@ -828,7 +749,7 @@ export function RequestWorkspace(props: Props) {
         { ...draft, ...patch },
         props.currentActor,
         '协作',
-        external ? '更新客户协作人' : '更新内部协作人',
+        partner ? '更新合作伙伴协作人' : external ? '更新客户协作人' : '更新SmartX协作人',
         detail,
       ),
       '协作人已保存',
@@ -837,7 +758,7 @@ export function RequestWorkspace(props: Props) {
 
   const feedback = (
     <>
-      {error && (
+      {error && !createOpen && !basicEditing && (
         <div className="sr-error" role="alert">
           {error}
           {!ready && (
@@ -853,15 +774,15 @@ export function RequestWorkspace(props: Props) {
 
   return (
     <div
-      data-creating-request={canCreate && createOpen && !!creation || undefined}
+
       data-request-detail={!!draft || undefined}
       className={
-        draft || createOpen || addOpen
+        draft || addOpen
           ? 'sr-workspace sr-workspace--detail catalog-detail'
           : 'sr-workspace'
       }
     >
-      {!createOpen && (!draft ? (
+      {!draft ? (
         <>
           {feedback}
           <section className="sr-panel sr-request-list-panel">
@@ -902,7 +823,7 @@ export function RequestWorkspace(props: Props) {
               <table className="sr-table app-list-table">
                 <thead>
                   <tr>
-                    <th>{applicationLabel('title', '申请主题')} / 编号</th>
+                    <th>{applicationLabel('title', '申请主题')}</th>
                     {!customerPortal && <th>客户</th>}
                     <th>申请类型</th>
                     <th>申请项</th>
@@ -948,7 +869,7 @@ export function RequestWorkspace(props: Props) {
                       {isInternal(props.currentActor.role) && <td>{requestAudience(record) === 'customer' ? '客户中心' : '内部系统'}</td>}
                       <td>
                         {dateLabel(record.createdAt)}
-                        <small>{migrateRoleLabel(record.createdBy ?? record.owner ?? '—')}</small>
+                        <small>{record.createdBy ?? record.owner ?? '—'}</small>
                       </td>
                       <td>
                         <Button
@@ -995,12 +916,7 @@ export function RequestWorkspace(props: Props) {
                 type="button"
                 className="detail-back"
                 disabled={busy}
-                onClick={async () => {
-                  if (readonly || (await persist(draft))) {
-                    setDraft(null);
-                    setNotice('');
-                  }
-                }}
+                onClick={() => { setDraft(null); setNotice(''); setError(''); }}
               >
                 <ArrowLeft aria-hidden="true" />
                 返回服务请求列表
@@ -1055,17 +971,7 @@ export function RequestWorkspace(props: Props) {
                 )}
               {!readonly && (
                 <>
-                  <Button
-                    variant="outline"
-                    className="ct-button ct-button--ordinary"
-                    disabled={busy}
-                    onClick={() => {
-                      void persist(draft);
-                    }}
-                  >
-                    保存草稿
-                  </Button>
-                  {isRequestApplicant(draft, props.currentActor) && <Button
+                  {canSubmitRequest(draft, props.currentActor) && <Button
                     className="ct-button ct-button--primary"
                     disabled={busy}
                     onClick={async () => {
@@ -1095,6 +1001,7 @@ export function RequestWorkspace(props: Props) {
             contacts={props.contacts}
             validationFailures={validationResult?.requestId === draft.id ? validationResult.failures : undefined}
             customers={props.customers}
+            mentionDirectory={{ customers: props.customers, partners: props.partners, partnerUsers: props.partnerCollaborators }}
             services={props.services}
             key={draft.id}
             customerId={props.currentCustomerId}
@@ -1106,29 +1013,6 @@ export function RequestWorkspace(props: Props) {
             save={persist}
             sidebar={
               <aside className="sr-collaboration-column" aria-label="协作人">
-                {customerPortal && customerSmartxContacts.length > 0 && (
-                  <section className="sr-panel sr-collaboration-card" aria-label="SmartX 联系人">
-                    <div className="sr-panel-heading"><h3>SmartX 联系人</h3></div>
-                    <div className="sr-internal-body sr-smartx-contact">
-                        <ul className="sr-participants">{customerSmartxContacts.map(contact => <li key={contact.id}>
-                        <span className="sr-collaborator-copy">
-                            <span className="sr-participant-name">{contact.name}</span>
-
-                          <small title={`${contact.phone?.trim() || '未填写电话'} · ${contact.email?.trim() || '未填写邮箱'}`}>
-                            {contact.phone?.trim() || '未填写电话'}
-                            {' · '}
-                            {contact.email?.trim() || '未填写邮箱'}
-                          </small>
-                        </span>
-                        <span className="sr-help">{[
-                          contact.id === customerSalesManager?.id && '客户经理',
-                          contact.id === customerProjectManager?.id && '项目经理',
-                          contact.id === customerInternalApplicant?.id && '申请人',
-                        ].filter(Boolean).join(' · ')}</span>
-                        </li>)}</ul>
-                    </div>
-                  </section>
-                )}
                 <RequestExternalCollaborators
                   showCustomerVisibility={isInternal(props.currentRole)}
                   applicantId={requestAudience(draft) === 'customer' ? draft.createdById : undefined}
@@ -1143,7 +1027,6 @@ export function RequestWorkspace(props: Props) {
                     updateCollaborators({ externalCollaborators })
                   }
                 />
-                {isInternal(props.currentRole) && (
                   <RequestInternalInfo
                     hardwareReviewerId={hardwareCollaboratorId(draft)}
                     projectManagerId={managerCollaboratorId(draft)}
@@ -1155,13 +1038,20 @@ export function RequestWorkspace(props: Props) {
                     }
                     users={props.users}
                     value={draft.internalParticipants ?? []}
-                    readonly={isConvertedRequest(draft)}
+                    readonly={!isInternal(props.currentRole) || requestCollaboratorsLocked(draft)}
                     busy={busy}
                     onChange={(internalParticipants) =>
                       updateCollaborators({ internalParticipants })
                     }
                   />
-                )}
+                <RequestPartnerCollaborators
+                  users={props.partnerCollaborators}
+                  value={draft.partnerCollaborators ?? []}
+                  readonly={!isInternal(props.currentRole) || !['草稿', '待评估'].includes(draft.status)}
+                  busy={busy}
+                  showCustomerVisibility={isInternal(props.currentRole)}
+                  onChange={partnerCollaborators => updateCollaborators({ partnerCollaborators })}
+                />
               </aside>
             }
           >
@@ -1189,62 +1079,18 @@ export function RequestWorkspace(props: Props) {
                   <h3>基本信息</h3>
                   {isInternal(props.currentRole) && <CustomerVisibleBadge />}
                 </div>
+                {!readonly && <Button type="button" disabled={busy} onClick={() => {
+                  basicOriginal.current = structuredClone(draft); setBasicEditing(structuredClone(draft)); setError('');
+                }}>编辑基本信息</Button>}
               </div>
-              <fieldset disabled={readonly || busy} className="sr-form-grid">
-                <label htmlFor="sr-title">
-                  {applicationLabel('title', '申请主题')} <em>*</em>
-                  <Input
-                    id="sr-title"
-                    value={draft.title}
-                    onChange={(e) => updateDraft({ title: e.target.value })}
-                    placeholder="例如：生产环境新装与巡检"
-                  />
-                </label>
-                <label htmlFor="sr-request-type">
-                  {applicationLabel('requestType', '申请类型')} <em>*</em>
-                  <select id="sr-request-type" required value={requestTypeOf(draft)} onChange={event => updateDraft({ requestType: event.target.value as RequestType })}>
-                    <option value="" disabled>请选择申请类型</option>
-                    {requestTypes.map(type => <option key={type} value={type}>{type}</option>)}
-                  </select>
-                </label>
-                <label htmlFor="sr-customer-readonly">
-                  <RequestCustomerLabel hint={draft.customerId ? '创建后不可修改客户。' : '此历史草稿未关联客户，请重新创建请求。'} />
-                  <Input
-                    id="sr-customer-readonly"
-                    className="sr-readonly-customer"
-                    readOnly
-                    value={
-                      props.customers.find((c) => c.id === draft.customerId)
-                        ?.name ??
-                      (draft.customerId || '历史草稿未选择客户')
-                    }
-                  />
-                </label>
-                <DateField
-                  id="sr-expected-service-date"
-                  label={applicationLabel('expectedServiceDate', '期望服务日期')} required
-                  value={draft.expectedServiceDate ?? ''}
-                  uncertain={draft.expectedServiceDateUncertain === true}
-                  onUncertain={() => updateDraft({ expectedServiceDate: '', expectedServiceDateUncertain: true })}
-                  readonly={readonly}
-                  disabled={busy}
-                  onChange={(expectedServiceDate) =>
-                    updateDraft({ expectedServiceDate, expectedServiceDateUncertain: false })
-                  }
-                />
-                <label className="sr-span">
-                  {applicationLabel('description', '申请说明')}（选填）
-                  <textarea
-                    value={draft.description}
-                    onChange={(e) =>
-                      updateDraft({ description: e.target.value })
-                    }
-                    placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。"
-                    rows={3}
-                  />
-                </label>
-                {applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{field.name}</div><RequestFieldControl field={field} value={draft.customValues?.[field.id] ?? ''} disabled={readonly || busy} onChange={value => updateDraft({ customValues: { ...draft.customValues, [field.id]: value } })} /></div>)}
-              </fieldset>
+              <RequestBasicInfo fields={[
+                { id: 'title', label: applicationLabel('title', '申请主题'), value: draft.title },
+                { id: 'requestType', label: applicationLabel('requestType', '申请类型'), value: requestTypeOf(draft) },
+                { id: 'customer', label: applicationLabel('customerId', '客户'), value: props.customers.find(customer => customer.id === draft.customerId)?.name ?? draft.customerId },
+                { id: 'date', label: applicationLabel('expectedServiceDate', '期望服务日期'), value: draft.expectedServiceDateUncertain ? '暂不确定' : draft.expectedServiceDate },
+                { id: 'description', label: applicationLabel('description', '申请说明'), value: draft.description, fullWidth: true },
+                ...applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => ({ id: field.id, label: field.name, value: projectFieldText(field, draft.customValues?.[field.id] ?? '') })),
+              ]} />
             </section>
             <RequestItemsPanel
               objects={props.businessObjects}
@@ -1252,9 +1098,9 @@ export function RequestWorkspace(props: Props) {
               onAdd={() => { setCatalogQuery(''); setPendingItem(null); setItemError(''); setAddOpen(true); }}
               onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setAddOpen(true); }}
               onRemove={setRemoveId}
-              onCopy={id => { void duplicateItem(draft, id, false); }}
+              onCopy={id => { void duplicateItem(draft, id); }}
             />
-            <RequestMaterialsPanel record={materialsRecord!} description={preparingDeliveryMaterials ? '按服务交付要求补齐材料，已评估材料仅可查看。' : undefined} actor={props.currentActor} readonly={materialsReadonly} busy={busy} onMaterial={setMaterialTarget} />
+            <RequestMaterialsPanel record={materialsRecord!} actor={props.currentActor} readonly={materialsReadonly} busy={busy} onMaterial={setMaterialTarget} />
             <section
               className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}
               aria-labelledby="sr-system-heading"
@@ -1289,14 +1135,14 @@ export function RequestWorkspace(props: Props) {
                 <div>
                   <dt>创建人</dt>
                   <dd>
-                    {migrateRoleLabel(draft.createdBy ?? draft.owner ?? '—')}
+                    {draft.createdBy ?? draft.owner ?? '—'}
                   </dd>
                 </div>
               </dl>
             </section>
           </RequestOperationsTabs>
         </>
-      ))}
+      )}
 
       {conversion && <RequestDeliveryConversion busy={busy} onConfirm={() => void confirmDeliveryConversion()} onClose={() => setConversion(null)} />}
       {draft && materialItem &&
@@ -1316,38 +1162,12 @@ export function RequestWorkspace(props: Props) {
             onSave={(material) => saveItemMaterials(materialItem.id, material)}
           />
         )}
-      {canCreate && createOpen && creation && (
-        <RequestFormPage
-          title="新建服务请求"
-          sectioned
-          backLabel={draft ? "返回申请详情" : "返回服务请求列表"}
-          busy={busy}
-          onClose={() => { setCreateOpen(false); setCreateMaterialTarget(null); setError(''); }}
-          actions={<>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => { setCreateOpen(false); setCreateMaterialTarget(null); setError(''); }}
-            >
-              取消
-            </Button>
-            <Button
-              disabled={!ready || busy || !canCreate}
-              onClick={() => void createDraft()}
-            >
-              {busy ? '正在保存…' : '创建草稿'}
-            </Button>
-          </>}
-        >
-          <RequestStatusProgress record={creation} />
-          {error && <p className="sr-error" role="alert">{error}</p>}
-          <div className="sr-detail-layout">
-          <div className="sr-detail-main">
-          <section className={`sr-panel${!customerPortal ? ' sr-customer-visible-panel' : ''}`} aria-label="基本信息">
-          <div className="sr-panel-heading">
-            <div className="sr-panel-title-with-visibility"><h3>基本信息</h3>{!customerPortal && <CustomerVisibleBadge />}</div>
-          </div>
+      {canCreate && createOpen && creation && <Dialog open onOpenChange={open => { if (!open) closeCreateDialog(); }}>
+        <DialogContent className="request-basic-dialog" showCloseButton={!busy} aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>新建服务请求</DialogTitle></DialogHeader>
+          <form id="request-create-basic-form" onSubmit={event => { event.preventDefault(); void createDraft(); }}>
           <fieldset className="sr-form-grid" disabled={busy}>
+            {isDemoAdministrator(props.currentActor) && <label>发起人<select value={creation.createdById} onChange={event => changeCreationActor(event.target.value)}>{creationActors.map(person => <option key={person.id} value={person.id}>{person.name} · {person.role}</option>)}</select></label>}
             <label htmlFor="sr-create-title">
               {applicationLabel('title', '申请主题')} <em>*</em>
               <Input
@@ -1368,12 +1188,12 @@ export function RequestWorkspace(props: Props) {
                 {requestTypes.map(type => <option key={type} value={type}>{type}</option>)}
               </select>
             </label>
-            {customerPortal ? <label htmlFor="sr-create-customer-readonly">
+            {requestAudience(creation) === 'customer' ? <label htmlFor="sr-create-customer-readonly">
               <RequestCustomerLabel />
               <Input id="sr-create-customer-readonly" className="sr-readonly-customer" readOnly value={props.customers.find(customer => customer.id === createCustomer)?.name ?? createCustomer} />
             </label> : (
               <label>
-                <RequestCustomerLabel required hint={`创建后不可修改客户。${creation.items.length ? '更换客户会清空已选业务对象、材料和协作人。' : ''}`} />
+                <RequestCustomerLabel required  />
                 <select
                   required
                   disabled={busy}
@@ -1399,45 +1219,91 @@ export function RequestWorkspace(props: Props) {
             </label>
             {applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{field.name}</div><RequestFieldControl field={field} value={creation.customValues?.[field.id] ?? ''} disabled={busy} onChange={value => updateCreation({ customValues: { ...creation.customValues, [field.id]: value } })} /></div>)}
           </fieldset>
-          </section>
-          <RequestItemsPanel
-              objects={props.businessObjects}
-            record={creation} actor={props.currentActor} busy={busy} readonly={false} showCompleteness={true} canAdd={ready && !!createCustomer}
-            onAdd={() => { setPendingItem(null); setCatalogQuery(''); setItemError(''); setError(''); setAddOpen(true); }}
-            onEdit={item => { setPendingItem(structuredClone(item)); setItemError(''); setError(''); setAddOpen(true); }}
-            onRemove={id => updateCreation({ items: synchronizeRequestMaterials(creation).items.filter(item => item.id !== id) })}
-            onCopy={id => { void duplicateItem(creation, id, true); }}
-          />
-          <RequestMaterialsPanel record={creation} actor={props.currentActor} readonly={false} busy={busy} onMaterial={setCreateMaterialTarget} />
-          </div>
-          <aside className="sr-collaboration-column" aria-label="协作人">
-            <RequestExternalCollaborators showCustomerVisibility={!customerPortal} applicantId={customerPortal ? creation.createdById : undefined} contacts={props.contacts.filter(contact => contact.customerId === createCustomer)} value={creation.externalCollaborators ?? []} readonly={!createCustomer} allowRemove={true} busy={busy} onChange={externalCollaborators => updateCreation({ externalCollaborators })} />
-            {!customerPortal && <RequestInternalInfo applicantId={creation.createdById} ownerUserId={props.customers.find(customer => customer.id === createCustomer)?.ownerUserId} users={props.users} value={creation.internalParticipants ?? []} readonly={!createCustomer} busy={busy} onChange={internalParticipants => updateCreation({ internalParticipants })} />}
-          </aside>
-          </div>
-        </RequestFormPage>
-      )}
-
-      {createOpen && creation && createMaterialTarget && (() => {
-        const group = requestMaterialGroup(creation, createMaterialTarget.itemId, createMaterialTarget.requirementId);
-        if (!group) return null;
-        const item = materialDialogItem(group);
-        const requirement = group.requirement;
-        return <RequestMaterialDialog key={`${item.id}:${requirement.id}`} record={creation} item={item} requirement={requirement} actor={props.currentActor} readonly={false} busy={busy} error="" onClose={() => setCreateMaterialTarget(null)} onSave={async material => {
-          updateCreation({ items: saveRequestMaterialGroup(creation, item.id, requirement.id, material, props.currentActor).items });
-          setCreateMaterialTarget(null);
-          return true;
-        }} />;
-      })()}
+            {error && <p className="sr-error" role="alert">{error}</p>}
+          </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy} onClick={closeCreateDialog}>取消</Button>
+            <Button type="submit" form="request-create-basic-form" disabled={!ready || busy || !canCreate}>{busy ? '正在保存…' : '创建草稿'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>}
+      {basicEditing && <Dialog open onOpenChange={open => { if (!open) closeBasicDialog(); }}>
+        <DialogContent className="request-basic-dialog" showCloseButton={!busy} aria-describedby={undefined}>
+          <DialogHeader><DialogTitle>编辑基本信息</DialogTitle></DialogHeader>
+          <form id="request-edit-basic-form" onSubmit={event => { event.preventDefault(); void saveBasicInfo(); }}>
+              <fieldset disabled={readonly || busy} className="sr-form-grid">
+                <label htmlFor="sr-title">
+                  {applicationLabel('title', '申请主题')} <em>*</em>
+                  <Input
+                    id="sr-title"
+                    required
+                    value={basicEditing.title}
+                    onChange={(e) => updateBasic({ title: e.target.value })}
+                    placeholder="例如：生产环境新装与巡检"
+                  />
+                </label>
+                <label htmlFor="sr-request-type">
+                  {applicationLabel('requestType', '申请类型')} <em>*</em>
+                  <select id="sr-request-type" required value={requestTypeOf(basicEditing)} onChange={event => updateBasic({ requestType: event.target.value as RequestType })}>
+                    <option value="" disabled>请选择申请类型</option>
+                    {requestTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                  </select>
+                </label>
+                <label htmlFor="sr-customer-readonly">
+                  <RequestCustomerLabel hint={basicEditing.customerId ? '' : '此历史草稿未关联客户，请重新创建请求。'} />
+                  <Input
+                    id="sr-customer-readonly"
+                    className="sr-readonly-customer"
+                    readOnly
+                    value={
+                      props.customers.find((c) => c.id === basicEditing.customerId)
+                        ?.name ??
+                      (basicEditing.customerId || '历史草稿未选择客户')
+                    }
+                  />
+                </label>
+                <DateField
+                  id="sr-expected-service-date"
+                  label={applicationLabel('expectedServiceDate', '期望服务日期')} required
+                  value={basicEditing.expectedServiceDate ?? ''}
+                  uncertain={basicEditing.expectedServiceDateUncertain === true}
+                  onUncertain={() => updateBasic({ expectedServiceDate: '', expectedServiceDateUncertain: true })}
+                  readonly={readonly}
+                  disabled={busy}
+                  onChange={(expectedServiceDate) =>
+                    updateBasic({ expectedServiceDate, expectedServiceDateUncertain: false })
+                  }
+                />
+                <label className="sr-span">
+                  {applicationLabel('description', '申请说明')}（选填）
+                  <textarea
+                    value={basicEditing.description}
+                    onChange={(e) =>
+                      updateBasic({ description: e.target.value })
+                    }
+                    placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。"
+                    rows={3}
+                  />
+                </label>
+                {applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{field.name}</div><RequestFieldControl field={field} value={basicEditing.customValues?.[field.id] ?? ''} disabled={readonly || busy} onChange={value => updateBasic({ customValues: { ...basicEditing.customValues, [field.id]: value } })} /></div>)}
+              </fieldset>
+            {error && <p className="sr-error" role="alert">{error}</p>}
+          </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy} onClick={closeBasicDialog}>取消</Button>
+            <Button type="submit" form="request-edit-basic-form" disabled={busy || readonly}>{busy ? '正在保存…' : '保存'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>}
 
       {itemParent && (
         <Dialog open={addOpen} onOpenChange={open => {
           if (!open && !busy) { setAddOpen(false); setPendingItem(null); setItemError(''); setError(''); }
         }}>
-          <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog" showCloseButton={!busy}>
+          <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog" {...(pendingReadonly && pendingItem ? { 'aria-describedby': undefined } : {})} showCloseButton={!busy}>
             <DialogHeader>
               <DialogTitle>{pendingReadonly && pendingItem ? '服务项详细信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑服务项' : '添加服务项'}</DialogTitle>
-              <DialogDescription>{pendingReadonly && pendingItem ? '申请项信息仅供查看。' : pendingItem ? (createOpen ? '填写并保存服务项信息，材料可返回申请材料区域补充。' : '填写并保存服务项信息，材料可在申请材料区域补充。') : '选择本次申请的服务目录。'}</DialogDescription>
+              {!(pendingReadonly && pendingItem) && <DialogDescription>{pendingItem ? '填写并保存服务项信息，材料可在申请材料区域补充。' : '选择本次申请的服务目录。'}</DialogDescription>}
             </DialogHeader>
           <div className="sr-item-dialog-body">
             {pendingItem ? (
@@ -1761,7 +1627,7 @@ export function RequestWorkspace(props: Props) {
             <Button
               disabled={busy}
               onClick={async () => {
-                if (!draft || !isRequestApplicant(draft, props.currentActor)) return;
+                if (!draft || !canSubmitRequest(draft, props.currentActor)) return;
                 if (
                   await persist(
                     appendActivity(
@@ -2111,11 +1977,16 @@ function ItemBasicFields({
 
 export function RequestCatalogSettings({
   service,
+  actor,
+  readonly = false,
   audience = 'internal',
 }: {
   service: CatalogService;
+  actor: OperationActor;
+  readonly?: boolean;
   audience?: CatalogFormAudience;
 }) {
+  const writable = !readonly && canManageCatalog(actor);
   const configLabel = audience === 'internal' ? '内部申请' : audience === 'partner' ? '合作伙伴中心申请' : '客户中心申请';
   const requestFields = useContext(RequestFieldsContext);
   const products = useContext(BusinessObjectProductsContext);
@@ -2130,8 +2001,7 @@ export function RequestCatalogSettings({
   const [saved, setSaved] = useState(false);
   useEffect(() => {
     let active = true;
-    (audience === 'partner' ? initializePartnerCatalogConfigs() : Promise.resolve())
-      .then(() => readRequestConfigs(audience))
+    readRequestConfigs(audience)
       .then((records) => {
         if (active) {
           setConfig(resolveRequestConfig(service, records));
@@ -2151,7 +2021,7 @@ export function RequestCatalogSettings({
         <h3>{configLabel}表单</h3>
         <Button
           variant="outline"
-          aria-label={`配置${configLabel}表单`}
+          aria-label={`${writable ? '配置' : '查看'}${configLabel}表单`}
           disabled={!ready}
           onClick={() => {
             setEditing(configForEditing(config, requestFields));
@@ -2160,7 +2030,7 @@ export function RequestCatalogSettings({
           }}
         >
           <Settings2 size={15} />
-          配置表单
+          {writable ? '配置表单' : '查看表单'}
         </Button>
       </div>
       <p>
@@ -2194,25 +2064,26 @@ export function RequestCatalogSettings({
       >
         <SheetContent className="sr-item-sheet rf-fullscreen">
           <SheetHeader>
-            <SheetTitle>配置{configLabel}</SheetTitle>
+            <SheetTitle>{writable ? '配置' : '查看'}{configLabel}</SheetTitle>
             <SheetDescription>
-              {service.name} · 保存后用于新添加的申请项；不影响已创建项目。
+              {service.name}{writable ? ' · 保存后用于新添加的申请项；不影响已创建项目。' : ''}
             </SheetDescription>
           </SheetHeader>
-          <RequestFormBuilder service={service} config={editing} fields={requestFields} products={products} busy={busy} update={setEditing} />
+          <RequestFormBuilder service={service} config={editing} fields={requestFields} products={products} busy={busy} readonly={!writable} update={next => { if (writable) setEditing(next); }} />
           {error && <p role="alert" className="sr-error" style={{ margin: '8px 24px' }}>{error}</p>}
           <SheetFooter className="sr-sheet-footer">
-            <span>模板文件仅保存在本机</span>
+            {writable && <span>模板文件仅保存在本机</span>}
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => setOpen(false)}
             >
-              取消
+              {writable ? '取消' : '关闭'}
             </Button>
-            <Button
+            {writable && <Button
               disabled={busy}
               onClick={async () => {
+                if (!writable) return;
                 const choiceWithoutOptions = requestFields.find(
                   (field) =>
                     editing.fields.includes(field.id) &&
@@ -2291,7 +2162,7 @@ export function RequestCatalogSettings({
                     config: next,
                     audience,
                     reason: `修改${configLabel}配置`,
-                  });
+                  }, actor);
                   setConfig(savedConfig ?? next);
                   setSaved(true);
                   setOpen(false);
@@ -2303,7 +2174,7 @@ export function RequestCatalogSettings({
               }}
             >
               {busy ? '正在保存…' : '保存配置'}
-            </Button>
+            </Button>}
           </SheetFooter>
         </SheetContent>
       </Sheet>

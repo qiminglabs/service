@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { NativeSelect } from '@/components/ui/native-select';
+import type { ApprovalScope } from '@/lib/approval-scope';
 import { readApprovalPreviewData } from '@/lib/approval-flow-store';
 import { resolveApprovalPreview } from '@/lib/approval-preview';
 
 type Data = Awaited<ReturnType<typeof readApprovalPreviewData>>;
-export function ApprovalAllocationPreview({ refreshKey, dirty = false }: { refreshKey: string | number; dirty?: boolean }) {
+export function ApprovalAllocationPreview({ refreshKey, dirty = false, scope = 'request' }: { refreshKey: string | number; dirty?: boolean; scope?: ApprovalScope }) {
   const [data, setData] = useState<Data>();
   const [sampleId, setSampleId] = useState('');
   const [loading, setLoading] = useState(true), [error, setError] = useState('');
@@ -16,7 +17,7 @@ export function ApprovalAllocationPreview({ refreshKey, dirty = false }: { refre
       const current = ++generation;
       setLoading(true); setError('');
       try {
-        const latest = await readApprovalPreviewData();
+        const latest = await readApprovalPreviewData(scope);
         if (active && current === generation) setData(latest);
       } catch (issue) {
         if (active && current === generation) setError(issue instanceof Error ? issue.message : '分配预览读取失败，请重试。');
@@ -27,15 +28,15 @@ export function ApprovalAllocationPreview({ refreshKey, dirty = false }: { refre
     void load();
     window.addEventListener('focus', load);
     return () => { active = false; window.removeEventListener('focus', load); };
-  }, [refreshKey, sampleId]);
+  }, [refreshKey, sampleId, scope]);
   const samples = data?.requests ?? [];
   const sample = samples.find(request => request.id === sampleId);
   const preview = sample && data && !loading && !error ? resolveApprovalPreview(sample, data.collection.rules, data.users, data.dictionary.customers, data.collection.defaultUserId) : undefined;
   return <section className="routing-preview approval-allocation-preview" aria-label="分配预览">
     <strong>分配预览</strong>
-    <NativeSelect aria-label="预览服务请求" value={sample ? sampleId : ''} onChange={event => setSampleId(event.target.value)} disabled={loading || !!error || !samples.length}>
-      <option value="">{loading ? '正在读取请求…' : error ? '请求读取失败' : samples.length ? '选择服务请求' : '暂无涉及特殊审批的请求'}</option>
-      {samples.map(request => <option key={request.id} value={request.id}>{request.id} · {data?.dictionary.customers.find(customer => customer.id === request.customerId)?.name ?? request.customerId} · {request.status}</option>)}
+    <NativeSelect aria-label={scope === 'project' ? '预览服务项目' : '预览服务请求'} value={sample ? sampleId : ''} onChange={event => setSampleId(event.target.value)} disabled={loading || !!error || !samples.length}>
+      <option value="">{loading ? '正在读取…' : error ? '读取失败' : samples.length ? `选择服务${scope === 'project' ? '项目' : '请求'}` : `暂无涉及特殊审批的${scope === 'project' ? '项目' : '请求'}`}</option>
+      {samples.map(request => <option key={request.id} value={request.id}>{request.id} · {data?.dictionary.customers.find(customer => customer.id === request.customerId)?.name ?? request.customerId} · {scope === 'project' ? request.title : request.status}</option>)}
     </NativeSelect>
     {dirty && <p className="sr-help approval-preview-note">默认审批人有未保存的修改，预览仍使用已保存配置。</p>}
     {error && <p className="sr-error" role="alert">{error}</p>}

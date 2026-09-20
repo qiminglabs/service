@@ -11,9 +11,13 @@ export type ProjectReservationRelease = {
   entitlementAllocations: EntitlementAllocation[];
   invalidatedApprovals: Pick<GapApproval, 'id' | 'days' | 'gaps'>[];
 };
+export function requestBasisIsFrozen(record: ServiceRequest): boolean {
+  const plan = record.operations?.assessment?.plans?.at(-1);
+  return !!plan && !plan.releasedAt && record.status !== '已取消' && (!plan.freezeOnConfirmation || !!plan.frozenAt);
+}
 export function activeRequestAssetAllocations(record: ServiceRequest): AssetAllocation[] {
   const plan = record.operations?.assessment?.plans?.at(-1);
-  if (!plan || plan.releasedAt || record.status === '已取消') return [];
+  if (!plan || !requestBasisIsFrozen(record)) return [];
   const releases = record.projectReservationReleases?.filter(release => release.planId === plan.id) ?? [];
   return plan.allocations.map(asset => ({ ...asset, days: Math.max(0, sumDays([asset.days,
     ...releases.flatMap(release => release.assetAllocations.filter(entry => entry.assetId === asset.assetId).map(entry => -entry.days))])) }))

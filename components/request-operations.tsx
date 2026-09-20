@@ -1,4 +1,6 @@
 'use client';
+
+import { isDemoAdministrator, canActForUser } from '@/lib/demo-permissions';
 import { requestTypeOf } from '@/lib/request-types';
 import { RequestSupplements } from '@/components/request-supplements';
 import { visibleSupplements } from '@/lib/request-supplements';
@@ -39,19 +41,17 @@ import type {
   StoredFile,
 } from '@/lib/service-requests';
 import {
-  applyRequestAction,
-  canRecordWorklog,
-  worklogHours,
-  formatWorklogHours,
-  isInternal,
-  isAdministrator,
-  migrateRoleLabel,
-  localDate,
-  operationsOf,
-  meetingAttachments,
-  meetingAttachmentAccept,
-  meetingAttachmentIssue,
-  meetingTranscript,
+applyRequestAction,
+canRecordWorklog,
+worklogHours,
+formatWorklogHours,
+isInternal,
+isAdministrator,localDate,
+operationsOf,
+meetingAttachments,
+meetingAttachmentAccept,
+meetingAttachmentIssue,
+meetingTranscript
 } from '@/lib/request-operations';
 import type {
   OperationActor,
@@ -62,6 +62,7 @@ import type {
 } from '@/lib/request-operations';
 
 type Props = {
+  mentionDirectory?: import('@/lib/supplement-mentions').RequestMentionDirectory;
   contacts?: import('@/lib/service-requests').ContactRef[];
   customers: CustomerRef[];
   services: CatalogService[];
@@ -138,6 +139,7 @@ function Summary({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function RequestOperationsTabs({
+  mentionDirectory,
   contacts,
   customers,
   services,
@@ -170,7 +172,7 @@ export function RequestOperationsTabs({
     activities.unshift({
       id: 'submission',
       at: record.submittedAt,
-      actor: migrateRoleLabel(record.createdBy ?? record.owner),
+      actor: record.createdBy ?? record.owner,
       actorId: '',
       category: '提交',
       title: '提交服务请求',
@@ -231,11 +233,6 @@ export function RequestOperationsTabs({
             </TabsTrigger>
           ))}
         </TabsList>
-        {closed && (
-          <p className="sr-ops-hint">
-            {record.status === '已转服务项目' ? '请求已转为服务项目，全部信息及协作人仅供查阅，不再支持编辑。' : '请求已结束，工作记录仅供查阅。协作人仍可在右侧管理。'}
-          </p>
-        )}
         {error && !dialog && (
           <p role="alert" className="sr-error">
             {error}
@@ -244,11 +241,11 @@ export function RequestOperationsTabs({
         <div className="sr-detail-layout">
           <div className="sr-detail-main">
             <TabsContent value="overview">
-              {!isInternal(role) && requestTypeOf(record) !== '技术评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
+              {(!isInternal(role) || isDemoAdministrator(actor)) && requestTypeOf(record) !== '技术评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
               {children}
             </TabsContent>
             <TabsContent value="supplements">
-              <RequestSupplements customers={customers} contacts={contacts} users={users} key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
+              <RequestSupplements directory={mentionDirectory} customers={customers} contacts={contacts} users={users} key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
             </TabsContent>
             <TabsContent value="meetings">
               <section className="sr-panel sr-ops-panel">
@@ -446,7 +443,7 @@ export function RequestOperationsTabs({
                             <td>{w.category}</td>
                             <td>
                               {!w.voidedAt &&
-                              w.userId === actor.id &&
+                              canActForUser(actor, w.userId) &&
                               editable ? (
                                 <>
                                   <Button
@@ -536,7 +533,7 @@ export function RequestOperationsTabs({
                           </h4>
                           <p>{a.detail}</p>
                           <span>
-                            {migrateRoleLabel(a.actor)} · {stamp(a.at)}
+                            {a.actor} · {stamp(a.at)}
                           </span>
                         </div>
                       </li>
@@ -657,7 +654,7 @@ function WorklogForm({
         <DialogDescription>
           {voiding && log
             ? `${log.date} · ${formatWorklogHours(log.hours)} 小时；作废后保留原记录，不计入汇总。`
-            : `录入人：${actor.name}。按起止时间计算分钟数，自动换算为投入小时。`}
+            : `录入人：${log?.userName ?? actor.name}。按起止时间计算分钟数，自动换算为投入小时。`}
         </DialogDescription>
       </DialogHeader>
       <div className="sr-ops-form">

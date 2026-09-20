@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   projectCollaboratorGroups,
+  projectCollaboratorRoleLabels,
   projectCollaboratorDialogOptions,
   type ProjectCollaborator,
   type ProjectCollaboratorOption,
@@ -120,7 +121,7 @@ function ProjectCollaboratorCard({
             <ul className="sr-participants">
               {value.map((person) => {
                 const current = person;
-                const identityLabels = current.assignmentRoles?.filter(role => role !== '原客户协作人') ?? [];
+                const identityLabels = projectCollaboratorRoleLabels(current.assignmentRoles);
                 return (
                   <li key={person.id}>
                     <span className="sr-collaborator-copy">
@@ -262,6 +263,7 @@ export function ServiceProjectCollaborators({
   directory,
   busy,
   partnerBusy = false,
+  internalReadonly,
   readonly,
   save,
 }: {
@@ -273,6 +275,7 @@ export function ServiceProjectCollaborators({
   directory: ProjectCollaboratorDirectory;
   busy: boolean;
   partnerBusy?: boolean;
+  internalReadonly: boolean;
   readonly: boolean;
   save: (
     group: ProjectCollaboratorGroup,
@@ -337,7 +340,7 @@ export function ServiceProjectCollaborators({
                 ? '请先选择服务方'
                 : undefined
           }
-          readonly={readonly}
+          readonly={readonly || (group.key === 'internal' && internalReadonly)}
           save={(ids) => save(group.key, ids)}
         />
       ))}

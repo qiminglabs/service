@@ -28,7 +28,7 @@ import {
   readProjectItemContext,
   newProjectServiceItem,
 } from '@/lib/service-project-store';
-import { projectItemReadonlyTargets, projectItemReadonlyValueFields } from '@/lib/service-project-readonly';
+import { projectItemReadonlyTargets } from '@/lib/service-project-readonly';
 import type { MappingTarget } from '@/lib/request-project-mapping';
 import type { ServiceProjectRecord } from '@/lib/service-projects';
 import { projectItemAudience } from '@/lib/service-projects';
@@ -212,7 +212,6 @@ function ProjectItemsPanel({
                         <button
                           type="button"
                           className="sr-muted-button"
-                          title={!canRemove(item) ? '包含转换后只读字段，不能移除' : undefined}
                           disabled={busy || !canRemove(item)}
                           onClick={() => onRemove(item.id)}
                         >
@@ -231,7 +230,7 @@ function ProjectItemsPanel({
   );
 }
 
-function ProjectItemBasicFields({
+export function ProjectItemBasicFields({
   reservationRecords,
   requestId,
   priceUnit,
@@ -240,19 +239,19 @@ function ProjectItemBasicFields({
   customerId,
   readonly,
   lockedFields,
-  lockedValueFields,
   busy,
   update,
+  descriptionPlaceholder = "说明本项服务的目标、范围和期望结果，环境细节可在材料中补充。",
 }: {
   reservationRecords: ServiceRequest[];
   requestId?: string;
+  descriptionPlaceholder?: string;
   priceUnit?: string;
   value: RequestItem;
   objects: ObjectRef[];
   customerId: string;
   readonly: boolean;
   lockedFields: MappingTarget[];
-  lockedValueFields: string[];
   busy: boolean;
   update: (patch: Partial<RequestItem>) => void;
 }) {
@@ -349,7 +348,7 @@ function ProjectItemBasicFields({
                       readOnly={fieldReadonly('description')}
                       value={value.description}
                       onChange={(e) => update({ description: e.target.value })}
-                      placeholder="说明本项服务的目标、范围和期望结果，环境细节可在材料中补充。"
+                      placeholder={descriptionPlaceholder}
                     />
                   </label>
                 );
@@ -512,7 +511,7 @@ function ProjectItemBasicFields({
                   </span>
                   {key !== 'nodes' && field ? (
                     <RequestFieldControl
-                      disabled={fieldReadonly('values') || lockedValueFields.includes(key) || busy}
+                      disabled={fieldReadonly('values') || busy}
                       field={field}
                       value={value.values[key] ?? ''}
                       availableOptions={value.config.fieldOptions?.[key]}
@@ -522,7 +521,7 @@ function ProjectItemBasicFields({
                     />
                   ) : (
                     <Input
-                      readOnly={fieldReadonly('values') || lockedValueFields.includes(key)}
+                      readOnly={fieldReadonly('values')}
                       type={key === 'nodes' ? 'number' : 'text'}
                       min={key === 'nodes' ? 1 : undefined}
                       step={key === 'nodes' ? 1 : undefined}
@@ -670,7 +669,7 @@ export function ServiceProjectItems({
         readonly={readonly}
         showCompleteness
         canAdd={!!customerId}
-        canRemove={item => !projectItemReadonlyTargets(project, item.id).length && !projectItemReadonlyValueFields(project, item.id).length}
+        canRemove={item => !projectItemReadonlyTargets(project, item.id).length}
         onAdd={() => void begin(null)}
         onEdit={(item) => void begin(item)}
         onCopy={(id) => void persist({ type: 'copy', id })}
@@ -701,6 +700,7 @@ export function ServiceProjectItems({
       >
         <DialogContent
           className="sr-dialog sr-catalog-dialog sr-item-basics-dialog"
+          {...(readonly ? { 'aria-describedby': undefined } : {})}
           showCloseButton={!disabled}
         >
           <DialogHeader>
@@ -711,13 +711,9 @@ export function ServiceProjectItems({
                   ? '编辑服务项'
                   : '添加服务项'}
             </DialogTitle>
-            <DialogDescription>
-              {readonly
-                ? '服务项信息仅供查看。'
-                : pending
-                  ? '填写并保存服务项信息。'
-                  : '选择本项目的服务目录。'}
-            </DialogDescription>
+            {!readonly && <DialogDescription>
+              {pending ? '填写并保存服务项信息。' : '选择本项目的服务目录。'}
+            </DialogDescription>}
           </DialogHeader>
           <div className="sr-item-dialog-body">
             {pending ? (
@@ -753,10 +749,8 @@ export function ServiceProjectItems({
                       </Button>
                     )}
                 </div>
-                {(projectItemReadonlyTargets(project, pending.id).length + projectItemReadonlyValueFields(project, pending.id).length) > 0 && <p className="sr-help">部分字段由来源请求带入，已按转换配置设为只读。</p>}
                 <ProjectItemBasicFields
                   lockedFields={projectItemReadonlyTargets(project, pending.id)}
-                  lockedValueFields={projectItemReadonlyValueFields(project, pending.id)}
                   value={pending}
                   reservationRecords={context.requests}
                   priceUnit={selectedService?.priceUnit}

@@ -10,12 +10,6 @@ export function readAddress(value: string): RequestAddress {
         typeof parsed?.[key] === 'string' ? parsed[key] : '',
       ]),
     ) as RequestAddress;
-    // Preserve legacy district information after removing the district control.
-    if (typeof parsed?.district === 'string' && parsed.district.trim()) {
-      address.detail = [parsed.district.trim(), address.detail]
-        .filter(Boolean)
-        .join(' ');
-    }
     return address;
   } catch {
     return { province: '', city: '', detail: value };

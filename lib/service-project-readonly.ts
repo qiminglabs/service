@@ -1,8 +1,11 @@
 import type { RequestItem } from './service-requests';
 import type { ServiceProjectRecord, ServiceProjectInput } from './service-projects';
 import { mappingRules, type MappingTarget } from './request-project-mapping.ts';
+import { projectCustomerConfirmationLocked } from './service-project-work-order-policy.ts';
 
 export function projectFieldReadonly(project: ServiceProjectRecord | null | undefined, target: MappingTarget): boolean {
+  if (target === 'name' && projectCustomerConfirmationLocked(project)) return true;
+  if (target === 'customerId' && project && project.status !== '待启动') return true;
   if (target === 'customerId' && (project?.sourceServiceRequestId || project?.requestConversion)) return true;
   const mapping = project?.requestConversion?.mapping;
   return !!mapping?.fields[target] && mapping.readonly?.[target] === true;
@@ -16,16 +19,14 @@ export function projectItemReadonly(project: ServiceProjectRecord | null | undef
 export function projectItemReadonlyTargets(project: ServiceProjectRecord | null | undefined, itemId: string): MappingTarget[] {
   return [...mappingRules.filter(rule => rule.section !== '请求字段' && projectItemReadonly(project, itemId, rule.target)).map(rule => rule.target), ...(projectItemReadonly(project, itemId, 'values') ? ['values' as const] : [])];
 }
-export function projectItemReadonlyValueFields(project: ServiceProjectRecord | null | undefined, itemId: string): string[] {
-  if (!project?.requestConversion?.workOrders.some(order => order.sourceItemId === itemId)) return [];
-  return (project.requestConversion.mapping.itemFields ?? []).filter(mapping => mapping.readonly).map(mapping => mapping.target.id);
-}
 export function projectCustomerReadonly(project: ServiceProjectRecord | null | undefined): boolean {
   return projectFieldReadonly(project, 'customerId') || !!project?.items?.some(item =>
     (projectItemReadonly(project, item.id, 'businessObjectIds') && item.businessObjectIds.length > 0)
     || (projectItemReadonly(project, item.id, 'materials') && item.materials.length > 0));
 }
 export function assertProjectFieldsWritable(previous: ServiceProjectRecord, input: ServiceProjectInput) {
+  if (projectCustomerConfirmationLocked(previous) && input.name !== previous.name)
+    throw new Error('客户已确认项目，项目名称已锁定，不能修改。');
   for (const target of ['name', 'expectedServiceDate', 'customerId', 'note', 'serviceProviderId'] as const) {
     const value = target === 'serviceProviderId' ? input[target] ?? previous[target] ?? '' : input[target];
     if (projectFieldReadonly(previous, target) && value !== (previous[target] ?? ''))
@@ -44,16 +45,12 @@ const itemKeys: Partial<Record<MappingTarget, (keyof RequestItem)[]>> = {
 export function assertProjectItemsWritable(project: ServiceProjectRecord, items: RequestItem[]) {
   for (const previous of project.items ?? []) {
     const targets = projectItemReadonlyTargets(project, previous.id);
-    const valueFields = projectItemReadonlyValueFields(project, previous.id);
-    if (!targets.length && !valueFields.length) continue;
+    if (!targets.length) continue;
     const next = items.find(item => item.id === previous.id);
     if (!next) throw new Error('由请求带入的服务项包含只读字段，不能移除。');
     for (const target of targets) {
       if (itemKeys[target]?.some(key => JSON.stringify(previous[key]) !== JSON.stringify(next[key])))
         throw new Error(`${mappingRules.find(rule => rule.target === target)?.label ?? '服务项字段'}已按转换映射设为只读，不能修改。`);
-    }
-    for (const field of valueFields) {
-      if ((previous.values[field] ?? '') !== (next.values[field] ?? '')) throw new Error('服务项字段已按转换映射设为只读，不能修改。');
     }
     // Form definitions can hide or replace the locked values and material requirements.
     if (JSON.stringify(previous.config) !== JSON.stringify(next.config)) throw new Error('服务项包含只读字段，不能更换其字段或材料定义。');

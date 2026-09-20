@@ -1,7 +1,7 @@
 import { entitlementAvailable } from './request-entitlement-reservations.ts';
 import { isDayQuantity, roundDays, sumDays } from './day-quantity.ts';
-export { roundDays } from './day-quantity.ts';
 import type { CatalogService, RequestItem, ServiceRequest, ObjectRef } from './service-requests';
+export { roundDays } from './day-quantity.ts';
 
 export type EntitlementPricingContext = {
   records?: ServiceRequest[];

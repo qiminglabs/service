@@ -35,7 +35,7 @@ export function DisabledRuleVersions({ versions, targetLabel, showName = false, 
         <td>{version.target}</td>
         <td><span className="rule-version-status">v{version.version} · 已停用</span></td>
         <td>{version.disabledAt ? new Date(version.disabledAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td>
-        <td>{version.disabledBy ?? '—'}</td><td><span className="sr-help">只读</span></td>
+        <td>{version.disabledBy ?? '—'}</td><td />
       </tr>)}{!versions.length && <tr><td colSpan={showName ? 8 : 7} className="routing-empty">
         {ready ? '暂无已停用版本。' : '正在读取配置…'}
       </td></tr>}</tbody>

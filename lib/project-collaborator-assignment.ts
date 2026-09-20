@@ -1,3 +1,4 @@
+import { withWorkOrderCollaboratorRoles } from './project-work-order-collaborators.ts';
 import type { CustomerRef, ServiceRequest } from './service-requests';
 import { fixedIdentityRoles } from './internal-users.ts';
 import type { ServiceProjectRecord } from './service-projects';
@@ -7,6 +8,8 @@ import type { ProjectCollaborator, ProjectCollaborators, ProjectCollaboratorDire
 import { managerCollaboratorId, requestAudience } from './request-collaboration.ts';
 
 export const projectCollaboratorAssignmentRules = [
+  { id: 'work-order-internal-engineer', scope: '派发内部工程师的项目', timing: '派单或改派时（原协作人保留）', source: '工单指派的内部工程师（去重）', target: 'SmartX 协作人', identity: '服务工程师' },
+  { id: 'work-order-partner-engineer', scope: '派发合作伙伴工程师的项目', timing: '派单或改派时（原协作人保留）', source: '工单指派的合作伙伴工程师（去重）', target: '合作伙伴协作人', identity: '服务工程师' },
   { id: 'customer-owner', scope: '全部项目', timing: '创建项目时', source: '客户所有人', target: '内部协作人', identity: '客户所有人' },
   { id: 'project-manager', scope: '全部项目', timing: '创建项目时', source: '请求负责项目经理；直接创建时为当前项目经理', target: '内部协作人', identity: '项目经理' },
   { id: 'project-applicant', scope: '内部直接创建的项目', timing: '创建项目时', source: '项目申请人（创建人）', target: '内部协作人', identity: '申请人' },
@@ -61,6 +64,7 @@ export function assignInitialProjectCollaborators(customerId: string, actor: Ope
 // Mark existing automatically assigned members without adding new people during a read.
 export function withProjectAssignmentRoles(project: ServiceProjectRecord,
   directory: ProjectCollaboratorDirectory & { customers: CustomerRef[] }, request?: ServiceRequest): ServiceProjectRecord {
+  project = withWorkOrderCollaboratorRoles(project);
   if (project.collaboratorAssignmentsVersion === 1) return project;
   const assigned = assignInitialProjectCollaborators(project.customerId, { id: project.createdById, name: project.createdBy,
     role: project.createdSite === '合作伙伴中心' ? '合作伙伴服务工程师' : fixedIdentityRoles[project.createdById] ?? '' }, directory, {}, request);

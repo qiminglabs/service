@@ -5,6 +5,7 @@ export const serviceProjectStatuses = [
   '待确认',
   '已完成',
   '已取消',
+  '已暂停',
 ] as const;
 
 // Rename saved projects on read without resetting project data or historical activities.
@@ -17,4 +18,9 @@ export function normalizeServiceProjectStatus(project: import('./service-project
     ...(initial ? { status: '待启动' as const } : {}),
     ...(cancelledInitial && project.cancellation ? { cancellation: { ...project.cancellation, fromStatus: '待启动' as const } } : {}),
   };
+}
+
+// Keep stored workflow states unchanged; external portals use customer-facing labels.
+export function serviceProjectStatusLabel(status: string, external = false): string {
+  return external && status === '待复核' ? '待服务方审核' : status;
 }

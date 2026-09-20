@@ -1,7 +1,5 @@
 'use client';
-import { commitCatalogVersion } from '@/lib/catalog-versions';
-import { initializeCatalogFormsFromBackupV2 } from '@/lib/catalog-form-initialization';
-import { initializePartnerCatalogConfigs } from '@/lib/partner-catalog-config';
+import { commitCatalogVersion, createStoredCatalogService, canManageCatalog } from '@/lib/catalog-versions';
 import { responsibleTeams } from '@/lib/customer-teams';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
 import { parseDayQuantity, formatDays } from '@/lib/day-quantity';
@@ -9,9 +7,7 @@ import { calculateBillableDays } from '@/lib/request-pricing';
 import { isEntitlementService } from '@/lib/service-requests';
 import { CatalogHistory } from '@/components/catalog-history';
 import { InitializeDataButton } from '@/components/initialize-data-button';
-import { initializeCustomerOwners, resetLocalDemoData } from '@/lib/initialize-demo-data';
-import { removeSelectedDemoRules } from '@/lib/remove-demo-rules';
-import { reinitializeRuleBasedRequestSamples } from '@/lib/reinitialize-request-samples';
+import {  resetLocalDemoData } from '@/lib/initialize-demo-data';
 import {
   resolveOperationActor,
   operationIdentities,
@@ -25,14 +21,13 @@ import {
 } from '@/lib/portal-context';
 import type { OperationActor } from '@/lib/request-operations';
 import {
-  ensurePartnerSamples,
   normalizePartnerName,
   samplePartners,
   samplePartnerUsers,
+  partnerUserRole,
   type Partner,
   type PartnerUser,
 } from '@/lib/partner-directory';
-import { migrateRoleLabel } from '@/lib/request-operations';
 import { reportingRelationshipIssue } from '@/lib/approval-flows';
 import { canManageRouting } from '@/lib/assessment-routing-store';
 
@@ -49,6 +44,7 @@ import {
   ContactRound,
   Database,
   Menu,
+  LayoutDashboard,
   MoreHorizontal,
   Network,
   Plus,
@@ -110,13 +106,13 @@ import {
 } from '@/components/request-field-settings';
 import { initialApplicationFields, normalizeApplicationFields } from '@/lib/request-application-fields';
 import { initialProjectFields, normalizeProjectFields } from '@/lib/service-project-fields';
+import { ProjectManagerHome } from '@/components/project-manager-home';
 import { ServiceProjects } from '@/components/service-projects';
 import { CustomerServiceProjects } from '@/components/customer-service-projects';
 import { importedServiceCatalogSeeds } from './service-catalog-import';
 
 type ServiceStatus = '草稿' | '已启用' | '已停用';
-type SortDirection = 'asc' | 'desc';
-type ViewKey = 'requests' | 'projects' | 'catalog' | 'reference-data' | 'field-settings';
+type ViewKey = 'manager-home' | 'requests' | 'projects' | 'catalog' | 'reference-data' | 'field-settings';
 type ReferenceTab =
   | 'customers'
   | 'contacts'
@@ -220,23 +216,6 @@ const services: Service[] = (() => {
     };
   });
 })();
-
-const importedServiceIds = new Set(services.map((service) => service.id));
-
-function mergeImportedServices(storedServices: Service[]): Service[] {
-  return [
-    ...services.map(
-      (service) =>
-        storedServices.find((stored) => stored.id === service.id) ?? service,
-    ),
-    ...storedServices.filter((service) => !importedServiceIds.has(service.id)),
-  ].map((service) => ({
-    ...service,
-    priceCoefficient: isEntitlementService(service) ? undefined : service.priceCoefficient,
-    defaultQuantity: isEntitlementService(service) ? undefined : service.defaultQuantity,
-    allowedInitiatorSites: [...service.allowedInitiatorSites],
-  }));
-}
 
 type Customer = {
   ownerUserId?: string;
@@ -438,17 +417,12 @@ const referenceTabs: Array<{
   { value: 'service-certifications', label: '服务认证', icon: ClipboardList },
 ];
 
-const COPY = {
-  appName: '服务管理中心',
-  catalogTitle: '服务目录',
-  catalogDescription: '统一维护可交付服务的范围、计价规则与服务约束。',
-};
-
 const navigation: Array<{
   key: ViewKey;
   label: string;
   icon: LucideIcon;
 }> = [
+  { key: 'manager-home', label: '项目经理主页', icon: LayoutDashboard },
   {
     key: 'requests',
     label: '服务请求',
@@ -757,8 +731,9 @@ function initialDemoWorkspace() {
 
 function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const resetting = useRef(false);
-  const [selectedView, setActiveView] = useState<ViewKey>('requests');
+  const [selectedView, setActiveView] = useState<ViewKey>('manager-home');
   const [initialProjectId, setInitialProjectId] = useState('');
+  const [initialWorkOrderId, setInitialWorkOrderId] = useState('');
   const [initialRequestId, setInitialRequestId] = useState('');
   const projectLinkHandled = useRef(false);
   const [settingsSection, setSettingsSection] = useState<BackendSettingsSection>('forms');
@@ -768,7 +743,6 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const [statusFilter, setStatusFilter] = useState<'全部状态' | ServiceStatus>(
     '已启用',
   );
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -818,6 +792,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     identitySources,
   );
   const currentRole = currentActor.role;
+  const catalogWritable = canManageCatalog(currentActor, users);
   const portal = resolvePortalContext(currentActor, identitySources);
   const activeView = portal.views.includes(selectedView)
     ? selectedView
@@ -856,13 +831,10 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     }
   }, [referencesReady]);
   const [referenceStorageError, setReferenceStorageError] = useState('');
-  const [requestResetError, setRequestResetError] = useState('');
 
   useEffect(() => {
     let active = true;
-    resetLocalDemoData(initialDemoWorkspace(), true).then(() => removeSelectedDemoRules()).then(() => initializeCatalogFormsFromBackupV2()).then(() => initializePartnerCatalogConfigs()).then(() => reinitializeRuleBasedRequestSamples().catch(error => {
-      if (active) setRequestResetError(`服务请求重新初始化未完成，原数据已保留：${error instanceof Error ? error.message : '请刷新重试。'}`);
-    })).then(() => readLocal<{
+    resetLocalDemoData(initialDemoWorkspace(), true).then(() => readLocal<{
       id: string;
       payload: {
         customerOwnersInitialized?: boolean;
@@ -891,46 +863,16 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           const storedRequestFields = normalizeRequestFields(
             snapshot.requestFields ?? initialRequestFields,
           );
-          setRequestFields([
-            ...storedRequestFields,
-            ...initialRequestFields.filter(
-              (defaultField) =>
-                !storedRequestFields.some(
-                  (storedField) => storedField.id === defaultField.id,
-                ),
-            ),
-          ]);
-          setServiceRecords(
-            mergeImportedServices(
-              Array.isArray(snapshot.services) ? snapshot.services : [],
-            ),
-          );
+          setRequestFields(storedRequestFields);
+          setServiceRecords(snapshot.services);
           setContacts(snapshot.contacts);
-          setAssets(withDefaultAssetBalances(Array.isArray(snapshot.assets) ? snapshot.assets : initialAssets));
-          const partnerDirectory = ensurePartnerSamples(
-            Array.isArray(snapshot.partners) ? snapshot.partners : [],
-            Array.isArray(snapshot.partnerUsers) ? snapshot.partnerUsers : [],
-          );
-          setPartners(partnerDirectory.partners);
-          setPartnerUsers(partnerDirectory.partnerUsers);
-          setBusinessObjects(
-            normalizeBusinessObjects(snapshot.businessObjects),
-          );
-          const restoredUsers = ensureLocalInternalUsers(
-            Array.isArray(snapshot.users) ? snapshot.users : initialUsers,
-          );
-          setUsers(restoredUsers);
-          setCustomers(snapshot.customerOwnersInitialized ? snapshot.customers : initializeCustomerOwners(snapshot.customers, restoredUsers));
-          setServiceCertifications(
-            ensureCertificationSamples(
-              Array.isArray(snapshot.serviceCertifications)
-                ? snapshot.serviceCertifications
-                : [],
-              restoredUsers,
-              partnerDirectory.partnerUsers,
-              partnerDirectory.partners,
-            ),
-          );
+          setAssets(snapshot.assets);
+          setPartners(snapshot.partners ?? []);
+          setPartnerUsers(snapshot.partnerUsers ?? []);
+          setBusinessObjects(normalizeBusinessObjects(snapshot.businessObjects));
+          setUsers(snapshot.users ?? []);
+          setCustomers(snapshot.customers);
+          setServiceCertifications(snapshot.serviceCertifications ?? []);
         }
         setReferencesReady(true);
       })
@@ -1015,6 +957,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   }, [catalogForm.category, serviceRecords]);
 
   function openCreation() {
+    if (!catalogWritable) return;
     setEditingService(null);
     setCatalogForm(emptyCatalogForm);
     setFormError('');
@@ -1023,6 +966,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 
   function clearDetailNavigation() {
     setInitialProjectId('');
+    setInitialWorkOrderId('');
     setInitialRequestId('');
     projectLinkHandled.current = true;
     const url = new URL(window.location.href);
@@ -1394,16 +1338,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         const matchesStatus =
           statusFilter === '全部状态' || service.status === statusFilter;
         return matchesQuery && matchesStatus;
-      })
-      .sort((a, b) => {
-        const comparison = a.name.localeCompare(b.name, 'zh-CN');
-        return sortDirection === 'asc' ? comparison : -comparison;
       });
-  }, [query, serviceRecords, sortDirection, statusFilter]);
+  }, [query, serviceRecords, statusFilter]);
 
   const detailService =
     serviceRecords.find((service) => service.id === detailServiceId) ?? null;
   async function saveDraft() {
+    if (!catalogWritable) return;
     const decimalPattern = /^\d{1,3}(\.\d{1,2})?$/;
     const allFieldsComplete =
       catalogForm.name.trim() &&
@@ -1451,8 +1392,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         await commitCatalogVersion(editingService.id, {
           service: createdService,
           reason: '编辑服务目录',
-        });
-      else setServiceRecords((records) => [...records, createdService]);
+        }, currentActor);
+      else await createStoredCatalogService(createdService, currentActor);
     } catch {
       setFormError('保存失败，请重试。');
       return;
@@ -1514,7 +1455,6 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           initializationDisabled={!referencesReady}
         />
         <main className="content-area" data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
-          {requestResetError && <p role="alert" className="sr-error">{requestResetError}</p>}
           {referenceStorageError && (
             <p role="alert" className="sr-error">
               {referenceStorageError}
@@ -1523,7 +1463,9 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           {!(activeView === 'catalog' && detailService) && <section className="page-header">
             <div>
               <h1>
-                {activeView === 'requests'
+                {activeView === 'manager-home'
+                  ? '项目经理主页'
+                  : activeView === 'requests'
                   ? '服务请求'
                   : activeView === 'projects'
                     ? '服务项目'
@@ -1542,7 +1484,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
             </div>
           </section>}
 
-          {activeView === 'requests' ? (
+          {activeView === 'manager-home' ? (
+            referencesReady && <ProjectManagerHome key={currentActor.id} actor={currentActor} customers={customers} directory={{ contacts, users, partners, partnerUsers }} onOpen={(view, id, workOrderId) => {
+              selectView(view);
+              if (view === 'projects') { setInitialProjectId(id ?? ''); setInitialWorkOrderId(workOrderId ?? ''); }
+              else setInitialRequestId(id ?? '');
+            }} />
+          ) : activeView === 'requests' ? (
             referencesReady && portal.views.includes('requests') ? (
               <RequestFieldsContext.Provider value={resolvedRequestFields}>
                 <ApplicationFieldsContext.Provider value={resolvedApplicationFields}>
@@ -1558,6 +1506,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                   currentActor={currentActor}
                   identityDirectory={[...users, ...contacts, ...partnerUsers]}
                   currentCustomerId={portal.type === 'customer' ? portal.organizationId : undefined}
+                  partners={partners}
                   partnerCollaborators={partnerUsers.filter(
                     (person) =>
                       person.status === '启用' &&
@@ -1580,7 +1529,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               </p>
             )
           ) : activeView === 'projects' ? (
-            referencesReady && (currentActor.role === '客户' ? <CustomerServiceProjects initialProjectId={initialProjectId} key={currentActor.id} actor={currentActor} itemFields={resolvedRequestFields} services={serviceRecords} /> : <ServiceProjects initialProjectId={initialProjectId} key={currentActor.id} customers={customers} actor={currentActor} fields={projectFields}
+            referencesReady && (currentActor.role === '客户' ? <CustomerServiceProjects initialProjectId={initialProjectId} key={currentActor.id} actor={currentActor} itemFields={resolvedRequestFields} services={serviceRecords} /> : <ServiceProjects initialWorkOrderId={initialWorkOrderId} initialProjectId={initialProjectId} key={currentActor.id} customers={customers} actor={currentActor} fields={projectFields}
               services={serviceRecords} businessObjects={businessObjects} itemFields={resolvedRequestFields}
               collaboratorDirectory={{ contacts, users, partners, partnerUsers }} />)
           ) : activeView === 'catalog' ? (
@@ -1589,6 +1538,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
             >
               <RequestFieldsContext.Provider value={resolvedRequestFields}>
                 <CatalogView
+                  actor={currentActor}
+                  writable={catalogWritable}
                   toolbarActions={<div className="app-list-actions">
                 <search className="search-field">
                   <Search aria-hidden="true" />
@@ -1608,15 +1559,16 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                     </button>
                   ) : null}
                 </search>
-                <Button
+                {catalogWritable && <Button
                   className="ct-button ct-button--primary"
                   onClick={openCreation}
                 >
                   <Plus data-icon="inline-start" />
                   新建服务目录
-                </Button>
+                </Button>}
               </div>}
                   onEdit={(service) => {
+                    if (!catalogWritable) return;
                     setEditingService(service);
                     setCatalogForm({
                       ...service,
@@ -1627,6 +1579,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                     setCreateOpen(true);
                   }}
                   onToggle={async (service) => {
+                    if (!catalogWritable) return;
                     try {
                       await commitCatalogVersion(service.id, {
                         service: {
@@ -1638,7 +1591,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                           service.status === '已启用'
                             ? '停用服务目录'
                             : '启用服务目录',
-                      });
+                      }, currentActor);
                     } catch {
                       setReferenceStorageError('状态保存失败，请重试。');
                     }
@@ -1658,8 +1611,6 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                   detailService={detailService}
                   onView={setDetailServiceId}
                   onBack={() => setDetailServiceId(null)}
-                  sortDirection={sortDirection}
-                  setSortDirection={setSortDirection}
                   resetFilters={() => {
                     setQuery('');
                     setStatusFilter('全部状态');
@@ -1771,7 +1722,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         </main>
       </div>
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen && catalogWritable} onOpenChange={setCreateOpen}>
         <DialogContent className="create-dialog">
           <DialogHeader>
             <DialogTitle>
@@ -2025,6 +1976,8 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 }
 
 type CatalogViewProps = {
+  actor: OperationActor;
+  writable: boolean;
   toolbarActions: ReactNode;
   onEdit: (service: Service) => void;
   onToggle: (service: Service) => void;
@@ -2035,8 +1988,6 @@ type CatalogViewProps = {
   detailService: Service | null;
   onView: (id: string) => void;
   onBack: () => void;
-  sortDirection: SortDirection;
-  setSortDirection: (value: SortDirection) => void;
   resetFilters: () => void;
 };
 
@@ -2044,6 +1995,8 @@ function CatalogView(props: CatalogViewProps) {
   if (props.detailService)
     return (
       <CatalogDetail
+        actor={props.actor}
+        writable={props.writable}
         service={props.detailService}
         onBack={props.onBack}
         onEdit={props.onEdit}
@@ -2086,26 +2039,7 @@ function CatalogView(props: CatalogViewProps) {
             <table className="service-table app-list-table">
               <thead>
                 <tr>
-                  <th
-                    aria-sort={
-                      props.sortDirection === 'asc' ? 'ascending' : 'descending'
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="sort-button"
-                      onClick={() =>
-                        props.setSortDirection(
-                          props.sortDirection === 'asc' ? 'desc' : 'asc',
-                        )
-                      }
-                    >
-                      服务名称{' '}
-                      <span aria-hidden="true">
-                        {props.sortDirection === 'asc' ? '↑' : '↓'}
-                      </span>
-                    </button>
-                  </th>
+                  <th>服务名称</th>
                   <th>服务类别</th>
                   <th>计价系数</th>
                   <th>服务方式</th>
@@ -2154,7 +2088,7 @@ function CatalogView(props: CatalogViewProps) {
                     <td>
                       <div className="updated-cell">
                         <span>{service.updatedAt.split(/[T ]/)[0]}</span>
-                        <small>{migrateRoleLabel(service.owner)}</small>
+                        <small>{service.owner}</small>
                       </div>
                     </td>
                     <td>
@@ -2189,11 +2123,15 @@ function CatalogView(props: CatalogViewProps) {
 }
 
 function CatalogDetail({
+  actor,
+  writable,
   service,
   onBack,
   onEdit,
   onToggle,
 }: {
+  actor: OperationActor;
+  writable: boolean;
   service: Service;
   onBack: () => void;
   onEdit: (service: Service) => void;
@@ -2217,7 +2155,7 @@ function CatalogDetail({
         </div>
         <div className="detail-actions">
           <CatalogHistory serviceId={service.id} />
-          <Button
+          {writable && <><Button
             variant="outline"
             className="ct-button ct-button--ordinary"
             onClick={() => onEdit(service)}
@@ -2229,7 +2167,7 @@ function CatalogDetail({
             onClick={() => onToggle(service)}
           >
             {service.status === '已启用' ? '停用' : '启用'}
-          </Button>
+          </Button></>}
         </div>
       </header>
 
@@ -2306,7 +2244,7 @@ function CatalogDetail({
             <dl>
               <div>
                 <dt>创建人</dt>
-                <dd>{migrateRoleLabel(service.owner)}</dd>
+                <dd>{service.owner}</dd>
               </div>
               <div>
                 <dt>创建时间</dt>
@@ -2314,7 +2252,7 @@ function CatalogDetail({
               </div>
               <div>
                 <dt>上次修改人</dt>
-                <dd>{migrateRoleLabel(service.owner)}</dd>
+                <dd>{service.owner}</dd>
               </div>
               <div>
                 <dt>上次修改时间</dt>
@@ -2324,15 +2262,19 @@ function CatalogDetail({
           </section>
         </div>
         <aside className="catalog-config-column" aria-label="申请配置">
-          <RequestCatalogSettings key={service.id} service={service} />
+          <RequestCatalogSettings key={service.id} service={service} actor={actor} readonly={!writable} />
           <RequestCatalogSettings
             key={`${service.id}-customer`}
             service={service}
+            actor={actor}
+            readonly={!writable}
             audience="customer"
           />
           <RequestCatalogSettings
             key={`${service.id}-partner`}
             service={service}
+            actor={actor}
+            readonly={!writable}
             audience="partner"
           />
         </aside>
@@ -2717,6 +2659,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                 <th>所属合作伙伴</th>
                 <th>手机号</th>
                 <th>邮箱</th>
+                <th>合作伙伴角色</th>
                 <th>状态</th>
                 <th>记录编号</th>
                 <th className="actions-column">操作</th>
@@ -2725,7 +2668,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
             <tbody>
               {props.partnerUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     暂无合作伙伴用户，请先维护合作伙伴，再添加用户。
                   </td>
                 </tr>
@@ -2738,6 +2681,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <td>{partnerNames.get(record.partnerId) ?? '—'}</td>
                     <td>{record.phone}</td>
                     <td>{record.email}</td>
+                    <td>{partnerUserRole}</td>
                     <td>
                       <span
                         className="reference-status"
@@ -2858,7 +2802,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     {props.canEditReporting ? <select className="reference-reporting-select" aria-label={`${record.name}的汇报人`} value={record.reportsToUserId ?? ''} onChange={event => props.onReportingChange(record.id, event.target.value)}>
                       <option value="">未设置</option>
                       {record.reportsToUserId && !props.users.some(user => user.id === record.reportsToUserId) && <option value={record.reportsToUserId} disabled>原汇报人已不存在</option>}
-                      {props.users.filter(user => user.id !== record.id && (user.status === '启用' || user.id === record.reportsToUserId)).map(user => <option key={user.id} value={user.id} disabled={!!reportingRelationshipIssue(props.users, record.id, user.id)}>{user.name} · {user.department}{user.status !== '启用' ? '（已停用）' : ''}</option>)}
+                      {props.users.filter(user => user.id !== record.id && (user.status === '启用' || user.id === record.reportsToUserId)).map(user => <option key={user.id} value={user.id} disabled={!!reportingRelationshipIssue(props.users, record.id, user.id)}>{user.name}{user.status !== '启用' ? '（已停用）' : ''}</option>)}
                     </select> : props.users.find(user => user.id === record.reportsToUserId)?.name || '—'}
                   </td>
                   <td>{fixedIdentityRoles[record.id] ?? '—'}</td>
@@ -3204,6 +3148,10 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   <span>暂无已启用的合作伙伴，请先在“合作伙伴”中创建。</span>
                 ) : null}
               </label>
+              <label htmlFor="partner-user-role">
+                <span>合作伙伴角色</span>
+                <Input id="partner-user-role" value={partnerUserRole} readOnly />
+              </label>
               <label htmlFor="partner-user-phone">
                 <span>
                   手机号 <em>*</em>
@@ -3275,7 +3223,7 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                 <span>汇报人</span>
                 <select id="user-reports-to" value={props.form.reportsToUserId ?? ''} onChange={event => update('reportsToUserId', event.target.value)}>
                   <option value="">未设置</option>
-                  {props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{user.name} · {user.department}</option>)}
+                  {props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
                 </select>
                 <span className="sr-help">关联其他内部用户，用于直属主管和逐级审批。</span>
               </label>

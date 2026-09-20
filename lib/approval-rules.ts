@@ -39,7 +39,7 @@ export function resolveApprovalRule(rules: ApprovalRule[], request: ServiceReque
 export function newApprovalRule(rules: ApprovalRule[] = []): ApprovalRule {
   return { id: crypto.randomUUID(), revision: 0, version: 1, enabled: true, name: '', priority: nextApprovalPriority(rules), conditions: { requirement: '' }, flow: emptyApprovalConfig() };
 }
-export function readApprovalRulesPayload(stored: unknown, legacy?: ApprovalConfig): ApprovalRules {
+export function readApprovalRulesPayload(stored: unknown): ApprovalRules {
   if (stored !== undefined) {
     const value = stored as ApprovalRules;
     if (!value || value.version !== 1 || !Array.isArray(value.rules) || value.rules.some(rule => !rule?.id || !rule.conditions || !rule.flow || !Array.isArray(rule.flow.nodes)) || new Set(value.rules.map(rule => rule.id)).size !== value.rules.length) throw new Error('特殊审批规则无法读取，请恢复有效配置后重试。');
@@ -52,9 +52,8 @@ export function readApprovalRulesPayload(stored: unknown, legacy?: ApprovalConfi
     });
     return { ...structuredClone(value), rules: sortApprovalRules(rules) };
   }
-  if (!legacy) return { version: 1, rules: [] };
-  if (legacy.version !== 1 || !Number.isInteger(legacy.revision) || !Array.isArray(legacy.nodes)) throw new Error('原审批流程无法读取，请恢复有效配置后重试。');
-  return { version: 1, rules: [{ ...newApprovalRule(), id: 'legacy-approval-rule', name: legacy.name, conditions: { requirement: '全部申请' }, flow: normalizeApprovalConfig(legacy), updatedAt: legacy.updatedAt, updatedBy: legacy.updatedBy }] };
+  return { version: 1, rules: [] };
+
 }
 export function approvalRuleIssue(rule: ApprovalRule): string | null {
   if (!rule.id || !Number.isInteger(rule.revision) || rule.revision < 0) return '规则版本无效。';
@@ -66,15 +65,9 @@ export function approvalRuleIssue(rule: ApprovalRule): string | null {
 export function approvalRuleConditionLabel(conditions: ApprovalRuleConditions): string {
   return conditions.requirement || '待填写匹配条件';
 }
-// Preserve existing conditions as editable prose when upgrading the local format.
 function normalizeConditions(conditions: ApprovalRuleConditions): ApprovalRuleConditions {
-  if (typeof conditions.requirement === 'string') return structuredClone(conditions);
-  const old = conditions as unknown as { scope?: string; minAmount?: number | null; maxAmount?: number | null; risk?: string };
-  const labels = [old.scope === 'internal' ? '内部申请' : old.scope === 'customer' ? '客户申请' : '全部申请'];
-  if (old.minAmount != null) labels.push(`申请金额不少于 ${old.minAmount} 元`);
-  if (old.maxAmount != null) labels.push(`申请金额不超过 ${old.maxAmount} 元`);
-  if (old.risk && old.risk !== 'all') labels.push(old.risk === 'high' ? '高风险' : '普通风险');
-  return { requirement: labels.join('，且') };
+  if (typeof conditions.requirement !== 'string') throw new Error('审批条件格式无效。');
+  return structuredClone(conditions);
 }
 export function testedApprovalConditions(conditions: ApprovalRuleConditions, dictionary: RoutingDictionary): ApprovalRuleConditions {
   if (!conditions.compiled || conditions.testedRequirement !== conditions.requirement.trim()) throw new Error('请先转译并测试当前匹配条件，再保存规则。');

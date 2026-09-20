@@ -1,3 +1,4 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
 import { isConvertedRequest } from './request-readonly.ts';
 import type { ContactRef, CustomerRef, InternalUser, ServiceRequest } from './service-requests';
 import type { OperationActor } from './request-operations';
@@ -12,6 +13,12 @@ export function isRequestApplicant(record: ServiceRequest, actor?: OperationActo
   return !!actor?.id && actor.id === record.createdById && (requestAudience(record) === 'customer'
     ? actor.role === '客户'
     : ['SmartX 系统管理员', 'SmartX 项目经理', 'SmartX 销售经理', 'SmartX 服务工程师', 'SmartX 售前工程师', 'SmartX 硬件产品经理'].includes(actor.role));
+}
+export function canSubmitRequest(record: ServiceRequest, actor?: OperationActor) {
+  return isDemoAdministrator(actor) || isRequestApplicant(record, actor);
+}
+export function requestCollaboratorsLocked(record?: ServiceRequest) {
+  return !!record && ['已取消', '评估完成', '已转服务项目'].includes(record.status);
 }
 export function hardwareCollaboratorId(record: ServiceRequest): string | undefined {
   const assessment = record.operations?.assessment;
@@ -50,7 +57,7 @@ export function assessmentCollaboratorRemovalIssue(record: ServiceRequest, previ
   return hardwareCollaboratorRemovalIssue(record, previous);
 }
 export function fixedInternalCollaboratorLabel(userId: string, applicantId?: string, ownerUserId?: string, hardwareReviewerId?: string, projectManagerId?: string): string | undefined {
-  return [userId === ownerUserId && '客户所有人', userId === applicantId && '申请人', userId === hardwareReviewerId && '硬件产品经理', userId === projectManagerId && '项目经理']
+  return [userId === ownerUserId && '客户经理', userId === applicantId && '申请人', userId === hardwareReviewerId && '硬件产品经理', userId === projectManagerId && '项目经理']
     .filter(Boolean).join(' · ') || undefined;
 }
 export function withRequestCollaborators(record: ServiceRequest, contacts: ContactRef[], customers: CustomerRef[] = [], users: InternalUser[] = []): ServiceRequest {

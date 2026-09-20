@@ -1,4 +1,10 @@
+import { isDemoAdministrator, canActForUser } from './demo-permissions.ts';
+import { projectWorklogsLocked } from './service-project-work-order-policy.ts';
+import { canViewServiceProject } from './service-projects.ts';
 import type { OperationActor, RequestAction } from './request-operations';
+import type { CatalogService } from './service-requests';
+import { canManageProjectAsManager } from './service-project-work-order-policy.ts';
+import { calculateWorklogPricing } from './project-worklog-pricing.ts';
 import {
   localDate,
   worklogHours,
@@ -19,13 +25,15 @@ import {
 } from './service-project-activity.ts';
 
 export type ProjectOperationAction =
+  | { type: 'worklog-confirm'; ids: string[] }
   | Exclude<
       Extract<
         RequestAction,
         { type: `meeting-${string}` | `worklog-${string}` }
       >,
-      { type: 'meeting-notify' }
+      { type: 'meeting-notify' | 'worklog-add' | 'worklog-edit' }
     >
+  | (Extract<RequestAction, { type: 'worklog-add' | 'worklog-edit' }> & { workOrderId: string })
   | {
       type: 'meeting-notify';
       id: string;
@@ -38,26 +46,41 @@ export function canRecordProjectWorklog(
   actor: OperationActor,
 ): boolean {
   return (
-    canManageServiceProjects(actor, record) &&
-    !['已完成', '已取消'].includes(record.status) &&
-    (actor.role === 'SmartX 项目经理' ||
+    !!actor.id &&
+    !projectWorklogsLocked(record) &&
+    !['已完成', '已取消', '已暂停'].includes(record.status) &&
+    canViewServiceProject(actor, record) && (isDemoAdministrator(actor) || actor.role === 'SmartX 项目经理' ||
       (isInternal(actor.role)
         ? !!record.collaborators?.internal?.some(
             (person) => person.id === actor.id,
           )
-        : actor.role === '合作伙伴服务工程师'))
+        : actor.role === '合作伙伴服务工程师' && !!record.collaborators?.partner?.some(person => person.id === actor.id)))
   );
+}
+export function canConfirmProjectWorklog(record: ServiceProjectRecord, actor: OperationActor) {
+  return !projectWorklogsLocked(record) && !['已完成', '已取消', '已暂停'].includes(record.status) && canManageProjectAsManager(record, actor);
+}
+export function canPerformProjectOperation(record: ServiceProjectRecord, actor: OperationActor, type: ProjectOperationAction['type']): boolean {
+  if (['已完成', '已取消', '已暂停'].includes(record.status)) return false;
+  if (type === 'worklog-confirm') return canConfirmProjectWorklog(record, actor);
+  return type === 'worklog-add' || type === 'worklog-edit' || type === 'worklog-void'
+    ? canRecordProjectWorklog(record, actor)
+    : canManageServiceProjects(actor, record);
 }
 export function applyProjectOperation(
   record: ServiceProjectRecord,
   action: ProjectOperationAction,
   actor: OperationActor,
   now = new Date().toISOString(),
+  services: CatalogService[] = [],
 ): ServiceProjectRecord {
-  if (!actor.name || !canManageServiceProjects(actor, record))
-    throw new Error('当前身份无权维护此服务项目。');
+  if (action.type.startsWith('worklog-') && projectWorklogsLocked(record))
+    throw new Error('项目无需工时或已发起客户确认，工时已锁定，不能新增、编辑、作废或重新确认。');
+  if (record.status === '已暂停') throw new Error('项目已暂停，请先恢复项目。');
   if (['已完成', '已取消'].includes(record.status))
     throw new Error('当前项目已结束，仅可查看历史记录。');
+  if (!actor.name || !canPerformProjectOperation(record, actor, action.type))
+    throw new Error('当前身份无权执行此项目操作。');
   const ops = structuredClone(projectOperationsOf(record));
   let category: ProjectActivity['category'] = '会议';
   let title = '';
@@ -271,6 +294,19 @@ export function applyProjectOperation(
       detail = meeting.title;
       break;
     }
+    case 'worklog-confirm': {
+      if (!action.ids.length || new Set(action.ids).size !== action.ids.length) throw new Error('请选择待确认工时，且不能重复选择。');
+      const logs = action.ids.map(id => {
+        const log = ops.worklogs.find(row => row.id === id);
+        if (!log || log.voidedAt || log.confirmedAt) throw new Error('工时已更新或不再待确认，请重新打开项目。');
+        if (!record.workOrders?.some(order => order.id === log.workOrderId)) throw new Error('请先将工时关联到有效工单。');
+        return log;
+      });
+      logs.forEach(log => Object.assign(log, { confirmedAt: now, confirmedById: actor.id, confirmedBy: actor.name }));
+      category = '工时'; title = '确认工时';
+      detail = logs.map(log => `${log.userName} · ${log.date} · ${formatWorklogHours(log.hours)} 小时`).join('；');
+      break;
+    }
     case 'worklog-add':
     case 'worklog-edit': {
       const existing =
@@ -279,11 +315,16 @@ export function applyProjectOperation(
           : undefined;
       if (
         action.type === 'worklog-edit' &&
-        (!existing || existing.voidedAt || existing.userId !== actor.id)
+        (!existing || existing.voidedAt || !canActForUser(actor, existing.userId))
       )
         throw new Error('只能编辑自己的有效工时记录。');
       if (!canRecordProjectWorklog(record, actor))
         throw new Error('仅项目经理或当前项目的协作人可以录入自己的工时。');
+      if (!action.workOrderId?.trim()) throw new Error('请选择关联工单。');
+      const order = record.workOrders?.find(order => order.id === action.workOrderId);
+      if (!order) throw new Error('关联工单不存在或不属于当前项目。');
+      if (order.status === '已取消' && existing?.workOrderId !== order.id)
+        throw new Error('不能将工时关联到已取消的工单。');
       const d = new Date(action.date + 'T12:00:00');
       if (
         !/^\d{4}-\d{2}-\d{2}$/.test(action.date) ||
@@ -300,7 +341,7 @@ export function applyProjectOperation(
       const dayTotal = ops.worklogs
         .filter(
           (w) =>
-            w.userId === actor.id &&
+            w.userId === (existing?.userId ?? actor.id) &&
             w.date === action.date &&
             !w.voidedAt &&
             w.id !== existing?.id,
@@ -312,26 +353,28 @@ export function applyProjectOperation(
       requireText(action.category, '工作类型');
       const updatedLog = {
         id: existing?.id ?? crypto.randomUUID(),
-        userId: actor.id,
-        userName: actor.name,
+        userId: existing?.userId ?? actor.id,
+        userName: existing?.userName ?? actor.name,
         date: action.date,
         startTime: action.startTime,
         endTime: action.endTime,
         hours,
+        workOrderId: order.id,
+        pricing: calculateWorklogPricing(order, hours, services, existing?.workOrderId === order.id ? existing.pricing : undefined),
         category: action.category,
         description: action.description.trim(),
         createdAt: existing?.createdAt ?? now,
       };
-      if (existing) Object.assign(existing, updatedLog);
+      if (existing) { Object.assign(existing, updatedLog); delete existing.confirmedAt; delete existing.confirmedById; delete existing.confirmedBy; }
       else ops.worklogs.unshift(updatedLog);
       category = '工时';
       title = existing ? '编辑工时' : '录入工时';
-      detail = `${action.date} ${action.startTime}–${action.endTime} · ${formatWorklogHours(hours)} 小时 · ${action.description.trim()}`;
+      detail = `${order.id} · ${order.item.serviceName} · ${action.date} ${action.startTime}–${action.endTime} · ${formatWorklogHours(hours)} 小时 · ${action.description.trim()}`;
       break;
     }
     case 'worklog-void': {
       const log = ops.worklogs.find((w) => w.id === action.id);
-      if (!log || log.voidedAt || log.userId !== actor.id)
+      if (!log || log.voidedAt || !canActForUser(actor, log.userId))
         throw new Error('只能作废自己的有效工时记录。');
       requireText(action.reason, '作废原因');
       log.voidedAt = now;

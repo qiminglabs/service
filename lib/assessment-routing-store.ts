@@ -16,7 +16,6 @@ import {
   type RoutingRule,
   type RoutePredicate,
 } from './assessment-routing-schema.ts';
-import { reassignAssessment } from './assessment-routing.ts';
 export type RoutingWorkspace = RoutingDictionary & { users: InternalUser[] };
 export const canManageRouting = (actor: OperationActor) =>
   !!actor.id &&
@@ -169,66 +168,6 @@ export async function saveRoutingPolicy(
           reject(error);
           tx.abort();
         }
-      };
-    });
-  } finally {
-    db.close();
-  }
-}
-// Narrow administrative operation: the latest row is read and transformed in the
-// same transaction. Callers cannot supply replacement request data or assignee IDs.
-export async function reassignRoutingRequest(
-  actor: OperationActor,
-  requestId: string,
-  role: RoutingRole,
-  reason: string,
-  expectedUpdatedAt: string,
-  expectedRevision: number,
-): Promise<ServiceRequest> {
-  if (!canManageRouting(actor)) throw new Error('仅系统管理员可重新分配。');
-  const db = await openDatabase();
-  try {
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(['references', 'requests'], 'readwrite'),
-        refs = tx.objectStore('references').getAll(),
-        store = tx.objectStore('requests');
-      let result: ServiceRequest;
-      tx.oncomplete = () => resolve(result);
-      tx.onabort = () => reject(tx.error ?? new Error('重新分配未完成。'));
-      tx.onerror = () => reject(tx.error);
-      refs.onsuccess = () => {
-        const get = store.get(requestId);
-        get.onsuccess = () => {
-          try {
-            const workspace: RoutingWorkspace = refs.result.find(
-              (r) => r.id === 'workspace',
-            )?.payload;
-            assertAdmin(actor, workspace?.users ?? []);
-            const config = parseRoutingConfig(
-              refs.result.find((r) => r.id === assessmentRoutingId)?.payload,
-            );
-            if (
-              config.revision !== expectedRevision ||
-              !get.result ||
-              get.result.updatedAt !== expectedUpdatedAt
-            )
-              throw new Error('请求或配置已变化，请刷新预览后重新分配。');
-            result = reassignAssessment(
-              get.result,
-              role,
-              config,
-              workspace.users,
-              actor,
-              reason,
-              undefined,
-              workspace.customers,
-            );
-            store.put(result);
-          } catch (error) {
-            reject(error);
-            tx.abort();
-          }
-        };
       };
     });
   } finally {

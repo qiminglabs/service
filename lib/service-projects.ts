@@ -1,3 +1,8 @@
+import { projectWorklogsLocked } from './service-project-work-order-policy.ts';
+import { withWorkOrderCollaboratorRoles } from './project-work-order-collaborators.ts';
+import { isPartnerCreatedProject, projectCustomerConfirmationLocked, isResponsibleProjectManager } from './service-project-work-order-policy.ts';
+import { projectScheduleIssue } from './service-project-dates.ts';
+import { isInternal } from './request-operations.ts';
 import { assertProjectFieldsWritable } from './service-project-readonly.ts';
 import type {
   CustomerRef,
@@ -20,6 +25,7 @@ export type ServiceProjectStatus = (typeof serviceProjectStatuses)[number];
 export type ServiceProjectInput = {
   name: string;
   expectedServiceDate: string;
+  plannedCompletionDate?: string;
   customerId: string;
   serviceProviderId?: string;
   note: string;
@@ -28,6 +34,8 @@ export type ServiceProjectInput = {
 export type ServiceProjectRecord = ServiceProjectInput & {
   id: string;
   status: ServiceProjectStatus;
+  worklogsLocked?: boolean;
+  createdViaAdmin?: { id: string; name: string };
   createdById: string;
   createdBy: string;
   createdAt: string;
@@ -38,6 +46,9 @@ export type ServiceProjectRecord = ServiceProjectInput & {
   readonly sourceServiceRequestId?: string;
   requestConversion?: { mapping: import('./request-project-mapping').RequestProjectMapping; assessmentSnapshot?: import('./project-request-snapshot').ProjectRequestSnapshot; workOrders: { id: string; sourceItemId: string; pricing?: import('./request-pricing').EffortPricingLine }[] };
   revision: number;
+  // Derived for partner views whose internal review details are omitted.
+  readonly customerConfirmationLocked?: boolean;
+  suspension?: { reason?: string; at: string; actorId: string; actor: string; fromStatus: '待启动' | '进行中' | '待复核' | '待确认' };
   cancellation?: { at: string; actorId: string; actor: string; reason: string; fromStatus: ServiceProjectStatus };
   collaborators?: ProjectCollaborators;
   collaboratorAssignmentsVersion?: 1;
@@ -45,6 +56,9 @@ export type ServiceProjectRecord = ServiceProjectInput & {
   serviceProviderName?: string;
   items?: RequestItem[];
   operations?: ProjectOperations;
+  review?: import('./service-project-review').ProjectReview;
+  dailyReports?: import('./service-project-daily-reports').ProjectDailyReport[];
+  workOrders?: import('./service-work-orders').ServiceWorkOrder[];
 };
 
 export function projectItemAudience(
@@ -62,25 +76,37 @@ export function canManageServiceProjects(
   project?: ServiceProjectRecord,
 ) {
   if (!actor.id) return false;
-  if (['SmartX 系统管理员', 'SmartX 项目经理'].includes(actor.role))
-    return true;
+  if (actor.role === 'SmartX 系统管理员') return true;
+  if (actor.role === 'SmartX 项目经理') return !project || isResponsibleProjectManager(project, actor);
   if (actor.role !== '合作伙伴服务工程师') return false;
   return (
     !project ||
     (project.createdSite === '合作伙伴中心' &&
       project.createdById === actor.id) ||
-    !!project.collaborators?.partner?.some((person) => person.id === actor.id)
+    !!project.collaborators?.partner?.some((person) => person.id === actor.id && !person.workOrderAssignmentOnly)
   );
+}
+
+export function canViewServiceProject(actor: OperationActor, project?: ServiceProjectRecord) {
+  if (project && actor.role === 'SmartX 项目经理') return isResponsibleProjectManager(project, actor);
+  if (project && actor.id && isInternal(actor.role) && project.review?.approvals.some(a => a.days > 0 && a.state === '待审批' && a.approverId === actor.id)) return true;
+  if (actor.id && actor.role === '合作伙伴服务工程师' && project?.collaborators?.partner?.some(person => person.id === actor.id && person.workOrderAssignmentOnly)) return true;
+  return canManageServiceProjects(actor, project) || (!!actor.id && isInternal(actor.role)
+    && (!project || !!project.collaborators?.internal?.some(person => person.id === actor.id)));
 }
 
 export function projectForActor(
   project: ServiceProjectRecord,
   actor: OperationActor,
 ): ServiceProjectRecord {
+  project = withWorkOrderCollaboratorRoles(project);
   return projectItemAudience(actor) === 'internal'
     ? project
     : {
         ...project,
+        worklogsLocked: projectWorklogsLocked(project),
+        customerConfirmationLocked: projectCustomerConfirmationLocked(project),
+        review: isPartnerCreatedProject(project) && project.review ? { approvals: [], confirmations: structuredClone(project.review.confirmations) } : undefined,
         supplements: project.supplements?.filter(
           (supplement) => supplement.externalVisible,
         ),
@@ -106,7 +132,7 @@ export function assertActiveProjectActor(
   actor: OperationActor,
   directory: Pick<ProjectCollaboratorDirectory, 'partners' | 'partnerUsers'>,
 ) {
-  if (!canManageServiceProjects(actor))
+  if (!canViewServiceProject(actor))
     throw new Error('当前身份无权访问服务项目。');
   if (projectItemAudience(actor) !== 'partner') return;
   const person = directory.partnerUsers.find(
@@ -124,7 +150,7 @@ export function assertActiveProjectActor(
 export function projectStatusChoices(
   status: ServiceProjectStatus,
 ): ServiceProjectStatus[] {
-  if (status === '已完成' || status === '已取消') return [status];
+  if (status === '已完成' || status === '已取消' || status === '已暂停') return [status];
   return [
     status,
     serviceProjectStatuses[serviceProjectStatuses.indexOf(status) + 1],
@@ -135,6 +161,7 @@ function projectInput(input: ServiceProjectInput): ServiceProjectInput {
   return {
     name: input.name.trim(),
     expectedServiceDate: input.expectedServiceDate,
+    ...(input.plannedCompletionDate !== undefined ? { plannedCompletionDate: input.plannedCompletionDate } : {}),
     customerId: input.customerId,
     note: input.note.trim(),
     ...(input.customValues !== undefined ? { customValues: structuredClone(input.customValues) } : {}),
@@ -149,14 +176,9 @@ export function serviceProjectIssue(
 ): string | null {
   if (!input.name.trim()) return '请填写项目名称。';
   if (input.name.trim().length > 100) return '项目名称不能超过 100 字。';
-  const value = input.expectedServiceDate;
-  const date = new Date(`${value}T12:00:00Z`);
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    !Number.isFinite(date.getTime()) ||
-    date.toISOString().slice(0, 10) !== value
-  )
-    return '请选择有效的期望服务日期。';
+  const scheduleIssue = projectScheduleIssue({ ...input, plannedCompletionDate: input.plannedCompletionDate ?? previous?.plannedCompletionDate },
+    !!previous?.plannedCompletionDate && previous.status !== '待启动', !previous || previous.status === '待启动');
+  if (scheduleIssue) return scheduleIssue;
   if (!input.customerId) return '请选择客户。';
   if (
     input.customerId !== previous?.customerId &&
@@ -234,15 +256,23 @@ export function editServiceProject(
 ): ServiceProjectRecord {
   if (!canManageServiceProjects(actor, previous))
     throw new Error('当前身份无权维护此服务项目。');
+  if (previous.status === '已暂停') throw new Error('项目已暂停，请先恢复项目。');
   if (previous.status === '已完成' || previous.status === '已取消')
     throw new Error('已结束的项目不可编辑。');
   if (!projectStatusChoices(previous.status).includes(input.status))
     throw new Error('请按项目流程变更状态，不可跳过阶段。');
+  if (input.status !== previous.status && ['待确认', '已完成'].includes(input.status))
+    throw new Error('请在复核选项卡中发起客户确认或完成项目。');
   if ((previous.createdSite === '合作伙伴中心' || projectItemAudience(actor) === 'partner')
     && (input.serviceProviderId ?? previous.serviceProviderId ?? '') !== (previous.serviceProviderId ?? ''))
     throw new Error(previous.createdSite === '合作伙伴中心' ? '合作伙伴创建的项目，服务方固定为所属企业，不能修改。' : '内部项目的服务方仅内部人员可调整。');
   if (input.customerId !== previous.customerId && previous.collaborators?.customer?.some(person => person.assignmentRoles?.length))
     throw new Error('客户协作人包含默认分配成员，不能通过更换客户移除。');
+  if (previous.status !== '待启动' && input.customerId !== previous.customerId) throw new Error('项目已启动，服务项已锁定，不能更换客户。');
+  if (input.status === '待复核' && input.status !== previous.status && isPartnerCreatedProject(previous)) throw new Error('合作伙伴创建的项目无需复核，工单完成后请发起客户确认。');
+  if (previous.status === '进行中' && input.status === '待复核') {
+    throw new Error('请由项目执行工程师通过「提交复核」操作手动提交，不能直接修改项目状态。');
+  }
   const issue = serviceProjectIssue(input, customers, previous, partners);
   if (issue) throw new Error(issue);
   assertProjectFieldsWritable(previous, { ...projectInput(input), serviceProviderId: input.serviceProviderId });

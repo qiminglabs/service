@@ -46,13 +46,12 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
       {groups.map(({ group, files }) => {
         const member = group.members[0];
         const related = group.members.filter((entry, index, members) => members.findIndex(other => other.item.id === entry.item.id) === index);
-        return <article className="sr-request-material-row" key={group.key}>
+        return <article className="sr-request-material-row" data-readonly={readonly || isGroupReadonly?.(group) || undefined} key={group.key}>
           <FileText className="sr-request-material-icon" size={22} aria-hidden="true" />
           <div className="sr-request-material-copy">
             <div className="sr-request-material-title"><h4>{group.requirement.name}{group.requirement.required && <sup className="sr-material-required" aria-label="必填">*</sup>}</h4>
               <span className="sr-badge" data-tone={files.length ? 'green' : group.requirement.required ? 'amber' : 'muted'}>{files.length ? '已提供' : group.requirement.required ? '待提供' : '选填'}</span>
             </div>
-            {isGroupReadonly?.(group) && <p className="sr-help">转换后只读</p>}
             <div className="sr-material-relations">
               <span className="sr-material-relations-label"><Link2 size={14} aria-hidden="true" />关联服务项</span>
               {related.map(entry => <button type="button" className="sr-material-relation" key={entry.item.id}

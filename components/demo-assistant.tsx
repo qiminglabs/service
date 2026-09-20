@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { PointerEvent } from 'react';
 import { readSiteContent } from '@/lib/demo-assistant-reader';
 import { MessageCircle, Send, X, RotateCcw } from 'lucide-react';
 import { assistantPages, assistantTabs, normalizeAssistantContext, type AssistantContext } from '@/lib/demo-assistant-context';
@@ -23,6 +24,55 @@ export function DemoAssistant() {
   const launcher = useRef<HTMLButtonElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const composing = useRef(false);
+  const floating = useRef<HTMLDivElement>(null);
+  // Position deliberately lives only in memory: a refresh restores CSS defaults.
+  const [position, setPosition] = useState<{ right: number; bottom: number }>();
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ id: number; x: number; y: number; right: number; bottom: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
+  function constrain(right: number, bottom: number) {
+    const rect = floating.current!.getBoundingClientRect();
+    return {
+      right: Math.max(12, Math.min(right, window.innerWidth - rect.width - 12)),
+      bottom: Math.max(12, Math.min(bottom, window.innerHeight - rect.height - 12)),
+    };
+  }
+  useLayoutEffect(() => {
+    const keepVisible = () => {
+      const rect = floating.current?.getBoundingClientRect();
+      if (!rect) return;
+      const next = constrain(window.innerWidth - rect.right, window.innerHeight - rect.bottom);
+      setPosition(previous => {
+        if (!previous && rect.left >= 12 && rect.top >= 12 && rect.right <= window.innerWidth - 12 && rect.bottom <= window.innerHeight - 12) return previous;
+        return previous?.right === next.right && previous?.bottom === next.bottom ? previous : next;
+      });
+    };
+    const observer = new ResizeObserver(keepVisible);
+    observer.observe(floating.current!);
+    window.addEventListener('resize', keepVisible);
+    return () => { observer.disconnect(); window.removeEventListener('resize', keepVisible); };
+  }, []);
+  function startDrag(event: PointerEvent<HTMLElement>) {
+    if (!event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest('.demo-assistant-tools')) return;
+    const rect = floating.current!.getBoundingClientRect();
+    suppressClick.current = false;
+    drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY, right: window.innerWidth - rect.right, bottom: window.innerHeight - rect.bottom, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function moveDrag(event: PointerEvent<HTMLElement>) {
+    const current = drag.current;
+    if (!current || current.id !== event.pointerId) return;
+    const dx = event.clientX - current.x, dy = event.clientY - current.y;
+    if (!current.moved && Math.hypot(dx, dy) < 6) return;
+    current.moved = true; suppressClick.current = true; setDragging(true);
+    setPosition(constrain(current.right - dx, current.bottom - dy));
+  }
+  function endDrag(event: PointerEvent<HTMLElement>) {
+    if (drag.current?.id !== event.pointerId) return;
+    drag.current = null; setDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+  const dragHandlers = { onPointerDown: startDrag, onPointerMove: moveDrag, onPointerUp: endDrag, onPointerCancel: endDrag, onLostPointerCapture: endDrag };
   useEffect(() => {
     const update = () => { const next = readContext(); setContext(old => JSON.stringify(old) === JSON.stringify(next) ? old : next); };
     update();
@@ -63,9 +113,9 @@ export function DemoAssistant() {
       setError(failure instanceof Error && failure.name === 'Error' ? failure.message : '连接失败或超时，请重试。');
     } finally { if (controller.current === pending) { controller.current = null; setBusy(false); input.current?.focus(); } }
   }
-  return <div className="demo-assistant">
+  return <div ref={floating} className="demo-assistant" style={position} data-dragging={dragging || undefined}>
     {open && <section id="demo-assistant-panel" className="demo-assistant-panel" role="dialog" aria-modal="false" aria-labelledby="demo-assistant-title" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
-      <header className="demo-assistant-header"><div><strong id="demo-assistant-title">Demo 功能助手</strong></div><div className="demo-assistant-tools"><button type="button" title="清空对话" aria-label="清空对话" onClick={clear}><RotateCcw size={17} /></button><button type="button" aria-label="收起功能助手" onClick={close}><X size={20} /></button></div></header>
+      <header className="demo-assistant-header" {...dragHandlers}><div><strong id="demo-assistant-title">Demo 功能助手</strong></div><div className="demo-assistant-tools"><button type="button" title="清空对话" aria-label="清空对话" onClick={clear}><RotateCcw size={17} /></button><button type="button" aria-label="收起功能助手" onClick={close}><X size={20} /></button></div></header>
       <div className="demo-assistant-context">当前页面：{assistantPages[context.page]}{context.status ? ` · ${context.status}` : ''}</div>
       <div className="demo-assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-busy={busy}>
         {!messages.length && <div className="demo-assistant-welcome"><MessageCircle size={28} /><h2>想了解哪个功能？</h2><p>我可以解释为什么、在哪里操作，以及下一步怎么做。</p><div className="demo-assistant-suggestions">{['这个页面可以做什么？', '为什么找不到可申请的服务？', '哪些功能只是本地模拟？'].map(text => <button key={text} disabled={busy} onClick={() => void send(text)}>{text}</button>)}</div></div>}
@@ -78,6 +128,6 @@ export function DemoAssistant() {
         <div><button type="submit" disabled={busy || !question.trim()} aria-label="发送问题"><Send size={18} /></button></div>
       </form>
     </section>}
-    <button ref={launcher} className="demo-assistant-launcher" type="button" aria-expanded={open} aria-controls="demo-assistant-panel" onClick={() => setOpen(value => !value)}><MessageCircle size={21} />{open ? '收起助手' : '功能助手'}</button>
+    <button ref={launcher} className="demo-assistant-launcher" type="button" title="点击打开或收起，拖动调整位置" {...dragHandlers} aria-expanded={open} aria-controls="demo-assistant-panel" onClick={event => { if (event.detail !== 0 && suppressClick.current) { suppressClick.current = false; return; } setOpen(value => !value); }}><MessageCircle size={21} />{open ? '收起助手' : '功能助手'}</button>
   </div>;
 }

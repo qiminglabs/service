@@ -4,14 +4,6 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { AtSign, Paperclip, FileText } from 'lucide-react';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Popover } from '@/components/ui/popover';
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -19,7 +11,6 @@ import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { MentionOptionLabel } from '@/components/mention-option-label';
 import { internalProjectProvider } from '@/lib/service-project-providers';
 import {
-  readLocal,
   storedFile,
   downloadFile,
   type InternalUser,
@@ -36,9 +27,11 @@ import {
 import {
   canAddProjectSupplement,
   projectCustomerMentionUsers,
+  projectSupplementMentionUsers,
   type ProjectSupplementInput,
   type ProjectSupplement,
 } from '@/lib/service-project-supplements';
+import type { CustomerProjectDirectory } from '@/lib/customer-service-projects';
 import type { ServiceProjectRecord } from '@/lib/service-projects';
 
 import {
@@ -51,16 +44,18 @@ import {
 type SupplementPanelProps = {
   record: {
     customerId?: string;
+    serviceProviderId?: string;
     supplements?: Omit<ProjectSupplement, 'authorId'>[];
     collaborators?: ServiceProjectRecord['collaborators'];
   };
   actor: OperationActor;
   users: (InternalUser & { companyName?: string })[];
   contacts?: ContactRef[];
+  directory?: CustomerProjectDirectory;
+  mentionCandidates?: (InternalUser & { companyName?: string })[];
   customers?: CustomerRef[];
   busy: boolean;
   publish: (input: ProjectSupplementInput) => Promise<string | null>;
-  joinMention: (id: string) => Promise<string | null>;
 };
 
 export function ServiceProjectSupplements(props: Omit<SupplementPanelProps, 'record'> & { record: ServiceProjectRecord }) {
@@ -72,17 +67,16 @@ export function ProjectSupplementsPanel({
   actor,
   users,
   contacts = [],
+  directory,
+  mentionCandidates,
   customers = [],
   busy,
   publish,
-  joinMention,
   editable,
   emptyMessage = '暂无补充资料',
-  hideReadonlyWhenEmpty = false,
 }: SupplementPanelProps & {
   editable: boolean;
   emptyMessage?: string;
-  hideReadonlyWhenEmpty?: boolean;
 }) {
   const [comment, setComment] = useState('');
   const [files, setFiles] = useState<StoredFile[]>([]);
@@ -97,28 +91,15 @@ export function ProjectSupplementsPanel({
   const listId = useId();
   const activeMention = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState('');
-  const [pendingMention, setPendingMention] = useState<{
-    user: InternalUser;
-    start: number;
-    end: number;
-  } | null>(null);
-  const [joiningError, setJoiningError] = useState('');
   const [working, setWorking] = useState(false);
   const lock = useRef(false);
   const uploadInput = useRef<HTMLInputElement>(null);
-  const disabled = busy || working || !!pendingMention;
+  const disabled = busy || working;
   const items = (record.supplements ?? []).filter(
     (item) => isInternal(actor.role) || item.externalVisible,
   );
   const customerMentionUsers = projectCustomerMentionUsers({ ...record, customerId: record.customerId ?? '' }, actor, contacts);
-  const mentionUsers = [...users.filter(
-    (user) =>
-      user.status === '启用' &&
-      (isInternal(actor.role) ||
-        record.collaborators?.internal?.some(
-          (person) => person.id === user.id,
-        ) || (actor.role === '客户' && record.collaborators?.partner?.some(person => person.id === user.id))),
-  ), ...customerMentionUsers];
+  const mentionUsers = mentionCandidates ?? projectSupplementMentionUsers({ ...record, customerId: record.customerId ?? '' }, actor, users, contacts, directory);
   const matches = query
     ? mentionUsers
         .filter((user) =>
@@ -162,101 +143,10 @@ export function ProjectSupplementsPanel({
   }
   function chooseMention(user: InternalUser) {
     if (!query || disabled) return;
-    if (
-      isInternal(actor.role) &&
-      !customerMentionUsers.some(person => person.id === user.id) &&
-      !record.collaborators?.internal?.some((person) => person.id === user.id)
-    ) {
-      setPendingMention({ user, start: query.start, end: caret });
-      setJoiningError('');
-      setQuery(null);
-      return;
-    }
     insertSelectedMention(user, query.start, caret);
   }
-  function cancelMention() {
-    if (busy || working || !pendingMention) return;
-    // Remove the unfinished @ query, retaining the rest of the comment and attachments.
-    const next =
-      comment.slice(0, pendingMention.start) +
-      comment.slice(pendingMention.end);
-    setMentions((previous) => editMentions(comment, next, previous));
-    setComment(next);
-    setCaret(pendingMention.start);
-    setQuery(null);
-    setPendingMention(null);
-    setJoiningError('');
-  }
-  async function confirmMention() {
-    if (!pendingMention || busy || working || lock.current) return;
-    lock.current = true;
-    setWorking(true);
-    setJoiningError('');
-    try {
-      const references = await readLocal<{
-        id: string;
-        payload?: { users?: InternalUser[] };
-      }>('references');
-      const user = references
-        .find((reference) => reference.id === 'workspace')
-        ?.payload?.users?.find((user) => user.id === pendingMention.user.id);
-      if (!user || user.status !== '启用')
-        throw new Error('该用户已停用或不存在，请取消后重新选择。');
-      const issue = await joinMention(user.id);
-      if (issue) {
-        setJoiningError(issue);
-        return;
-      }
-      insertSelectedMention(user, pendingMention.start, pendingMention.end);
-      setPendingMention(null);
-    } catch (error) {
-      setJoiningError(
-        error instanceof Error ? error.message : '加入协作人失败，请重试。',
-      );
-    } finally {
-      lock.current = false;
-      setWorking(false);
-    }
-  }
-
   return (
     <section className="sr-panel sr-ops-panel">
-      <AlertDialog
-        open={!!pendingMention}
-        onOpenChange={(open) => {
-          if (!open) cancelMention();
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>加入内部协作人？</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingMention?.user.name}{' '}
-              尚未加入当前项目的内部协作人。确认加入后，可在留言中被 @。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {joiningError && (
-            <p className="sr-error" role="alert">
-              {joiningError}
-            </p>
-          )}
-          <AlertDialogFooter>
-            <Button
-              variant="outline"
-              disabled={busy || working}
-              onClick={cancelMention}
-            >
-              不加入，不 @
-            </Button>
-            <Button
-              disabled={busy || working}
-              onClick={() => void confirmMention()}
-            >
-              {working ? '正在加入…' : '加入并 @'}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <div className="sr-ops-heading">
         <div>
           <h3>补充信息</h3>
@@ -364,9 +254,9 @@ export function ProjectSupplementsPanel({
                             onMouseEnter={() => setActiveOption(index)}
                             onClick={() => chooseMention(user)}
                           >
-                            <MentionOptionLabel name={user.name} email={user.email} companyName={customerMentionUsers.some(person => person.id === user.id)
+                            <MentionOptionLabel name={user.name} email={user.email} companyName={user.companyName ?? (customerMentionUsers.some(person => person.id === user.id)
                               ? customers.find(customer => customer.id === record.customerId)?.name
-                              : users.find(person => person.id === user.id)?.companyName ?? internalProjectProvider.name} />
+                              : users.find(person => person.id === user.id)?.companyName ?? internalProjectProvider.name)} />
                           </button>
                         ))}
                       </div>
@@ -523,8 +413,6 @@ export function ProjectSupplementsPanel({
               </p>
             )}
           </div>
-        ) : (!hideReadonlyWhenEmpty || items.length > 0) ? (
-          <p className="sr-help">当前阶段仅可查看已提交的补充资料。</p>
         ) : null}
         <div className="sr-supplement-records">
           {[...items].reverse().map((item) => (

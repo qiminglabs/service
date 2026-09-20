@@ -107,6 +107,7 @@ export function editProjectItems(
     throw new Error('当前身份无权维护此服务项目的服务项。');
   if (['已完成', '已取消'].includes(previous.status))
     throw new Error('已结束的项目不可编辑。');
+  if (previous.status !== '待启动' || previous.workOrders?.length) throw new Error('项目已启动，服务项已锁定，不能修改、添加或移除。');
   if (change.type === 'materials') {
     const group = requestMaterialGroup(projectMaterialRecord(previous), change.id, change.material.requirementId);
     if (group?.members.some(member => projectItemReadonly(previous, member.item.id, 'materials')))
@@ -117,8 +118,7 @@ export function editProjectItems(
     const old = previous.items?.find(old => old.id === item.id);
     if (!old || !previous.requestConversion?.workOrders.some(order => order.sourceItemId === item.id)) return item;
     const values = { ...item.values };
-    const mappedIds = previous.requestConversion.mapping.itemMappingMode === 'fixed'
-      ? Object.keys(old.values) : (previous.requestConversion.mapping.itemFields ?? []).map(mapping => mapping.target.id);
+    const mappedIds = Object.keys(old.values);
     for (const id of mappedIds) {
       if (Object.hasOwn(old.values, id) && (!item.config.fields.includes(id) || !requestFieldIsVisible(item.config, id, item.method, item.values))) values[id] = old.values[id];
     }

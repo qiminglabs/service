@@ -68,30 +68,14 @@ export function parseRuleDefinition(value: unknown): RuleDefinition {
 export function parseSubmissionRuleDefinition(value: unknown): RuleDefinition {
   return parseRuleDefinition({ ...object(value), events: [...submissionCheckEvents] });
 }
-// Upgrade saved custom rules only. Built-in workflow checks retain their events.
-// New writes must explicitly provide the required prompt.
+// Read the current rule schema without upgrading retired fields or events.
 export function normalizeStoredSubmissionRule(value: unknown): SubmissionRule {
   const rule = object(value);
-  const upgrade = (data: Record<string, unknown>, compiled?: unknown) => {
-    data = { ...data, events: [...submissionCheckEvents] };
-    if (Object.hasOwn(data, 'promptText')) return data;
-    const checks = compiled && typeof compiled === 'object' ? (compiled as CompiledRule).checks : undefined;
-    const messages = Array.isArray(checks) ? checks.map(check => check?.message).filter((message): message is string => typeof message === 'string' && !!message.trim()) : [];
-    return { ...data, promptText: [...new Set(messages)].join('\n') || data.requirement };
-  };
-  const active = rule.active ? object(rule.active) : undefined;
-  // Retire the entire rule rather than silently dropping one condition from an
-  // AND/OR expression. Keep its text available for administrators to rewrite.
-  const checks = (active?.compiled as CompiledRule | undefined)?.checks;
-  const retiredFieldUsed = Array.isArray(checks) && checks.some(check =>
-    Array.isArray(check?.conditions) && check.conditions.some(condition => condition && String(condition.fact) === 'businessImpact'),
-  );
-  if (retiredFieldUsed) return {
-    ...upgrade(rule, active?.compiled), status: 'error',
-    error: '“业务影响”字段已移除，此规则已停用，请修改检验要求后重新转译并测试。',
-    active: { ...upgrade(active!, active?.compiled), enabled: false },
-  } as SubmissionRule;
-  return { ...upgrade(rule, active?.compiled), ...(active ? { active: upgrade(active, active.compiled) } : {}) } as SubmissionRule;
+  const definition = (data: Record<string, unknown>) => parseRuleDefinition({ scope: data.scope, events: data.events, requirement: data.requirement, promptText: data.promptText });
+  const current = { ...structuredClone(rule), ...definition(rule) };
+  if (!rule.active) return current as SubmissionRule;
+  const active = object(rule.active);
+  return { ...current, active: { ...structuredClone(active), ...definition(active), compiled: parseCompiledRule(active.compiled) } } as SubmissionRule;
 }
 export function parseCompiledRule(value: unknown): CompiledRule {
   const data = object(value); exact(data, ['version', 'checks']);

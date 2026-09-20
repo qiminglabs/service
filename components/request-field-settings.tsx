@@ -1,5 +1,8 @@
 'use client';
 
+import { ServiceExecutionFormSettings } from '@/components/service-execution-form-settings';
+import { ServiceProviderSettings } from '@/components/service-provider-settings';
+
 import type { OperationActor } from '@/lib/request-operations';
 import { createContext, useId, useState } from 'react';
 import { Plus } from 'lucide-react';
@@ -29,7 +32,6 @@ import { editionFeatureFields, editionFieldRequirement, fieldRequirementLabels, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DateField } from '@/components/date-field';
-import { requestFieldLabel } from '@/lib/request-field-labels';
 import {
   Combobox,
   ComboboxInput,
@@ -38,6 +40,7 @@ import {
   ComboboxItem,
   ComboboxEmpty,
 } from '@/components/ui/combobox';
+import { ServiceMailTemplateSettings } from '@/components/service-mail-template-settings';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Dialog,
@@ -82,6 +85,7 @@ const systemFields: Record<
   version: { name: '版本号', type: 'single' },
   ...Object.fromEntries(editionFeatureFields.map(field => [field.id, { name: field.name, type: 'single' as const }])),
   nodes: { name: '节点数', type: 'integer' },
+  installObservability: { name: '是否安装可观测性', type: 'single' },
   description: { name: '需求说明', type: 'textarea' },
   businessObjects: {
     name: '业务对象',
@@ -116,7 +120,7 @@ export function normalizeRequestFields(
     fields.map((field) => ({
       ...field,
       type: systemFields[field.id]?.type ?? field.type ?? 'single',
-      name: requestFieldLabel(field.id, field.name?.trim() || systemFields[field.id]?.name || field.name),
+      name: (field.name?.trim() || systemFields[field.id]?.name || field.name),
       referenceTarget:
         systemFields[field.id]?.referenceTarget ?? field.referenceTarget,
       options: field.options.map((option) =>
@@ -134,6 +138,7 @@ export const initialRequestFields = normalizeRequestFields([
   },
   { id: 'version', name: '版本号', options: ['5.0.1', '5.0.2', '5.0.3'] },
   { id: 'nodes', name: '节点数', type: 'integer', options: [] },
+  { id: 'installObservability', name: '是否安装可观测性', type: 'single', options: ['是', '否'] },
   { id: 'description', name: '需求说明', type: 'textarea', options: [] },
   {
     id: 'businessObjects',
@@ -290,7 +295,7 @@ export function RequestFieldSettings({
       className="reference-panel backend-settings-panel"
       aria-label={currentSection.label}
     >
-      {section === 'execution-flow' && <ExecutionFlowDiagram />}
+      {section === 'execution-flow' && <ExecutionFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={setActiveTab} />}
       {section === 'request-flow' && <RequestFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={selectFlowTab} />}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
@@ -381,10 +386,13 @@ export function RequestFieldSettings({
           <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
           <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
         </>}
-        {section === 'execution-flow' && <TabsContent value="service-flows"><ServiceFlowSettings actor={actorIdentity} mode="flows" /></TabsContent>}
-        {section === 'execution-flow' && <TabsContent value="service-flow-assignment"><ServiceFlowSettings actor={actorIdentity} mode="assignment" /></TabsContent>}
+        {section === 'execution-flow' && <TabsContent value="service-mail-templates">{activeTab === 'service-mail-templates' && <ServiceMailTemplateSettings actor={actorIdentity} />}</TabsContent>}
+        {section === 'execution-flow' && <TabsContent value="service-flows"><ServiceFlowSettings actor={actorIdentity} /></TabsContent>}
+        {section === 'execution-flow' && <TabsContent value="project-approval-designer"><ApprovalRuleSettings actor={actorIdentity} scope="project" /></TabsContent>}
+        {section === 'execution-flow' && <TabsContent value="service-providers">{activeTab === 'service-providers' && <ServiceProviderSettings actor={actorIdentity} />}</TabsContent>}
         {section === 'execution-flow' && <TabsContent value="project-collaborators"><ProjectCollaboratorAssignmentSettings /></TabsContent>}
         {section === 'execution-flow' && <TabsContent value="request-project-mapping"><RequestProjectMappingSettings actor={actorIdentity} applicationFields={applicationFields} projectFields={projectFields} /></TabsContent>}
+        {section === 'execution-flow' && <TabsContent value="execution-form-library"><ServiceExecutionFormSettings actor={actorIdentity} /></TabsContent>}
         {section === 'pricing' && <TabsContent value="entitlement-conversions">
           <EntitlementConversions actor={actor} />
         </TabsContent>}
@@ -402,10 +410,10 @@ export function RequestFieldSettings({
             </DialogTitle>
             <DialogDescription>
               {projectTab && locked ? '可修改字段名称；字段类型、填写规则、项目状态选项及系统自动记录规则固定。' : fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为技术评估和服务交付；可修改字段名称。' : locked
-                ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项，字段类型不可修改。'
+                ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项。'
                 : creating
                   ? projectTab ? '创建后可在服务项目中填写，并配置请求转项目映射。' : applicationTab ? '创建后保存在服务申请字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
-                  : '可修改名称和选项；字段类型创建后不可修改，以保留历史数据。'}
+                  : '可修改名称和选项。'}
             </DialogDescription>
           </DialogHeader>
           <form

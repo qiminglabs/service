@@ -1,3 +1,4 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
 import type { ServiceRequest } from './service-requests';
 import type { OperationActor } from './request-operations';
 
@@ -18,9 +19,9 @@ export function applyCustomerDecision(
   reason = '',
   at = new Date().toISOString(),
 ): ServiceRequest {
-  if (!actor.id || actor.role !== '客户' || customerId !== record.customerId)
+  if (!isDemoAdministrator(actor) && (!actor.id || actor.role !== '客户' || customerId !== record.customerId))
     throw new Error('仅所属客户可以确认或拒绝服务请求。');
-  if (!record.externalCollaborators?.some(person => person.contactId === actor.id)) throw new Error('仅客户协作人可以确认或拒绝服务请求。');
+  if (!isDemoAdministrator(actor) && !record.externalCollaborators?.some(person => person.contactId === actor.id)) throw new Error('仅客户协作人可以确认或拒绝服务请求。');
   const confirmation = record.operations?.assessment?.confirmation;
   if (record.status !== '待确认' || !confirmation)
     throw new Error('请求已变更，请刷新后重试；仅待确认请求可以处理。');
@@ -28,7 +29,7 @@ export function applyCustomerDecision(
   const next = structuredClone(record);
   const ops = next.operations!;
   ops.customerDecisions = [...(ops.customerDecisions ?? []), {
-    at, actorId: actor.id, actor: actor.name, accepted,
+    at, actorId: actor.id, actor: isDemoAdministrator(actor) ? `${actor.name}（管理员代确认）` : actor.name, accepted,
     reason: accepted ? '' : reason.trim(), planId: confirmation.planId,
   }];
   next.status = accepted ? '待受理' : '待评估';

@@ -1,5 +1,6 @@
+import { requestApprovalRemainingDays } from './request-approval-quota.ts';
 import type { ContactRef, CustomerRef, InternalUser, ServiceRequest } from './service-requests';
-import { assessedEffort, assessmentOf, canSubmitGapApproval, currentPlan, customerOwner, planGap } from './request-assessment.ts';
+import { assessedEffort, assessmentOf, canSubmitGapApproval, currentPlan, customerOwner } from './request-assessment.ts';
 import { canPerformAssessmentRole } from './assessment-routing.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
 import { requestAudience } from './request-collaboration.ts';
@@ -44,7 +45,7 @@ export function requestNextStep(record: ServiceRequest, users: InternalUser[], c
     return contact ? { site: '客户中心', actor: `${contact.name}${candidates.length > 1 ? '等任一客户协作人' : '（客户协作人）'}`, action: '查看服务方案，完成客户确认（确认或拒绝）。' }
       : admin('恢复客户协作人的有效账号后，前往客户中心完成确认。');
   }
-  const manager = activeUsers.find(user => canPerformAssessmentRole(record, actorOf(user), 'manager', users));
+  const manager = activeUsers.find(user => fixedIdentityRoles[user.id] === 'SmartX 项目经理' && canPerformAssessmentRole(record, actorOf(user), 'manager', users));
   if (record.status === '评估完成' && requestTypeOf(record) === '技术评估') return manager
     ? staff(manager, '负责项目经理', '技术评估已完成；如需继续交付，点击「转为服务交付」。')
     : { action: '技术评估已完成。如需转为服务交付，请先恢复负责项目经理的有效账号。' };
@@ -54,7 +55,7 @@ export function requestNextStep(record: ServiceRequest, users: InternalUser[], c
   const assessment = assessmentOf(record);
   const passed = assessment.rounds.some(round => round.outcome === '评估通过');
   if (!passed && hardwareItems(record).length && hardwarePassIssue(record, users)) {
-    const reviewer = activeUsers.find(user => canPerformAssessmentRole(record, actorOf(user), 'hardware', users));
+    const reviewer = activeUsers.find(user => fixedIdentityRoles[user.id] === 'SmartX 硬件产品经理' && canPerformAssessmentRole(record, actorOf(user), 'hardware', users));
     if (!reviewer) return admin('为本请求分配有效的硬件产品经理，再进行硬件评估。');
     return staff(reviewer, '硬件产品经理', currentHardwareReview(record)?.outcome === '需补充'
       ? '按评估意见检查补充材料，在「评估」中重新提交硬件评估。'
@@ -76,8 +77,7 @@ export function requestNextStep(record: ServiceRequest, users: InternalUser[], c
     return approver ? staff(approver, '当前审批人', `在「评估」中处理特殊审批${step ? `的「${step.nodeName}」环节` : ''}。`)
       : admin('恢复当前指定审批人的有效账号后继续特殊审批。');
   }
-  const gap = planGap(plan);
-  if (gap > 1e-8 && !assessment.approvals.some(approval => approval.planId === plan.id && approval.state === '已通过' && approval.days >= gap)) {
+  if (requestApprovalRemainingDays(record) > 1e-8) {
     const submitters = activeUsers.filter(user => canSubmitGapApproval(record, actorOf(user), users));
     const submitter = submitters.find(user => user.id === record.createdById) ?? submitters[0];
     const rejected = assessment.approvals.some(approval => approval.planId === plan.id && approval.state === '已拒绝');

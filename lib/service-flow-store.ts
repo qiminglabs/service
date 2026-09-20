@@ -1,3 +1,13 @@
+import { executionFormsFromRows } from './service-execution-form-store.ts';
+import {
+  bindExecutionForms,
+  executionFormsId,
+} from './service-execution-forms.ts';
+import { validateServiceFlowLanguage } from './service-flow-conditions.ts';
+import {
+  changedServiceFlows,
+  serviceFlowHistory,
+} from './service-flow-history.ts';
 import {
   openDatabase,
   readLocal,
@@ -8,6 +18,7 @@ import type { OperationActor } from './request-operations';
 import type { ServiceProjectRecord } from './service-projects';
 import {
   parseServiceFlowConfig,
+  validateServiceFlowScope,
   serviceFlowConfigId,
   type ServiceFlowConfig,
   type FlowDictionary,
@@ -38,14 +49,26 @@ export async function readServiceFlowData() {
         `service-project:${(row.payload as ServiceProjectRecord | undefined)?.id}`,
     )
     .map((row) => row.payload as ServiceProjectRecord);
-  return { ...unpack(rows), projects };
+  return {
+    ...unpack(rows),
+    projects,
+    executionForms: executionFormsFromRows(rows).library,
+  };
 }
 export async function saveServiceFlowConfig(
   input: ServiceFlowConfig,
   actor: OperationActor,
 ) {
-  const checked = parseServiceFlowConfig(input);
+  let checked = parseServiceFlowConfig(input);
   if (!canManageRouting(actor)) throw new Error('仅系统管理员可维护服务流程。');
+  const beforeData = await readServiceFlowData();
+  const before = beforeData.config;
+  checked = parseServiceFlowConfig(
+    bindExecutionForms(checked, beforeData.executionForms),
+  );
+  if (before.revision !== checked.revision)
+    throw new Error('配置已被其他页面修改，请重新加载后再保存。');
+  const changed = await changedServiceFlows(before, checked);
   const db = await openDatabase();
   try {
     return await new Promise<ServiceFlowConfig>((resolve, reject) => {
@@ -60,6 +83,9 @@ export async function saveServiceFlowConfig(
       read.onsuccess = () => {
         try {
           const current = unpack(read.result);
+          const formLibrary = executionFormsFromRows(read.result).library;
+          if (formLibrary.revision !== beforeData.executionForms.revision)
+            throw new Error('表单已更新，请重新加载后再保存流程。');
           if (
             !current.users.some(
               (user) => user.id === actor.id && user.status === '启用',
@@ -70,7 +96,17 @@ export async function saveServiceFlowConfig(
             throw new Error(
               '配置已被其他页面修改，请关闭编辑窗口并重新加载后再保存。',
             );
-          for (const rule of checked.assignment.rules)
+          for (const rule of checked.assignment.rules.filter(
+            (rule) => rule.enabled,
+          ))
+            validateServiceFlowScope(rule, current.dictionary);
+          for (const rule of checked.assignment.rules.filter(
+            (rule) => rule.enabled,
+          ))
+            validateServiceFlowLanguage(rule, current.dictionary);
+          for (const rule of checked.assignment.rules.filter(
+            (rule) => rule.enabled,
+          ))
             for (const condition of rule.conditions) {
               const entries =
                 condition.field === 'serviceId'
@@ -86,8 +122,16 @@ export async function saveServiceFlowConfig(
             revision: checked.revision + 1,
             updatedAt: new Date().toISOString(),
             updatedBy: actor.name,
+            history: serviceFlowHistory(
+              current.config,
+              checked,
+              changed,
+              actor.name,
+              new Date().toISOString(),
+            ),
           };
           store.put({ id: serviceFlowConfigId, payload: result });
+          store.put({ id: executionFormsId, payload: formLibrary });
         } catch (error) {
           reject(error);
           tx.abort();

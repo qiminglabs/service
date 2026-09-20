@@ -1,3 +1,4 @@
+import { effectiveRequestApprovals } from './request-approval-quota.ts';
 import type { Assessment, AssessmentPlan, GapApproval } from './request-assessment';
 import type { ServiceRequest } from './service-requests';
 import type { ProjectCreation } from './request-projects';
@@ -71,8 +72,7 @@ export function projectRequestSnapshots(record: ServiceRequest, creation: Projec
   if (plan && snapshots.length === 1) {
     snapshots[0].basis = structuredClone(plan);
     snapshots[0].basis.entitlementAllocations ??= effortEntitlementAllocations(effort?.lines);
-    const approval = assessment?.approvals?.filter(entry => entry.planId === plan.id && entry.state === '已通过').at(-1);
-    if (approval) snapshots[0].approvals = [{ ...approval, sourceDays: approval.days, sourceGaps: approval.gaps }];
+    snapshots[0].approvals = effectiveRequestApprovals(record).map(approval => ({ ...approval, sourceDays: approval.days, sourceGaps: approval.gaps }));
     return new Map([[creation.projects[0].id, structuredClone(snapshots[0])]]);
   }
   if (plan) {
@@ -94,17 +94,15 @@ export function projectRequestSnapshots(record: ServiceRequest, creation: Projec
         if (days > 0) snapshots[index].basis!.allocations.push({ ...allocation, method, days });
       });
     }
-    // Only the effective approval belongs to this basis; failed/obsolete approvals
-    // are not quota, and multiple approval records must not duplicate the balance.
-    const approval = assessment?.approvals?.filter(entry => entry.planId === plan.id && entry.state === '已通过').at(-1);
-    if (approval) {
+    // Manual applications are additive; legacy whole-gap approvals retain their original semantics.
+    for (const approval of effectiveRequestApprovals(record)) {
       const gaps = approval.gaps ?? (['远程', '现场'] as const).map(method => ({ method,
         days: sumDays(remaining.get(method)!.map(units => units / 10)) })).filter(gap => gap.days > 0);
       if (Math.abs(sumDays(gaps.map(gap => gap.days)) - approval.days) > 1e-8) {
         throw new Error('特批额度与分类人天不一致，无法拆分项目。');
       }
       const parts: DayRequirement[][] = snapshots.map(() => []);
-      for (const gap of gaps) allocate(gap.days, gap.method).forEach((days, index) => {
+      for (const gap of gaps) allocate(approval.manualAmount ? Math.min(gap.days, sumDays(remaining.get(gap.method)!.map(units => units / 10))) : gap.days, gap.method).forEach((days, index) => {
         if (days > 0) parts[index].push({ method: gap.method, days });
       });
       snapshots.forEach((snapshot, index) => {

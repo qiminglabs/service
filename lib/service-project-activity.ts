@@ -1,8 +1,8 @@
 import type {
   OperationActor,
   RequestMeeting,
-  RequestWorklog,
 } from './request-operations';
+import type { ProjectWorklog } from './project-worklog-pricing';
 import type { ServiceProjectRecord } from './service-projects';
 
 export type ProjectActivity = {
@@ -10,14 +10,14 @@ export type ProjectActivity = {
   at: string;
   actor: string;
   actorId: string;
-  category: '项目' | '服务项' | '协作' | '补充信息' | '会议' | '工时';
+  category: '项目' | '服务项' | '协作' | '补充信息' | '会议' | '工时' | '工单' | '复核' | '服务日报' | '项目报告';
   title: string;
   detail: string;
   externalVisible?: boolean;
 };
 export type ProjectOperations = {
   meetings: RequestMeeting[];
-  worklogs: RequestWorklog[];
+  worklogs: ProjectWorklog[];
   activities: ProjectActivity[];
 };
 export function projectOperationsOf(

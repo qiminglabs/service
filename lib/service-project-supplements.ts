@@ -11,7 +11,7 @@ import {
   type SupplementMention,
 } from './supplement-mentions.ts';
 import {
-  canManageServiceProjects,
+  canViewServiceProject,
   projectItemAudience,
   type ServiceProjectRecord,
 } from './service-projects.ts';
@@ -30,9 +30,20 @@ export type ProjectSupplement = ProjectSupplementInput & {
 };
 
 export function projectCustomerMentionUsers(record: Pick<ServiceProjectRecord, 'customerId' | 'collaborators'>, actor: OperationActor, contacts: ContactRef[] = []) {
-  return isInternal(actor.role) || actor.role === '合作伙伴服务工程师'
+  return isInternal(actor.role) || actor.role === '合作伙伴服务工程师' || actor.role === '客户'
     ? customerCollaboratorMentionUsers(record.customerId, (record.collaborators?.customer ?? []).map(person => person.id), contacts)
     : [];
+}
+
+export function projectSupplementMentionUsers(record: Pick<ServiceProjectRecord, 'customerId' | 'collaborators' | 'serviceProviderId'>, actor: OperationActor, users: InternalUser[], contacts: ContactRef[] = [], directory?: CustomerProjectDirectory): (InternalUser & { companyName?: string })[] {
+  if (actor.role === '客户') return customerProjectMentionUsers(record, directory).map(user => ({ ...user, status: '启用', department: '' }));
+  const partners = directory?.partners.filter(partner => partner.status === '启用') ?? [];
+  const partnerUsers = (directory?.partnerUsers ?? []).filter(user => user.status === '启用'
+    && partners.some(partner => partner.id === user.partnerId && record.serviceProviderId === `partner:${partner.id}`)
+    && record.collaborators?.partner?.some(person => person.id === user.id))
+    .map(user => ({ ...user, department: '', companyName: partners.find(partner => partner.id === user.partnerId)?.name }));
+  const internal = users.filter(user => user.status === '启用' && record.collaborators?.internal?.some(person => person.id === user.id));
+  return [...internal, ...partnerUsers, ...projectCustomerMentionUsers(record, actor, contacts)];
 }
 
 export function canAddProjectSupplement(
@@ -41,7 +52,7 @@ export function canAddProjectSupplement(
   directory?: CustomerProjectDirectory,
 ) {
   return (
-    (canManageServiceProjects(actor, record) ||
+    (canViewServiceProject(actor, record) ||
       (!!directory && canViewCustomerProject(record, actor, directory))) &&
     !['已完成', '已取消'].includes(record.status)
   );
@@ -68,11 +79,7 @@ export function addProjectSupplement(
   }
   const recipients: InternalUser[] = actor.role === '客户'
     ? customerProjectMentionUsers(previous, directory).map(user => ({ id: user.id, name: user.name, status: '启用', email: '', department: '' }))
-    : [...users.filter(
-    (user) =>
-      user.status === '启用' &&
-      previous.collaborators?.internal?.some((person) => person.id === user.id),
-  ), ...projectCustomerMentionUsers(previous, actor, directory?.contacts)];
+    : projectSupplementMentionUsers(previous, actor, users, directory?.contacts, directory);
   const mentionIssue = supplementMentionsIssue(
     input.comment,
     input.mentions,

@@ -13,7 +13,7 @@ export function isSystemApplicationField(id: string): boolean {
   return initialApplicationFields.some(field => field.id === id);
 }
 
-// Import existing request fields once, retaining saved labels, options and custom fields.
+// Keep required system field types and user-defined labels/options consistent.
 export function normalizeApplicationFields(fields: RequestField[] = []): RequestField[] {
   const ids = initialApplicationFields.map(field => field.id);
   return [

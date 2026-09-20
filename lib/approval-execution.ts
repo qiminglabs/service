@@ -1,3 +1,6 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
+import { requestApprovalRemainingDays } from './request-approval-quota.ts';
+import { isDayQuantity, sumDays } from './day-quantity.ts';
 import { resolveApprovalPreview } from './approval-preview.ts';
 import type { RoutingDictionary } from './assessment-routing-schema';
 import type { ApprovalRules } from './approval-rules';
@@ -37,10 +40,10 @@ export function createApprovalExecution(record: ServiceRequest, rules: ApprovalR
 export function decideApprovalExecution(approval: GapApproval, actor: OperationActor, users: InternalUser[], approve: boolean, note: string, now: string): string {
   const steps = approval.workflow!.steps;
   const current = steps.find(step => step.state === '待审批');
-  if (!current || current.approverId !== actor.id || approval.approverId !== actor.id
+  if (!current || (!isDemoAdministrator(actor, users) && (current.approverId !== actor.id || approval.approverId !== actor.id))
     || !users.some(user => user.id === actor.id && user.status === '启用') || fixedIdentityRoles[actor.id] !== actor.role)
     throw new Error('仅当前环节指定且已启用的审批人可以处理。');
-  if (actor.id === approval.authorId) throw new Error('不能审批自己发起的申请，请调整审批人配置后重新发起。');
+  if (actor.id === approval.authorId && !isDemoAdministrator(actor, users)) throw new Error('不能审批自己发起的申请，请调整审批人配置后重新发起。');
   current.state = approve ? '已通过' : '已拒绝';
   current.note = note.trim(); current.decidedAt = now; current.decidedBy = actor.name;
   if (!approve) {
@@ -87,7 +90,10 @@ export function specialApprovalSaveIssue(next: ServiceRequest, previous: Service
     for (const approval of added) {
       const plan = previous.operations?.assessment?.plans.at(-1);
       if (previous.status !== '待评估' || !plan || plan.releasedAt || approval.planId !== plan.id || approval.authorId !== actor.id
-        || (previous.createdById !== actor.id && plan.salesId !== actor.id) || before.some(old => old.planId === plan.id && ['待审批', '已通过'].includes(old.state))) return '当前请求不能发起新的特殊审批。';
+        || (!isDemoAdministrator(actor, users) && previous.createdById !== actor.id && plan.salesId !== actor.id) || before.some(old => old.planId === plan.id && old.state === '待审批') || requestApprovalRemainingDays(previous) <= 1e-8) return '当前请求不能发起新的特殊审批。';
+      if (!isDayQuantity(approval.days) || approval.days <= 0 || approval.days > 100000 || !approval.reason.trim()) return '申请人天须为大于 0 的有效数值，最多一位小数，并填写申请理由。';
+      if (approval.manualAmount && (approval.gaps?.length !== 1 || !['远程', '现场'].includes(approval.gaps[0].method) || approval.gaps[0].days !== approval.days)) return '申请人天与服务方式明细不一致。';
+      if (approval.gaps?.length && (approval.gaps.some(row => !isDayQuantity(row.days) || row.days <= 0 || !['远程', '现场'].includes(row.method)) || sumDays(approval.gaps.map(row => row.days)) !== approval.days)) return '申请额度明细无效。';
       const expected = createApprovalExecution(previous, rules, users, customers, approval.at);
       if (!same(expected, approval.workflow) || approval.state !== '待审批' || approval.approverId !== expected.steps[0].approverId || approval.approver !== expected.steps[0].approver) return '审批规则已变更，请重新打开并发起审批。';
     }

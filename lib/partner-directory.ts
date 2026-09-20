@@ -1,4 +1,5 @@
 export type Partner = { id: string; name: string; status: '启用' | '停用' };
+export const partnerUserRole = '合作伙伴服务工程师' as const;
 export type PartnerUser = {
   id: string;
   name: string;

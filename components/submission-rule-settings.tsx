@@ -103,7 +103,7 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
       <td><span className="rule-version-status" data-enabled={!disabled && !!rule.active?.enabled}>v{rule.version ?? Math.max(1, rule.revision)} · {disabled ? '已停用' : rule.active?.enabled ? '已启用' : '未生效'}</span></td>
       <td>{new Date(disabled ? rule.disabledAt ?? rule.updatedAt : rule.updatedAt).toLocaleString('zh-CN', { hour12: false })}</td>
       <td>{disabled ? rule.disabledBy ?? rule.updatedBy : rule.updatedBy}</td>
-      <td>{disabled ? <span className="sr-help">只读</span> : canManage && <div className="rule-table-actions">
+      <td>{!disabled && canManage && <div className="rule-table-actions">
         <Button variant="ghost" disabled={busy} onClick={() => edit(rule)}>{rule.status === 'ready' ? '编辑' : '修改 / 重试'}</Button>
         <Button variant="ghost" disabled={busy} onClick={() => { setDisableTarget(rule); setDisableError(''); }}>停用</Button>
       </div>}</td>

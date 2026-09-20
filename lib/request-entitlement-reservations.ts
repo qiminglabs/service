@@ -1,3 +1,4 @@
+import { requestBasisIsFrozen } from './project-reservation-release.ts';
 import type { ObjectRef, ServiceRequest } from './service-requests';
 import type { EffortPricingLine } from './request-pricing';
 export type EntitlementAllocation = { itemId: string; objectId: string; name: string; kind: 'inspection' | 'upgrade'; quantity: number };
@@ -8,6 +9,9 @@ export function effortEntitlementAllocations(lines: EffortPricingLine[] = []): E
       ? [{ itemId: line.itemId, objectId: object.objectId, name: object.name, kind: line.entitlementKind!, quantity: object.nodes - object.deficit }] : []) : []);
 }
 export function activeEntitlementAllocations(record: ServiceRequest): EntitlementAllocation[] {
+  return requestBasisIsFrozen(record) ? associatedEntitlementAllocations(record) : [];
+}
+export function associatedEntitlementAllocations(record: ServiceRequest): EntitlementAllocation[] {
   if (record.status === '已取消') return [];
   const assessment = record.operations?.assessment;
   const plan = assessment?.plans.at(-1);
@@ -23,7 +27,8 @@ export function entitlementAvailable(object: ObjectRef, kind: EntitlementAllocat
   const locked = records.filter(record => record.id !== exceptId && record.customerId === object.customerId)
     .flatMap(activeEntitlementAllocations).filter(allocation => allocation.objectId === object.id && allocation.kind === kind)
     .reduce((sum, allocation) => sum + allocation.quantity, 0);
-  return Math.max(0, balance - locked);
+  const projectLocked = (object.projectReservations ?? []).filter(row => row.kind === kind).reduce((sum, row) => sum + row.quantity, 0);
+  return Math.max(0, balance - locked - projectLocked - (object.projectConsumptions ?? []).filter(row => row.kind === kind).reduce((sum, row) => sum + row.quantity, 0));
 }
 export function entitlementLockIssue(record: ServiceRequest, records: ServiceRequest[], objects: ObjectRef[]): string | null {
   if (record.status === '已取消') return null;
@@ -31,7 +36,7 @@ export function entitlementLockIssue(record: ServiceRequest, records: ServiceReq
   const plan = assessment?.plans.at(-1);
   if (!plan || plan.releasedAt) return null;
   const expected = effortEntitlementAllocations(assessment?.effort?.lines);
-  const allocations = activeEntitlementAllocations(record);
+  const allocations = associatedEntitlementAllocations(record);
   if (JSON.stringify(expected) !== JSON.stringify(allocations)) return '权益冻结明细与核定结果不一致，请重新进行服务依据关联。';
   const sums = new Map<string, number>();
   for (const allocation of allocations) {

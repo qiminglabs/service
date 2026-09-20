@@ -1,14 +1,16 @@
+import { canSubmitRequest } from './request-collaboration.ts';
 import { routeAssessmentOnSave } from './assessment-routing.ts';
 import { assessmentRoutingId } from './assessment-routing-schema.ts';
 import { readLocal } from './service-requests.ts';
 import { requestMaterialIssues } from './request-materials.ts';
 import type { ServiceRequest } from './service-requests';
-import { applicantRemovalIssue, customerCollaboratorsIssue, isRequestApplicant, requestAudience } from './request-collaboration.ts';
+import { applicantRemovalIssue,customerCollaboratorsIssue,requestAudience } from './request-collaboration.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
 import { assessedEffort } from './request-assessment.ts';
 import { requestCompletenessIssues } from './request-validation-builtins.ts';
 import { factCatalog, parseCompiledRule, parseRuleDefinition, normalizeStoredSubmissionRule, ruleEvents, submissionCheckEvents, submissionRulesId } from './submission-rule-schema.ts';
 import type { RuleDefinition, RuleEvent, RuleFact, SubmissionRule, RuleCondition } from './submission-rule-schema';
+import { builtinSubmissionRules } from './submission-rule-builtins.ts';
 export type ValidationContext = Parameters<typeof requestCompletenessIssues>[1];
 export type ValidationFailure = { ruleId: string; requirement: string; message: string };
 export class SubmissionValidationError extends Error {
@@ -20,7 +22,6 @@ export class SubmissionValidationError extends Error {
   }
 }
 export { builtinSubmissionRules } from './submission-rule-builtins.ts';
-import { builtinSubmissionRules } from './submission-rule-builtins.ts';
 export function submissionEvent(record: ServiceRequest): RuleEvent {
   return record.operations?.draftReturns?.length ? 'resubmit' : 'submit';
 }
@@ -52,7 +53,7 @@ export function ruleFacts(record: ServiceRequest, refs: ValidationContext, now =
     internalCount: new Set(people.map(p => p.id)).size,
     customerCount: new Set(refs.contacts.filter(c => externalIds.has(c.id) && c.customerId === record.customerId && c.status === '启用').map(c => c.id)).size,
     presalesCount: roleCount('SmartX 售前工程师'), engineerCount: roleCount('SmartX 服务工程师'), managerCount: roleCount('SmartX 项目经理'), salesCount: roleCount('SmartX 销售经理'),
-    isApplicant: isRequestApplicant(record, refs.currentActor), applicantPresent: !applicantRemovalIssue(record),
+    isApplicant: canSubmitRequest(record, refs.currentActor), applicantPresent: !applicantRemovalIssue(record),
     customerCollaboratorsValid: !customerCollaboratorsIssue(record, refs.contacts),
     allItemsDescribed: record.items.length > 0 && record.items.every(item => !!item.description.trim()),
     hasOnsiteItem: record.items.some(item => item.method === '现场'), hasRemoteItem: record.items.some(item => item.method === '远程'),
@@ -91,7 +92,7 @@ export function runValidationQueue(record: ServiceRequest, refs: ValidationConte
   for (const rule of builtinSubmissionRules.filter(applies)) {
     let messages: string[] = [];
     switch (rule.id) {
-      case 'builtin-applicant': messages = [isRequestApplicant(record, refs.currentActor) ? null : '仅创建人可以提交服务请求。', applicantRemovalIssue(record)].filter((s): s is string => !!s); break;
+      case 'builtin-applicant': messages = [canSubmitRequest(record, refs.currentActor) ? null : '仅创建人可以提交服务请求。', applicantRemovalIssue(record)].filter((s): s is string => !!s); break;
       case 'builtin-presales': if (facts.presalesCount === 0) messages = ['内部申请提交前，请至少添加一位已启用的 SmartX 售前工程师为内部协作人。']; break;
       case 'builtin-customer': { const issue = customerCollaboratorsIssue(record, refs.contacts); if (issue) messages = [issue]; break; }
       case 'builtin-completeness': messages = requestCompletenessIssues(record, context); break;

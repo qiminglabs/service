@@ -1,3 +1,6 @@
+import { fixedIdentityRoles } from './internal-users.ts';
+import { canSubmitRequest, requestCollaboratorsLocked } from './request-collaboration.ts';
+import { isDemoAdministrator } from './demo-permissions.ts';
 import { validateCustomValues } from './custom-field-mapping.ts';
 import { normalizeApplicationFields, isSystemApplicationField } from './request-application-fields.ts';
 import { isConvertedRequest, convertedRequestReadonlyMessage } from './request-readonly.ts';
@@ -12,13 +15,12 @@ import { approvalRulesId, readApprovalRulesPayload } from './approval-rules.ts';
 import { canPerformAssessmentRole, routeAssessmentOnSave, routingSaveIssue } from './assessment-routing.ts';
 import { assessmentRoutingId } from './assessment-routing-schema.ts';
 import { runValidationQueue, validationEventsForTransition, SubmissionValidationError } from './submission-validation.ts';
-import { requestFieldLabel } from './request-field-labels.ts';
 import { submissionRulesId } from './submission-rule-schema.ts';
-export { requestIssues } from './request-validation-builtins.ts';
 import { addressLabel, isAddressValue, addressComplete } from './request-address.ts';
 import { withRequestCollaborators, withAssessmentCollaborators, assessmentCollaboratorRemovalIssue, requestAudience, isRequestApplicant, applicantRemovalIssue } from './request-collaboration.ts';
 import { entitlementAvailable } from './request-entitlement-reservations.ts';
 import { workspaceDayQuantityIssue } from './day-quantity.ts';
+import { preserveProjectReservations } from './project-reservations.ts';
 import { effortPricingSaveIssue, entitlementPricingContext } from './request-pricing.ts';
 import { projectCreationSaveIssue } from './request-projects.ts';
 import { isInternal } from './request-operations.ts';
@@ -28,9 +30,11 @@ import { customerDecisionIssue } from './request-customer-decision.ts';
 import { assessmentLockIssue, assessmentBasisSaveIssue, currentPlan, planSalesOwnerIssue } from './request-assessment.ts';
 import { hardwareAssessmentSaveIssue, invalidateHardwareReview, hardwareItems, isHardwareProductManager } from './request-hardware-assessment.ts';
 import type { OperationActor, RequestOperations } from './request-operations';
+export { requestIssues } from './request-validation-builtins.ts';
 
 export type CatalogService = {
   id: string;
+  certifications?: string[];
   version?: number;
   name: string;
   description?: string;
@@ -83,7 +87,7 @@ export async function readRequestConfigs(
 ): Promise<RequestConfig[]> {
   if (audience === 'internal') {
     return (await readLocal<RequestConfig>('configs')).map(
-      normalizeCatalogRequestConfig,
+      normalizeRequestConfig,
     );
   }
   const references = await readLocal<{ id: string; payload?: RequestConfig }>(
@@ -94,7 +98,7 @@ export async function readRequestConfigs(
       (record) => record.payload?.serviceId &&
         record.id === (audience === 'partner' ? partnerRequestConfigId : customerRequestConfigId)(record.payload.serviceId),
     )
-    .map((record) => normalizeCatalogRequestConfig(record.payload!));
+    .map((record) => normalizeRequestConfig(record.payload!));
 }
 
 export function resolveRequestConfig(
@@ -103,7 +107,7 @@ export function resolveRequestConfig(
 ): RequestConfig {
   // The caller supplies only the selected audience's configs. Never fall back
   // from customer configuration to internal configuration, even for empty forms.
-  return applyCatalogConfigRules(service, normalizeCatalogRequestConfig(
+  return applyCatalogConfigRules(service, normalizeRequestConfig(
     configs.find((config) => config.serviceId === service.id) ?? defaultConfig(service),
   ));
 }
@@ -122,6 +126,8 @@ export function contactDisplay(contact: ContactRef) {
   };
 }
 export type ObjectRef = ContactRef & {
+  projectReservations?: { projectId: string; kind: 'inspection' | 'upgrade'; quantity: number }[];
+  projectConsumptions?: { projectId: string; kind: 'inspection' | 'upgrade'; quantity: number; at: string }[];
   nodeCount: number;
   upgradeEntitlement?: number;
   inspectionEntitlement?: number;
@@ -140,6 +146,8 @@ export function matchesObjectProduct(object: ObjectRef, config: RequestConfig) {
   return products === undefined || products.includes(object.product ?? '');
 }
 export type StoredFile = {
+  submittedBy?: string;
+  submittedAt?: string;
   uploadedById?: string;
   uploaderAudience?: RequestAudience;
   id: string;
@@ -152,6 +160,7 @@ export type StoredFile = {
     content: string;
     source: 'template' | 'blank';
     richText?: Record<string, unknown>;
+    reportSource?: import('./report-templates').ReportSource;
   };
 };
 export type FieldKey = string;
@@ -160,6 +169,7 @@ export const fieldLabels: Record<string, string> = {
   edition: '授权版本',
   version: '版本号',
   nodes: '节点数',
+  installObservability: '是否安装可观测性',
 };
 export type MaterialRequirement = {
   id: string;
@@ -212,8 +222,8 @@ export function attributeRequestMaterials(record: ServiceRequest, previous: Serv
   }) })) };
 }
 export type RequestConfig = {
+  fieldDefinitions?: Record<string, import('../components/request-field-settings').RequestField>;
   /** One-time default removal; later manual additions of version remain valid. */
-  versionFieldDefaultRemoved?: boolean;
   fieldOrder?: string[];
   fieldWidths?: Record<string, 'full' | 'half'>;
   fieldColumns?: Record<string, 'left' | 'right'>;
@@ -407,11 +417,6 @@ export function reconcileExternalCollaborators(
     email: contact.email?.trim() ?? '',
   }));
 }
-// Compatibility export: the former contact field no longer creates collaborators.
-export const withRequestContact = withRequestCollaborators;
-export function requestContactRemovalIssue(record: ServiceRequest, previous?: ServiceRequest): string | null {
-  return applicantRemovalIssue(record);
-}
 export const requestStatuses = [
   '草稿',
   '待评估',
@@ -423,22 +428,6 @@ export const requestStatuses = [
 ] as const;
 export type RequestStatus = (typeof requestStatuses)[number];
 export type RequestStage = Exclude<RequestStatus, '已取消'>;
-// Normalize legacy local records at the storage boundary without changing their data.
-export function normalizeStoredRequest(
-  record: ServiceRequest | (Omit<ServiceRequest, 'status'> & { status: '已转工单' }),
-): ServiceRequest {
-  let normalized = record.status === '已转工单' ? { ...record, status: '已转服务项目' as const } : record;
-  // Keep saved conversion events and untouched demo titles in the current terminology.
-  if (normalized.operations?.activities?.some(event => event.category === '评估' && ['转为交付', '转为服务'].includes(event.title))) {
-    normalized = { ...normalized, operations: { ...normalized.operations,
-      activities: normalized.operations.activities.map(event => event.category === '评估' && ['转为交付', '转为服务'].includes(event.title)
-        ? { ...event, title: '转为服务交付' } : event) } };
-  }
-  if (normalized.id.startsWith('SR-DEMO-') && ['技术评估转交付－待关联服务依据', '技术评估转为服务－待关联服务依据'].includes(normalized.title)) {
-    normalized = { ...normalized, title: '技术评估转为服务交付－待关联服务依据' };
-  }
-  return normalized.requestType === undefined ? { ...normalized, requestType: '服务交付' } : normalized;
-}
 export function requestStatusTone(status: RequestStatus) {
   if (status === '已取消') return 'cancelled';
   if (status === '已转服务项目' || status === '评估完成') return 'green';
@@ -446,30 +435,6 @@ export function requestStatusTone(status: RequestStatus) {
 }
 export function requestCancellationStage(record: ServiceRequest): RequestStage {
   if (record.cancelledFromStatus && requestStatuses.filter(stage => stage !== '已取消').includes(record.cancelledFromStatus)) return record.cancelledFromStatus;
-  // Reconstruct legacy cancellations from transitions, including returns and resubmissions.
-  const transitions: { at: number; stage: RequestStage }[] = [];
-  const add = (at: string | undefined, stage: RequestStage) => {
-    if (at && Number.isFinite(Date.parse(at))) transitions.push({ at: Date.parse(at), stage });
-  };
-  const ops = record.operations;
-  add(record.submittedAt, '待评估');
-  for (const returned of ops?.draftReturns ?? []) add(returned.at, '草稿');
-  add(ops?.assessment?.confirmation?.at, '待确认');
-  for (const decision of ops?.customerDecisions ?? []) add(decision.at, decision.accepted ? '待受理' : '待评估');
-  add(ops?.projectCreation?.at, '已转服务项目');
-  const activityStages: Record<string, RequestStage> = {
-    '提交服务请求': '待评估', '提交服务申请': '待评估', '退回草稿': '草稿',
-    '发起客户确认': '待确认', '客户确认通过': '待受理', '客户拒绝确认': '待评估', '创建服务项目': '已转服务项目',
-  };
-  for (const event of ops?.activities ?? []) {
-    const stage = activityStages[event.title];
-    if (stage) add(event.at, stage);
-  }
-  if (transitions.length) return transitions.sort((a, b) => a.at - b.at).at(-1)!.stage;
-  if (ops?.projectCreation) return '已转服务项目';
-  if (ops?.assessment?.confirmation) return '待确认';
-  if (ops?.assessment?.rounds?.length || ops?.assessment?.effort) return '待评估';
-  // Missing history must not imply that later stages were completed.
   return '草稿';
 }
 export function requestProgressSteps(request: RequestStatus | ServiceRequest) {
@@ -504,10 +469,12 @@ export type ServiceRequest = {
   businessImpact?: string;
   owner: string;
   createdBy?: string;
+  createdViaAdmin?: { id: string; name: string };
   createdById?: string;
   createdByAudience?: RequestAudience;
   externalCollaborators?: ExternalCollaborator[];
   internalParticipants?: InternalParticipant[];
+  partnerCollaborators?: InternalParticipant[];
   status: RequestStatus;
   cancelledFromStatus?: RequestStage;
   createdAt: string;
@@ -529,7 +496,7 @@ export function itemDisplayFields(item: RequestItem, names: Record<string, strin
     return value || '未填写';
   };
   const keys = [...new Set(['method', ...item.config.fields])].filter(key => key !== 'description' && key !== 'businessObjects' && requestFieldIsVisible(item.config, key, item.method, item.values));
-  const fields = keys.map(key => ({ key, label: requestFieldLabel(key, names[key] || item.config.fieldNames?.[key] || fieldLabels[key] || (key === 'method' ? '服务方式' : key)), value: display(key === 'method' ? item.method : item.values[key]) }));
+  const fields = keys.map(key => ({ key, label: (names[key] || item.config.fieldNames?.[key] || fieldLabels[key] || (key === 'method' ? '服务方式' : key)), value: display(key === 'method' ? item.method : item.values[key]) }));
   if (businessObjectsEnabled(item.config)) fields.push({ key: 'businessObjects', label: names.businessObjects || '业务对象', value: item.businessObjectIds.map(id => itemObjectName(item, id, objects)).join('、') || '未关联' });
   return fields;
 }
@@ -544,7 +511,7 @@ export function itemSummaryFields(item: RequestItem, names: Record<string, strin
     else if (value.startsWith('[')) {
       try { const parsed: unknown = JSON.parse(value); if (Array.isArray(parsed)) value = parsed.filter(entry => typeof entry === 'string' && entry.trim()).map(entry => entry.trim()).join('、'); } catch { /* Keep legacy text readable. */ }
     }
-    return value ? [{ key, label: requestFieldLabel(key, names[key] || item.config.fieldNames?.[key] || defaults[key] || key), value, address }] : [];
+    return value ? [{ key, label: (names[key] || item.config.fieldNames?.[key] || defaults[key] || key), value, address }] : [];
   });
 }
 export function itemSummary(item: RequestItem): string {
@@ -554,7 +521,6 @@ export function newRequest(
   title: string,
   customerId: string,
   owner: string,
-  contactId = '',
   createdById?: string,
   creatorRole?: string,
   customerOwner?: InternalUser,
@@ -589,7 +555,7 @@ export function canCheckRequestCompleteness(record: ServiceRequest, actor: Opera
 export function canEditRequestItems(record: ServiceRequest, actor?: OperationActor): boolean {
   if (record.status === '草稿') return !actor || canCheckRequestCompleteness(record, actor);
   const assessment = record.operations?.assessment;
-  return record.status === '待评估' && !!actor?.id && actor.role === 'SmartX 项目经理'
+  return record.status === '待评估' && !!actor?.id && (actor.role === 'SmartX 项目经理' || isDemoAdministrator(actor))
     && canPerformAssessmentRole(record, actor, 'manager')
     && !assessment?.rounds.some(round => round.outcome === '评估通过');
 }
@@ -604,13 +570,14 @@ export function requestIdentityIssue(
     if (existing.status !== '草稿' && requestTypeOf(existing) !== requestTypeOf(record)
       && !(requestTypeOf(existing) === '技术评估' && existing.status === '评估完成' && requestTypeOf(record) === '服务交付' && record.status === '待评估'))
       return '提交后申请类型不可直接修改，请通过“转为服务交付”操作变更。';
-    if (existing.status === '草稿' && !['草稿', '已取消'].includes(record.status) && (record.status !== '待评估' || !isRequestApplicant(existing, actor))) return '仅创建人可以提交服务请求。';
+    if (existing.status === '草稿' && !['草稿', '已取消'].includes(record.status) && (record.status !== '待评估' || !canSubmitRequest(existing, actor))) return '仅创建人可以提交服务请求。';
     if (existing.customerId !== record.customerId)
       return '服务请求创建后不支持修改客户。';
     if (
       (existing.createdBy ?? existing.owner) !==
         (record.createdBy ?? record.owner) ||
       existing.createdAt !== record.createdAt
+      || JSON.stringify(existing.createdViaAdmin) !== JSON.stringify(record.createdViaAdmin)
       || existing.createdById !== record.createdById
       || (record.createdByAudience !== undefined && requestAudience(existing) !== record.createdByAudience)
     )
@@ -626,8 +593,7 @@ export function requestIdentityIssue(
         const previousReturns = existing.operations?.draftReturns ?? [];
         const event = record.operations?.activities.at(-1);
         const managerId = existing.operations?.assessment?.managerId;
-        const validReturn = existing.status === '待评估' && actor?.role === 'SmartX 项目经理'
-          && (!managerId || managerId === actor.id)
+        const validReturn = existing.status === '待评估' && !!actor?.id && (isDemoAdministrator(actor) || actor.role === 'SmartX 项目经理' && (!managerId || managerId === actor.id))
           && returned?.actorId === actor.id && Boolean(returned.reason.trim())
           && record.operations?.draftReturns?.length === previousReturns.length + 1
           && previousReturns.every((item, index) => JSON.stringify(item) === JSON.stringify(record.operations?.draftReturns?.[index]))
@@ -671,6 +637,14 @@ export function canCreateRequest({ actor, customerId }: RequestAccessContext): b
 }
 
 export function requestCreationAccessIssue(record: ServiceRequest, access: RequestAccessContext): string | null {
+  if (isDemoAdministrator(access.actor) && record.createdById !== access.actor.id) {
+    if (record.status !== '草稿') return '请先创建草稿，再提交申请。';
+    if (record.createdViaAdmin?.id !== access.actor.id || record.createdViaAdmin.name !== access.actor.name) return '管理员代发起信息无效。';
+    const contact = access.contacts?.find(person => person.id === record.createdById && person.status === '启用' && person.customerId === record.customerId);
+    if (record.createdByAudience === 'customer') return contact ? null : '代发起客户联系人不可用。';
+    return record.createdByAudience === 'internal' && access.directory.some(person => person.id === record.createdById && !!fixedIdentityRoles[person.id]) ? null : '代发起内部用户不可用。';
+  }
+  if (record.createdViaAdmin) return '当前创建方式不允许指定代发起信息。';
   if (record.createdByAudience !== (access.actor.role === '客户' ? 'customer' : 'internal')) return '申请来源必须与创建人身份一致。';
   if (record.status !== '草稿') return '请先创建草稿，再提交申请。';
   if (!canCreateRequest(access)) return '当前身份不能创建服务请求。';
@@ -720,11 +694,12 @@ export function customerCollaborationIssue(record: ServiceRequest, existing: Ser
 export function requestCollaborationSaveIssue(
   record: ServiceRequest,
   previous: ServiceRequest | undefined,
-  refs: { contacts: ContactRef[]; customers: CustomerRef[]; users: InternalUser[] },
+  refs: { contacts: ContactRef[]; customers: CustomerRef[]; users: InternalUser[]; partners?: import('./partner-directory').Partner[]; partnerUsers?: import('./partner-directory').PartnerUser[] },
   access?: RequestAccessContext,
 ): string | null {
-  if (isConvertedRequest(previous) && (JSON.stringify(record.internalParticipants) !== JSON.stringify(previous?.internalParticipants)
-    || JSON.stringify(record.externalCollaborators) !== JSON.stringify(previous?.externalCollaborators))) return convertedRequestReadonlyMessage;
+  if (requestCollaboratorsLocked(previous) && (JSON.stringify(record.internalParticipants) !== JSON.stringify(previous?.internalParticipants)
+    || JSON.stringify(record.externalCollaborators) !== JSON.stringify(previous?.externalCollaborators)
+    || JSON.stringify(record.partnerCollaborators ?? []) !== JSON.stringify(previous?.partnerCollaborators ?? []))) return previous?.status === '已转服务项目' ? convertedRequestReadonlyMessage : '当前申请阶段不可维护协作人。';
   const { contacts, customers, users } = refs;
   const assessmentRemovalIssue = assessmentCollaboratorRemovalIssue(record, previous);
   record = withAssessmentCollaborators(record, users);
@@ -736,6 +711,14 @@ export function requestCollaborationSaveIssue(
   if (access) {
     const customerIssue = customerCollaborationIssue(record, old ?? { ...record, externalCollaborators: [] }, { ...access, contacts });
     if (customerIssue) return customerIssue;
+  }
+  const partnersChanged = JSON.stringify(previous?.partnerCollaborators ?? []) !== JSON.stringify(record.partnerCollaborators ?? []);
+  if (partnersChanged) {
+    if (!access || !isInternal(access.actor.role) || !['草稿', '待评估'].includes(previous?.status ?? record.status)) return '当前身份或阶段不允许修改合作伙伴协作人。';
+    const people = record.partnerCollaborators ?? [];
+    if (new Set(people.map(person => person.userId)).size !== people.length) return '合作伙伴协作人不能重复。';
+    if (people.some(person => !refs.partnerUsers?.some(user => user.id === person.userId && user.status === '启用'
+      && refs.partners?.some(partner => partner.id === user.partnerId && partner.status === '启用')))) return '只能选择已启用合作伙伴中的启用用户。';
   }
   const participantsChanged = JSON.stringify(old?.internalParticipants) !== JSON.stringify(record.internalParticipants);
   if (access?.actor.role === '客户') {
@@ -770,7 +753,6 @@ export function defaultConfig(service: CatalogService): RequestConfig {
   const installation = service.category === '产品实施交付';
   return {
     serviceId: service.id,
-    versionFieldDefaultRemoved: true,
     revision: 1,
     basicFields: {
       description: { enabled: true, required: true },
@@ -924,7 +906,7 @@ export function itemBasicIssues(item: RequestItem): string[] {
       issues.push(
         key === 'nodes'
           ? '节点数（正整数）'
-          : requestFieldLabel(key, item.config.fieldNames?.[key] ??
+          : (item.config.fieldNames?.[key] ??
               fieldLabels[key] ??
               `申请字段 ${key}`),
       );
@@ -932,23 +914,6 @@ export function itemBasicIssues(item: RequestItem): string[] {
   return issues;
 }
 
-// Apply only to live catalog forms, not existing application/history snapshots.
-export function normalizeCatalogRequestConfig(config: RequestConfig): RequestConfig {
-  const normalized = normalizeRequestConfig(config);
-  if (normalized.versionFieldDefaultRemoved) return normalized;
-  const omitVersion = <T,>(value?: Record<string, T>): Record<string, T> | undefined => value
-    ? Object.fromEntries(Object.entries(value).filter(([id]) => id !== 'version')) : undefined;
-  return { ...normalized, versionFieldDefaultRemoved: true,
-    fields: normalized.fields.filter(id => id !== 'version'),
-    fieldOrder: normalized.fieldOrder?.filter(id => id !== 'version'),
-    fieldRowStarts: normalized.fieldRowStarts?.filter(id => id !== 'version'),
-    fieldRequired: omitVersion(normalized.fieldRequired),
-    fieldRequiredWhen: omitVersion(normalized.fieldRequiredWhen),
-    fieldOptions: omitVersion(normalized.fieldOptions) ?? {},
-    fieldWidths: omitVersion(normalized.fieldWidths),
-    fieldColumns: omitVersion(normalized.fieldColumns),
-  };
-}
 export function normalizeRequestConfig(
   config: RequestConfig & {
     fieldNames?: Record<string, string>;
@@ -966,7 +931,7 @@ export function normalizeRequestConfig(
         required: config.basicFields?.businessObjects?.required ?? false,
       },
     },
-    fieldNames: Object.fromEntries(Object.entries({ ...fieldLabels, ...config.fieldNames }).map(([id, name]) => [id, requestFieldLabel(id, name)])),
+    fieldNames: Object.fromEntries(Object.entries({ ...fieldLabels, ...config.fieldNames }).map(([id, name]) => [id, (name)])),
     fieldOptions: Object.fromEntries(
       Object.entries(config.fieldOptions ?? {}).map(([fieldId, options]) => [
         fieldId,
@@ -1040,7 +1005,7 @@ export async function readLocal<T>(
     return await new Promise((resolve, reject) => {
       const transaction = db.transaction(store, 'readonly');
       const request = transaction.objectStore(store).getAll();
-      transaction.oncomplete = () => resolve((store === 'requests' ? request.result.map(normalizeStoredRequest) : request.result) as T[]);
+      transaction.oncomplete = () => resolve(request.result as T[]);
       transaction.onabort = () => reject(transaction.error);
       transaction.onerror = () => reject(transaction.error);
     });
@@ -1064,6 +1029,7 @@ export async function updateLocalReference<T>(id: string, update: (previous: T |
         try {
           result = update(request.result?.payload as T | undefined);
           if (id === 'workspace') {
+            result = preserveProjectReservations(result as Parameters<typeof preserveProjectReservations>[0], request.result?.payload) as T;
             const issue = workspaceDayQuantityIssue(result as Parameters<typeof workspaceDayQuantityIssue>[0], request.result?.payload);
             if (issue) throw new Error(issue);
           }
@@ -1077,10 +1043,34 @@ export async function updateLocalReference<T>(id: string, update: (previous: T |
   } finally { db.close(); }
 }
 
+export function requestBasicInfo(record: ServiceRequest) {
+  return {
+    title: record.title.trim(),
+    requestType: requestTypeOf(record),
+    description: record.description,
+    expectedServiceDate: record.expectedServiceDate ?? '',
+    expectedServiceDateUncertain: record.expectedServiceDateUncertain === true,
+    customValues: structuredClone(record.customValues ?? {}),
+  };
+}
+export type RequestSaveOptions = { basicInfo?: { expectedUpdatedAt: string } };
+
+export function applyRequestBasicInfo(previous: ServiceRequest | undefined, submitted: ServiceRequest, actor: OperationActor | undefined, expectedUpdatedAt: string): ServiceRequest {
+  if (!previous) throw new RequestIdentityError('服务请求不存在，请重新打开列表。');
+  if (!actor?.id || (!isInternal(actor.role) && actor.role !== '客户') || previous.status !== '草稿' || !canCheckRequestCompleteness(previous, actor))
+    throw new RequestIdentityError('当前身份或状态不允许编辑基本信息。');
+  if (previous.updatedAt !== expectedUpdatedAt) throw new RequestIdentityError('服务请求已被更新，请重新打开详情后编辑；当前填写内容已保留。');
+  const next = { ...previous, ...requestBasicInfo(submitted), updatedAt: new Date().toISOString() };
+  const issue = requestIdentityIssue(next) ?? requestIdentityIssue(next, previous, actor);
+  if (issue) throw new RequestIdentityError(issue);
+  return next;
+}
+
 export async function saveLocal(
   store: 'requests' | 'configs' | 'references',
   record: ServiceRequest | RequestConfig | { id: string; payload: unknown },
   access?: RequestAccessContext,
+  options?: RequestSaveOptions,
 ): Promise<void> {
   if (store === 'references' && 'id' in record && record.id === requestProjectMappingId) throw new Error('请通过请求转项目映射管理保存配置。');
   if (store === 'references' && 'id' in record && record.id === assessmentRoutingId) throw new Error('请通过服务请求流程配置保存分配规则。');
@@ -1091,41 +1081,47 @@ export async function saveLocal(
       const records = transaction.objectStore(store);
       if (store === 'requests') {
         const itemConfigsRead = transaction.objectStore('configs').getAll();
-        let serviceRequest = normalizeStoredRequest(record as ServiceRequest);
+        let serviceRequest = record as ServiceRequest;
         // Keep the submitted list so automatic additions cannot hide an explicit removal.
-        const incomingParticipants = serviceRequest.internalParticipants;
+        let incomingParticipants = serviceRequest.internalParticipants;
         const current = records.get(serviceRequest.id);
         current.onsuccess = () => {
           // Use the persisted state before any normalization or automatic collaborator updates.
           // This also rejects stale tabs, status rollback attempts and attachment-only writes.
-          if (current.result && isConvertedRequest(normalizeStoredRequest(current.result))) {
+          if (current.result && isConvertedRequest(current.result)) {
             reject(new RequestIdentityError(convertedRequestReadonlyMessage));
             transaction.abort();
             return;
+          }
+          if (options?.basicInfo) {
+            try {
+              serviceRequest = applyRequestBasicInfo(current.result ? current.result : undefined, serviceRequest, access?.actor, options.basicInfo.expectedUpdatedAt);
+              incomingParticipants = serviceRequest.internalParticipants;
+            } catch (error) { reject(error); transaction.abort(); return; }
           }
           const referenceRead = transaction.objectStore('references').getAll();
           referenceRead.onsuccess = () => {
             const savedWorkspace = referenceRead.result.find((entry: { id: string }) => entry.id === 'workspace')?.payload;
             // Apply system additions symmetrically before immutable-field comparisons.
             serviceRequest = withAssessmentCollaborators(serviceRequest, savedWorkspace?.users ?? []);
-            const storedPrevious = current.result ? normalizeStoredRequest(current.result) : undefined;
+            const storedPrevious = current.result ? current.result : undefined;
             const previous = storedPrevious ? withRequestCollaborators(storedPrevious, savedWorkspace?.contacts ?? [], savedWorkspace?.customers ?? [], savedWorkspace?.users ?? []) : undefined;
             try { validateCustomValues(serviceRequest.customValues, normalizeApplicationFields(savedWorkspace?.applicationFields).filter(field => !isSystemApplicationField(field.id)), previous?.customValues); }
             catch (error) { reject(error); transaction.abort(); return; }
-            const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, access) : null;
+            const creationIssue = access && !previous ? requestCreationAccessIssue(serviceRequest, { ...access, contacts: savedWorkspace?.contacts ?? [], directory: (savedWorkspace?.users ?? []).filter((user: InternalUser) => user.status === '启用') }) : null;
             if (creationIssue) {
               reject(new RequestIdentityError(creationIssue));
               transaction.abort();
               return;
             }
             if (access && (!canAccessRequest(previous ?? serviceRequest, access)
-              || (!previous && serviceRequest.createdById !== access.actor.id))) {
+              || (!previous && serviceRequest.createdById !== access.actor.id && !isDemoAdministrator(access.actor, savedWorkspace?.users ?? [])))) {
               reject(new RequestIdentityError('无权访问此服务请求。'));
               transaction.abort();
               return;
             }
             const decisionIssue = previous ? customerDecisionIssue(serviceRequest, previous, access?.actor, access?.customerId) : null;
-            const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? [], savedWorkspace?.contacts ?? []);
+            const supplementIssue = supplementSaveIssue(serviceRequest, previous ?? { ...serviceRequest, operations: undefined }, access?.actor, access?.customerId, savedWorkspace?.users ?? [], savedWorkspace?.contacts ?? [], savedWorkspace);
             let projectIssue: string | null = null;
             try {
               projectIssue = projectCreationSaveIssue(serviceRequest, previous, access?.actor,
@@ -1164,7 +1160,7 @@ export async function saveLocal(
                   const contacts = workspacePayload?.contacts ?? [];
                   const users = workspacePayload?.users ?? [];
                   const customers = workspacePayload?.customers ?? [];
-                  const policyIssue = requestCollaborationSaveIssue({ ...serviceRequest, internalParticipants: incomingParticipants }, storedPrevious, { contacts, users, customers }, access);
+                  const policyIssue = requestCollaborationSaveIssue({ ...serviceRequest, internalParticipants: incomingParticipants }, storedPrevious, { contacts, users, customers, partners: workspacePayload?.partners, partnerUsers: workspacePayload?.partnerUsers }, access);
                   if (policyIssue) { reject(new RequestIdentityError(policyIssue)); transaction.abort(); return; }
                   try { serviceRequest = routeAssessmentOnSave(serviceRequest, previous, referenceRead.result.find((entry: { id: string }) => entry.id === assessmentRoutingId)?.payload, users, undefined, customers); }
                   catch (error) { reject(error); transaction.abort(); return; }
@@ -1196,8 +1192,8 @@ export async function saveLocal(
                   }
                   if (!checkAssessment) { records.put(withRequestCollaborators(serviceRequest, contacts, customers, users)); return; }
                   const ownerIssue = changedPlan ? planSalesOwnerIssue(serviceRequest, workspacePayload?.customers ?? [], workspacePayload?.users ?? []) : null;
-                  const lockIssue = ownerIssue ?? effortPricingSaveIssue(serviceRequest, previous, workspacePayload?.services ?? [], entitlementPricingContext(workspace.result, all.result.map(normalizeStoredRequest)))
-                    ?? assessmentLockIssue(serviceRequest, all.result.map(normalizeStoredRequest), workspacePayload?.assets ?? [], workspacePayload?.businessObjects ?? []);
+                  const lockIssue = ownerIssue ?? effortPricingSaveIssue(serviceRequest, previous, workspacePayload?.services ?? [], entitlementPricingContext(workspace.result, all.result))
+                    ?? assessmentLockIssue(serviceRequest, all.result, workspacePayload?.assets ?? [], workspacePayload?.businessObjects ?? []);
                   if (lockIssue) { reject(new RequestIdentityError(lockIssue)); transaction.abort(); }
                   else records.put(withRequestCollaborators(serviceRequest, contacts, customers, users));
               };
@@ -1221,6 +1217,9 @@ export async function saveLocal(
         };
         const current = records.get('workspace');
         current.onsuccess = () => {
+          try {
+            incoming.payload = preserveProjectReservations(incoming.payload as Parameters<typeof preserveProjectReservations>[0], current.result?.payload) as typeof incoming.payload;
+          } catch (error) { reject(error); transaction.abort(); return; }
           const precisionIssue = workspaceDayQuantityIssue(incoming.payload, current.result?.payload);
           if (precisionIssue) { reject(new Error(precisionIssue)); transaction.abort(); return; }
           const latest = current.result?.payload?.services as

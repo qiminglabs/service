@@ -4,23 +4,27 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { DateField } from '@/components/date-field';
+import { CustomerProjectDailyReports } from '@/components/project-daily-report-history';
+import { ServiceProjectBasicInfo } from '@/components/service-project-basic-info';
+import { ServiceProjectDeliverables } from '@/components/service-project-deliverables';
 import { ServiceProjectItems } from '@/components/service-project-items';
 import { RequestFieldsContext, type RequestField } from '@/components/request-field-settings';
+import { ServiceProjectNextStepBanner } from '@/components/service-project-next-step';
+import { customerProjectNextStep } from '@/lib/service-project-next-step';
 import { ServiceProjectProgress } from '@/components/service-project-progress';
+import { CustomerProjectConfirmation } from '@/components/customer-project-confirmation';
 import { CustomerProjectCollaborators } from '@/components/customer-project-collaborators';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { readCustomerServiceProjects, saveCustomerProjectSupplement } from '@/lib/service-project-store';
 import { ProjectSupplementsPanel } from '@/components/service-project-supplements';
-import { serviceProjectStatuses } from '@/lib/service-project-status';
+import { serviceProjectStatuses, serviceProjectStatusLabel } from '@/lib/service-project-status';
 import type { CatalogService } from '@/lib/service-requests';
 import type { OperationActor } from '@/lib/request-operations';
 import type { CustomerServiceProject } from '@/lib/customer-service-projects';
 
 const stamp = (value: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—';
 function Status({ value }: { value: CustomerServiceProject['status'] }) {
-  return <span className="sr-badge" data-tone={value === '已取消' ? 'cancelled' : value === '已完成' ? 'green' : value === '待启动' ? 'muted' : 'blue'}>{value}</span>;
+  return <span className="sr-badge" data-tone={value === '已取消' ? 'cancelled' : value === '已完成' ? 'green' : value === '待启动' ? 'muted' : 'blue'}>{serviceProjectStatusLabel(value, true)}</span>;
 }
 export function CustomerServiceProjects({ actor, initialProjectId, itemFields, services }: { actor: OperationActor; initialProjectId?: string; itemFields: RequestField[]; services: CatalogService[] }) {
   const [records, setRecords] = useState<CustomerServiceProject[]>([]);
@@ -62,26 +66,37 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
       <div className="detail-title-row"><h2>{project.name}</h2><Status value={project.status} /></div>
       <p>{project.id} · {project.customerName}</p>
     </div></header>
-    <ServiceProjectProgress status={project.status} cancelledFromStatus={project.cancelledFromStatus} />
+    <ServiceProjectProgress external skipReview={project.skipsReview} status={project.status} pausedFromStatus={project.pausedFromStatus} cancelledFromStatus={project.cancelledFromStatus} />
+    <ServiceProjectNextStepBanner key={project.id} next={customerProjectNextStep(project)} />
     {notice && <output className="sr-notice">{notice}</output>}
     <div className="sr-ops-workspace">
     <Tabs value={tab} onValueChange={value => setTab(String(value))} className="sr-ops-tabs">
       <TabsList variant="line" className="sr-ops-tab-list" aria-label="客户服务项目工作区">
         <TabsTrigger value="overview">项目信息</TabsTrigger>
+        <TabsTrigger value="service-reports">服务日报 <span>{project.dailyReports.length}</span></TabsTrigger>
+        <TabsTrigger value="deliverables">交付物</TabsTrigger>
         <TabsTrigger value="supplements">补充信息 <span>{project.supplements.length}</span></TabsTrigger>
       </TabsList>
       <div className="sr-detail-layout">
       <div className="sr-detail-main">
+      <TabsContent value="service-reports">
+        <div className="service-report-sections">
+          <CustomerProjectDailyReports key={`daily:${project.id}:${actor.id}`} reports={project.dailyReports} projectId={project.id} confirmation={project.confirmation} />
+        </div>
+      </TabsContent>
+      <TabsContent value="deliverables"><ServiceProjectDeliverables projectName={project.name} key={project.id} items={project.deliverables} /></TabsContent>
       <TabsContent value="overview">
-        {project.cancellationReason && <section className="sr-panel sr-ops-panel" role="status"><div className="sr-ops-heading"><div><h3>取消原因</h3><p className="whitespace-pre-wrap break-words">{project.cancellationReason}</p></div></div></section>}
+        {['已取消', '已暂停'].includes(project.status) && <section className="sr-panel sr-ops-panel" role="status"><div className="sr-ops-heading"><div><h3>{project.status === '已取消' ? '项目已取消' : '项目已暂停'}</h3><p className="whitespace-pre-wrap break-words">{project.status === '已取消' ? `取消原因：${project.cancellationReason || '未记录'}` : `暂停原因：${project.suspensionReason || '未记录'}`}</p></div></div></section>}
+        <CustomerProjectConfirmation key={project.id} project={project} actor={actor} onViewDeliverables={() => setTab('deliverables')} onSaved={updated => { ++sequence.current; setRecords(current => current.map(record => record.id === updated.id ? updated : record)); setNotice('客户确认已保存'); }} />
         <section className="sr-panel"><div className="sr-panel-heading"><h3>基本信息</h3></div>
-          <fieldset className="sr-form-grid" disabled>
-            <label htmlFor="customer-project-name">项目名称<Input id="customer-project-name" value={project.name} readOnly /></label>
-            <DateField id="customer-project-date" label="期望服务日期" value={project.expectedServiceDate} readonly onChange={() => {}} />
-            <label htmlFor="customer-project-customer">客户<Input id="customer-project-customer" value={project.customerName} readOnly /></label>
-            <label htmlFor="customer-project-provider">服务方<Input id="customer-project-provider" value={project.serviceProviderName || '未指定'} readOnly /></label>
-            <label className="sr-span" htmlFor="customer-project-note">项目说明<Textarea id="customer-project-note" value={project.note} readOnly rows={3} /></label>
-          </fieldset>
+          <ServiceProjectBasicInfo fields={[
+            { id: 'name', label: '项目名称', value: project.name },
+            { id: 'expectedServiceDate', label: '计划执行日期', value: project.expectedServiceDate },
+            { id: 'customerId', label: '客户', value: project.customerName },
+            { id: 'plannedCompletionDate', label: '计划完成日期', value: project.plannedCompletionDate },
+            { id: 'serviceProviderId', label: '服务方', value: project.serviceProviderName },
+            { id: 'note', label: '项目说明', value: project.note, fullWidth: true },
+          ]} />
         </section>
         <RequestFieldsContext.Provider value={itemFields}>
           <ServiceProjectItems key={project.id} actor={actor} id={project.id} customerId={project.customerId}
@@ -95,13 +110,14 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
       </TabsContent>
       <TabsContent value="supplements" keepMounted>
         <ProjectSupplementsPanel key={`${project.id}:${actor.id}`} actor={actor} busy={false} editable={!supplementsClosed}
-          hideReadonlyWhenEmpty emptyMessage={supplementsClosed ? '暂无补充信息' : '暂无补充资料'}
+          emptyMessage={supplementsClosed ? '暂无补充信息' : '暂无补充资料'}
           record={{ supplements: project.supplements, collaborators: {
             internal: project.supplementMentionUsers.filter(user => user.group === 'internal').map(user => ({ id: user.id, name: user.name, details: '', assignmentRoles: user.isManager ? ['项目经理'] : [] })),
             partner: project.supplementMentionUsers.filter(user => user.group === 'partner').map(user => ({ id: user.id, name: user.name, details: '' })),
           } }}
           users={project.supplementMentionUsers.map(user => ({ id: user.id, name: user.name, status: '启用', email: user.email, companyName: user.companyName, department: '' }))}
-          joinMention={async () => '客户仅可 @ 已加入项目的内部协作人和当前服务方的合作伙伴协作人。'} publish={async input => {
+          mentionCandidates={project.supplementMentionUsers.map(user => ({ ...user, status: '启用', department: '' }))}
+          publish={async input => {
           try {
             setNotice('');
             const updated = await saveCustomerProjectSupplement(project.id, project.revision, input, actor);
@@ -120,10 +136,10 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
   </section>;
   const filtered = records.filter(record => (status === '全部状态' || record.status === status) && `${record.name} ${record.id} ${record.serviceProviderName}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <section className="sr-workspace" aria-label="客户服务项目">
-    <div className="sr-toolbar"><div className="sr-filter-group"><div className="sr-search"><Search size={16} /><Input aria-label="搜索服务项目" placeholder="搜索项目名称、编号或服务方" value={query} onChange={event => setQuery(event.target.value)} /></div><select aria-label="筛选项目状态" value={status} onChange={event => setStatus(event.target.value)}><option>全部状态</option>{serviceProjectStatuses.map(value => <option key={value}>{value}</option>)}</select></div></div>
-    <div className="sr-table-scroll"><table className="sr-table app-list-table"><thead><tr><th>项目名称 / 编号</th><th>服务方</th><th>服务项</th><th>期望服务日期</th><th>状态</th><th>创建时间/创建人</th><th>操作</th></tr></thead><tbody>
-      {filtered.map(record => <tr key={record.id}><td><button className="sr-title-link app-list-link" onClick={() => select(record.id)}>{record.name}</button><small>{record.id}</small></td><td>{record.serviceProviderName || '未指定'}</td><td>{record.items.length} 项</td><td>{record.expectedServiceDate || '未填写'}</td><td><Status value={record.status} /></td><td>{stamp(record.createdAt)}<small>{record.createdBy || '—'}</small></td><td><Button variant="outline" size="sm" onClick={() => select(record.id)}>查看项目</Button></td></tr>)}
-      {!filtered.length && <tr><td colSpan={7}>{records.length ? '暂无符合筛选条件的项目' : '暂无参与的服务项目，加入客户协作人后将在此显示。'}</td></tr>}
+    <div className="sr-toolbar"><div className="sr-filter-group"><div className="sr-search"><Search size={16} /><Input aria-label="搜索服务项目" placeholder="搜索项目名称、编号或服务方" value={query} onChange={event => setQuery(event.target.value)} /></div><select aria-label="筛选项目状态" value={status} onChange={event => setStatus(event.target.value)}><option>全部状态</option>{serviceProjectStatuses.map(value => <option key={value} value={value}>{serviceProjectStatusLabel(value, true)}</option>)}</select></div></div>
+    <div className="sr-table-scroll"><table className="sr-table app-list-table"><thead><tr><th>项目名称</th><th>服务方</th><th>服务项</th><th>计划执行日期</th><th>计划完成日期</th><th>状态</th><th>创建时间/创建人</th><th>操作</th></tr></thead><tbody>
+      {filtered.map(record => <tr key={record.id}><td><button className="sr-title-link app-list-link" onClick={() => select(record.id)}>{record.name}</button><small>{record.id}</small></td><td>{record.serviceProviderName || '未指定'}</td><td>{record.items.length} 项</td><td>{record.expectedServiceDate || '未填写'}</td><td>{record.plannedCompletionDate || '未填写'}</td><td><Status value={record.status} /></td><td>{stamp(record.createdAt)}<small>{record.createdBy || '—'}</small></td><td><Button variant="outline" size="sm" onClick={() => select(record.id)}>查看项目</Button></td></tr>)}
+      {!filtered.length && <tr><td colSpan={8}>{records.length ? '暂无符合筛选条件的项目' : '暂无参与的服务项目，加入客户协作人后将在此显示。'}</td></tr>}
     </tbody></table></div>
   </section>;
 }

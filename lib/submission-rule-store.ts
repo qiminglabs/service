@@ -2,7 +2,7 @@ import { openDatabase, readLocal } from './service-requests.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
 import type { OperationActor } from './request-operations';
 import type { InternalUser } from './service-requests';
-import { parseCompiledRule, parseSubmissionRuleDefinition, normalizeStoredSubmissionRule, submissionRulesId } from './submission-rule-schema.ts';
+import { parseSubmissionRuleDefinition,normalizeStoredSubmissionRule,submissionRulesId } from './submission-rule-schema.ts';
 import type { RuleDefinition, SubmissionRule } from './submission-rule-schema';
 import { ruleCompilationKey, RuleConflictError, testSubmissionRule } from './submission-rule-conflicts.ts';
 import type { RuleTestResult } from './submission-rule-conflicts';
@@ -51,34 +51,6 @@ function archiveSubmissionRule(rule: SubmissionRule, actor: OperationActor, acti
     disabledAt: archivedAt, disabledBy: actor.name, archivedAt, archivedBy: actor.name,
   }];
 }
-export async function saveRuleDraft(actor: OperationActor, definition: RuleDefinition, existing?: Pick<SubmissionRule, 'id' | 'revision'>) {
-  const parsed = parseSubmissionRuleDefinition(definition), id = existing?.id ?? crypto.randomUUID();
-  const rules = await mutateRules(actor, rules => {
-    const previous = rules.find(r => r.id === id);
-    if (existing && (!previous || previous.revision !== existing.revision)) throw new Error('规则已被其他页面修改，请刷新后重试。');
-    if (previous?.enabled === false) throw new Error('停用规则只读，不可编辑或再次启用。');
-    const next: SubmissionRule = { ...parsed, id, enabled: true, version: previous ? (previous.version ?? Math.max(1, previous.revision)) : 0, history: structuredClone(previous?.history ?? []), revision: (previous?.revision ?? 0) + 1, status: 'pending', updatedAt: new Date().toISOString(), updatedBy: actor.name, ...(previous?.active ? { active: previous.active } : {}) };
-    return previous ? rules.map(r => r.id === id ? next : r) : [...rules, next];
-  });
-  return rules.find(r => r.id === id)!;
-}
-export async function finishRuleCompilation(actor: OperationActor, draft: SubmissionRule, result: { compiled?: unknown; summary?: string; error?: string }) {
-  return mutateRules(actor, rules => {
-    if (!rules.some(rule => rule.id === draft.id)) throw new Error('规则已被移除，本次转译结果未生效。');
-    return rules.map(rule => {
-    if (rule.id !== draft.id) return rule;
-    if (rule.revision !== draft.revision) throw new Error('规则已变更，本次旧转译结果未生效，请刷新。');
-    if (rule.enabled === false) throw new Error('停用规则只读，不可编辑或再次启用。');
-    if (rule.status !== 'pending') throw new Error('转译任务已结束，请重新编辑后再试。');
-    if (result.error) return { ...rule, status: 'error', error: result.error.slice(0, 1500) };
-    const compiled = parseCompiledRule(result.compiled);
-    if (!result.summary?.trim()) throw new Error('缺少转译说明。');
-    const tested = testSubmissionRule(rule, compiled, result.summary, rules, rule.id);
-    if (tested.conflicts.length) throw new RuleConflictError(tested.conflicts);
-    return { ...rule, enabled: true, version: (rule.version ?? Math.max(1, rule.revision)) + 1, history: rule.active ? archiveSubmissionRule(rule, actor, true) : structuredClone(rule.history ?? []), status: 'ready', error: undefined, updatedAt: new Date().toISOString(), active: { ...parseSubmissionRuleDefinition(rule), compiled, summary: result.summary, enabled: true } };
-    });
-  });
-}
 // Persist only the tested compilation. Recheck the latest rules inside the same
 // transaction so a new conflicting rule cannot slip in between test and save.
 export async function saveTestedSubmissionRule(actor: OperationActor, definition: RuleDefinition, tested: RuleTestResult, existing?: Pick<SubmissionRule, 'id' | 'revision'>) {
@@ -99,15 +71,6 @@ export async function saveTestedSubmissionRule(actor: OperationActor, definition
       active: { ...parsed, compiled: current.compiled, summary: current.summary, enabled: true },
     };
     return previous ? rules.map(r => r.id === previous.id ? next : r) : [...rules, next];
-  });
-}
-export async function deleteSubmissionRule(actor: OperationActor, rule: Pick<SubmissionRule, 'id' | 'revision'>) {
-  return mutateRules(actor, rules => {
-    if (builtinSubmissionRules.some(builtin => builtin.id === rule.id)) throw new Error('系统预置规则不支持删除。');
-    const current = rules.find(current => current.id === rule.id);
-    if (!current) throw new Error('规则已被移除，请刷新。');
-    if (current.revision !== rule.revision) throw new Error('规则已被其他页面修改，请刷新后重试。');
-    throw new Error('提交校验规则只能停用，不能删除。');
   });
 }
 

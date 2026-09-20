@@ -81,7 +81,7 @@ export function RequestFlowDiagram({ activeTab, tabId, onTabSelect }: {
         <FlowNode x={194} y={20} width={140} label="硬件产品经理分配" owners={['系统按规则分配']} optional {...navigation('assessment-hardware')} />
         <FlowNode x={380} y={20} label="硬件产品经理评估" owners={['硬件产品经理']} optional />
         <FlowNode x={194} y={80} label="项目经理分配" owners={['系统按规则分配']} {...navigation('assessment-manager')} />
-        <FlowNode x={380} y={80} label="项目经理评估" owners={['负责项目经理']} />
+        <FlowNode x={380} y={80} label="整体评估" owners={['负责项目经理']} />
         <FlowNode x={556} y={80} width={114} label="人天核定" owners={['负责项目经理']} />
         <FlowNode x={714} y={20} label="评估完成" owners={['负责项目经理']} terminal />
         <FlowNode x={814} y={80} label="服务依据关联" owners={['内部申请人或客户所有人']} />

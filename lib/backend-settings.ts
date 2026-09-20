@@ -8,9 +8,18 @@ export const backendSettingsSections = [
     { key: 'assessment-hardware', label: '硬件产品经理分配' },
     { key: 'approval-designer', label: '特殊审批' },
   ] },
-  { key: 'execution-flow', label: '服务执行流程', tabs: [{ key: 'service-flows', label: '服务流程' }, { key: 'service-flow-assignment', label: '服务流程分配' }, { key: 'project-collaborators', label: '协作人分配' }, { key: 'request-project-mapping', label: '请求转项目映射' }] },
+  { key: 'execution-flow', label: '服务执行流程', tabs: [
+    { key: 'project-collaborators', label: '协作人分配' },
+    { key: 'request-project-mapping', label: '请求转项目映射' },
+    { key: 'service-providers', label: '服务商管理' },
+    { key: 'service-flows', label: '服务流程' },
+    { key: 'execution-form-library', label: '服务步骤表单' },
+    { key: 'project-approval-designer', label: '特殊审批流程' },
+    { key: 'service-mail-templates', label: '邮件模板' },
+  ] },
   { key: 'pricing', label: '计价与权益', tabs: [{ key: 'entitlement-conversions', label: '权益换算' }] },
 ] as const;
 
 export type BackendSettingsSection = typeof backendSettingsSections[number]['key'];
 export type RequestFlowTab = Extract<typeof backendSettingsSections[number], { key: 'request-flow' }>['tabs'][number]['key'];
+export type ExecutionFlowTab = Extract<typeof backendSettingsSections[number], { key: 'execution-flow' }>['tabs'][number]['key'];

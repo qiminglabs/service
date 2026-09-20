@@ -394,7 +394,6 @@ export function RequestFlowSettings({
                           setDisableTarget({ rule, revision: data.config.revision });
                           dialogActive.current = true;
                         }}>停用</Button>}
-                        {!rule.enabled && <span className="sr-help">只读</span>}
                       </div>
                     ) : (
                       '—'

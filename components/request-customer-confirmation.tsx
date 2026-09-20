@@ -1,4 +1,6 @@
 'use client';
+
+import { isDemoAdministrator } from '@/lib/demo-permissions';
 import type { ValidationFailure } from '@/lib/submission-validation';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -27,7 +29,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
   const disabled = busy || working;
   const confirmation = record.operations?.assessment?.confirmation;
   const latest = record.operations?.customerDecisions?.at(-1);
-  const canDecide = actor.role === '客户' && customerId === record.customerId && record.status === '待确认' && !!confirmation;
+  const canDecide = (isDemoAdministrator(actor) || actor.role === '客户' && customerId === record.customerId) && record.status === '待确认' && !!confirmation;
   const plan = record.operations?.assessment?.plans.find(plan => plan.id === confirmation?.planId);
   const entitlements = confirmation?.entitlementAllocations ?? activeEntitlementAllocations(record);
   const allocations = confirmation?.allocations ?? plan?.allocations ?? [];
@@ -52,8 +54,8 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
         <p>{canDecide ? '请核对申请信息及预计消耗资产后，确认或拒绝本次服务请求。' : '请求已进入后续受理流程。'}</p>
       </div>
       {canDecide && <div className="flex gap-2">
-        <Button variant="outline" disabled={disabled} onClick={() => { setReason(''); setError(''); setMode('reject'); }}>拒绝</Button>
-        <Button disabled={disabled} onClick={() => { setError(''); setMode('accept'); }}>确认</Button>
+        <Button variant="outline" disabled={disabled} onClick={() => { setReason(''); setError(''); setMode('reject'); }}>{isDemoAdministrator(actor) ? '代客户拒绝' : '拒绝'}</Button>
+        <Button disabled={disabled} onClick={() => { setError(''); setMode('accept'); }}>{isDemoAdministrator(actor) ? '代客户确认' : '确认'}</Button>
       </div>}
     </div>
     {confirmation && <div className="sr-customer-confirmation-body">

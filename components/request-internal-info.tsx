@@ -292,7 +292,7 @@ export function RequestInternalInfo({
   const available = users.filter((user) => user.status === '启用');
   return (
     <CollaboratorCard
-      title="内部协作人"
+      title="SmartX 协作人"
       placeholder="搜索姓名或邮箱"
       options={available.map((user) => ({
         id: user.id,
@@ -325,4 +325,23 @@ export function RequestInternalInfo({
       }
     />
   );
+}
+
+export function RequestPartnerCollaborators({ users, value, readonly, busy, onChange, showCustomerVisibility = false }: {
+  users: import('@/lib/partner-directory').PartnerUser[];
+  value: InternalParticipant[];
+  readonly: boolean;
+  busy: boolean;
+  onChange: (value: InternalParticipant[]) => void;
+  showCustomerVisibility?: boolean;
+}) {
+  return <CollaboratorCard title="合作伙伴协作人" placeholder="搜索姓名或邮箱" readonly={readonly} busy={busy}
+    showCustomerVisibility={showCustomerVisibility}
+    options={users.map(user => ({ id: user.id, name: user.name, details: user.email, disabled: user.status !== '启用' }))}
+    selected={value.map(person => {
+      const user = users.find(user => user.id === person.userId);
+      return { id: person.userId, name: user?.name ?? person.name, details: [user?.phone, user?.email].filter(Boolean).join(' · ') };
+    })}
+    onAdd={ids => onChange([...value, ...ids.filter(id => !value.some(person => person.userId === id)).map(id => ({ userId: id, name: users.find(user => user.id === id)!.name }))])}
+    onRemove={id => onChange(value.filter(person => person.userId !== id))} />;
 }

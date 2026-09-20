@@ -1,4 +1,8 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
+import type { OperationActor } from './request-operations';
+import type { InternalUser } from './service-requests';
 import {
+  updateLocalReference,
   defaultConfig,
   openDatabase,
   applyCatalogConfigRules,
@@ -28,6 +32,19 @@ export type CatalogVersion = {
   };
 };
 
+export const canManageCatalog = isDemoAdministrator;
+const catalogPermissionError = '仅启用的系统管理员可以修改服务目录及申请表单配置。';
+
+export async function createStoredCatalogService(service: VersionedService, actor: OperationActor) {
+  if (!canManageCatalog(actor)) throw new Error(catalogPermissionError);
+  await updateLocalReference<{ services: VersionedService[]; users: InternalUser[] }>('workspace', workspace => {
+    if (!workspace || !canManageCatalog(actor, workspace.users ?? [])) throw new Error(catalogPermissionError);
+    if (workspace.services.some(current => current.id === service.id)) throw new Error('服务编码已存在，请重新创建。');
+    return { ...workspace, services: [...workspace.services, { ...service, status: '草稿', version: 1, owner: actor.name }] };
+  });
+  window.dispatchEvent(new Event('catalog-version-saved'));
+}
+
 // One transaction writes the catalog, all configuration snapshots, and history.
 export async function commitCatalogVersion(
   serviceId: string,
@@ -37,7 +54,9 @@ export async function commitCatalogVersion(
     audience?: CatalogFormAudience;
     reason: string;
   },
+  actor: OperationActor,
 ) {
+  if (!canManageCatalog(actor)) throw new Error(catalogPermissionError);
   if (change.config)
     change = {
       ...change,
@@ -59,6 +78,7 @@ export async function commitCatalogVersion(
       const finish = () => {
         if (++loaded !== 5) return;
         try {
+          if (!canManageCatalog(actor, workspace.result?.payload.users ?? [])) throw new Error(catalogPermissionError);
           const current = workspace.result?.payload.services.find(
             (s: VersionedService) => s.id === serviceId,
           );

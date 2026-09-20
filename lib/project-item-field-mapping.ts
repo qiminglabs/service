@@ -1,12 +1,6 @@
 import type { RequestField } from '../components/request-field-settings';
 import { resolveRequestConfig, type CatalogService, type RequestConfig, type RequestItem } from './service-requests.ts';
-
-export type ProjectItemFieldMapping = { source: RequestField; target: RequestField; readonly: boolean };
 export type ItemMappingDirectory = { requestFields?: RequestField[]; services?: CatalogService[]; itemConfigs?: RequestConfig[] };
-const reserved = ['method', 'description', 'businessObjects', '__proto__', 'constructor', 'prototype'];
-export function itemMappingTargets(directory: ItemMappingDirectory): RequestField[] {
-  return (directory.requestFields ?? []).filter(field => !reserved.includes(field.id));
-}
 export function mapItemFields(item: RequestItem, directory: ItemMappingDirectory) {
   const service = directory.services?.find(service => service.id === item.serviceId);
   const targetConfig = service ? resolveRequestConfig(service, directory.itemConfigs ?? []) : undefined;

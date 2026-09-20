@@ -1,12 +1,13 @@
-import { demoSubmissionRuleReferences } from './demo-submission-rules.ts';
-import { buildRequestSamples, requestSamplesMarker, presalesRequestSamplesMarker } from './demo-service-requests.ts';
-import { openDatabase, defaultConfig, resolveRequestConfig, customerRequestConfigId } from './service-requests.ts';
+import { demoServiceExecution } from './demo-service-execution.ts';
+import { buildRequestSamples } from './demo-service-requests.ts';
+import { openDatabase,defaultConfig,resolveRequestConfig,customerRequestConfigId,partnerRequestConfigId } from './service-requests.ts';
 import type { CustomerRef, InternalUser } from './service-requests';
 import { ensureConversionHistory } from './entitlement-conversions.ts';
 import { requestFormOrder } from './request-form-layout.ts';
 import { demoReportingUsers, demoWorkflowRuleReferences } from './demo-workflow-rules.ts';
-import { ruleBasedRequestSamplesMarker } from './reinitialize-request-samples.ts';
 import { buildProjectSamples } from './demo-service-projects.ts';
+import { serviceMailTemplatesId, parseMailConfig } from './service-mail-templates.ts';
+import { initialProjectApprovalRules, projectApprovalRulesId } from './approval-scope.ts';
 
 export function initializeCustomerOwners<T extends CustomerRef>(customers: T[], users: InternalUser[]): T[] {
   const sales = users.find(user => user.status === '启用' && /销售/.test(user.department));
@@ -18,7 +19,7 @@ type InitialWorkspace = Parameters<typeof buildRequestSamples>[0] & {
   requestFields?: { id: string; name: string; options?: Array<string | { value: string; enabled: boolean }> }[];
 };
 
-export const requestedDemoResetMarker = 'demo-reset-2026-09-16-technical-assessment-v1';
+export const requestedDemoResetMarker = 'demo-reset-2026-09-20-service-reports-v3';
 
 // Call only for an explicitly requested reset. Validate/build first;
 // then replace this application's three stores in a single rollback-safe commit.
@@ -54,20 +55,23 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T,
     resolved.fieldRowStarts = ['description'];
     return resolved;
   });
+  const now = new Date();
+  const execution = demoServiceExecution(workspace, new Date(now.getTime() - 2 * 86400000).toISOString());
   const references: { id: string; payload: unknown }[] = [...new Map([
     { id: requestedDemoResetMarker, payload: { initializedAt: new Date().toISOString() } },
-    ...demoSubmissionRuleReferences([]),
+    { id: serviceMailTemplatesId, payload: parseMailConfig(undefined) },
     { id: 'workspace', payload: { ...workspace, customerOwnersInitialized: true } },
-    ...configs.map(config => ({ id: customerRequestConfigId(config.serviceId), payload: structuredClone(config) })),
+    ...configs.flatMap(config => [customerRequestConfigId(config.serviceId), partnerRequestConfigId(config.serviceId)].map(id => ({ id, payload: structuredClone(config) }))),
     ...(['inspection', 'upgrade'] as const).map(kind => ({ id: `entitlement-conversion-${kind}`, payload: ensureConversionHistory(undefined) })),
-    { id: requestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
     ...demoWorkflowRuleReferences(workspace),
-    { id: ruleBasedRequestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
-    { id: presalesRequestSamplesMarker, payload: { initializedAt: new Date().toISOString() } },
+    ...execution.references,
   ].map(reference => [reference.id, reference])).values()];
-  const now = new Date();
-  const generated = buildProjectSamples(workspace, buildRequestSamples(workspace, [], configs, references, now, true), now);
+  const projectApprovalRules = initialProjectApprovalRules(references);
+  const generated = buildProjectSamples(workspace, buildRequestSamples(workspace, [], configs, references, now, true), now, execution.config, projectApprovalRules);
   const samples = generated.requests;
+  const workspaceReference = references.find(row => row.id === 'workspace')!;
+  workspaceReference.payload = { ...workspace, customerOwnersInitialized: true, assets: generated.assets, businessObjects: generated.businessObjects };
+  references.push({ id: projectApprovalRulesId, payload: projectApprovalRules });
   references.push(...generated.projects.map(project => ({ id: `service-project:${project.id}`, payload: project })));
   const db = await openDatabase();
   try {

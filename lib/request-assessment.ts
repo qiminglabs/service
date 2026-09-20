@@ -1,3 +1,5 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
+import { requestApprovalRemaining, requestApprovalRemainingDays } from './request-approval-quota.ts';
 import type { HardwareAssessmentRequirement } from './hardware-assessment-trigger';
 import { activeRequestAssetAllocations } from './project-reservation-release.ts';
 import { requestTypeOf } from './request-types.ts';
@@ -30,6 +32,7 @@ import type { ApprovalRules } from './approval-rules';
 
 export function canManageAssessmentBasis(record: ServiceRequest, actor?: OperationActor, customers: CustomerRef[] = [], users: InternalUser[] = []): boolean {
   if (!actor?.id || !isInternal(actor.role)) return false;
+  if (isDemoAdministrator(actor, users)) return true;
   if (requestAudience(record) === 'internal') return isRequestApplicant(record, actor);
   return customerOwner(record, customers, users)?.id === actor.id;
 }
@@ -48,7 +51,15 @@ export function assessmentBasisSaveIssue(next: ServiceRequest, previous: Service
   const confirming = !!confirmation && JSON.stringify(confirmation) !== JSON.stringify(previous && assessmentOf(previous).confirmation);
   if (!(changingBasis || confirming)) return null;
   const source = previous ?? next;
-  return canManageAssessmentBasis(source, actor, customers, users) ? null : assessmentBasisPermissionMessage(source);
+  if (!canManageAssessmentBasis(source, actor, customers, users)) return assessmentBasisPermissionMessage(source);
+  const previousPlan = previous && currentPlan(previous);
+  if (plan && previousPlan?.id === plan.id) {
+    if (plan.freezeOnConfirmation !== previousPlan.freezeOnConfirmation || (previousPlan.frozenAt && plan.frozenAt !== previousPlan.frozenAt))
+      return '不可直接更改已有服务依据的冻结状态。';
+    if (plan.frozenAt && !previousPlan.frozenAt && (!confirming || confirmation?.planId !== plan.id))
+      return '仅发起客户确认时可冻结关联资产。';
+  }
+  return null;
 }
 
 export type Followup = {
@@ -76,6 +87,8 @@ export type AssetAllocation = { assetId: string; name: string; days: number; met
 export type AssessmentPlan = {
   entitlementAllocations?: EntitlementAllocation[];
   releasedAt?: string;
+  freezeOnConfirmation?: true;
+  frozenAt?: string;
   id: string;
   roundId: string;
   effort: number;
@@ -87,6 +100,7 @@ export type AssessmentPlan = {
   author: string;
 };
 export type GapApproval = {
+  manualAmount?: true;
   workflow?: ApprovalExecution;
   id: string;
   planId: string;
@@ -146,7 +160,7 @@ export type AssessmentAction =
       allocations: { assetId: string; days: number }[];
       salesId: string;
     }
-  | { type: 'gap-submit'; reason: string; approverId?: string }
+  | { type: 'gap-submit'; reason: string; approverId?: string; method?: DayMethod; days?: number }
   | { type: 'gap-decide'; id: string; approve: boolean; note: string }
   | { type: 'confirm'; externalNote?: string };
 export const emptyAssessment = (): Assessment => ({
@@ -184,52 +198,6 @@ export function gapApproverOptions(
   );
 }
 
-// User-requested repair for this named local request only. Never changes a decision.
-export function repairCustomerRequestApprover(
-  records: ServiceRequest[],
-  users: InternalUser[],
-  now = new Date().toISOString(),
-): ServiceRequest | null {
-  const matches = records.filter((record) => record.title === '客户发起请求');
-  if (matches.length !== 1 || matches[0].status !== '待评估') return null;
-  const original = matches[0];
-  const plan = currentPlan(original);
-  if (!plan) return null;
-  const options = gapApproverOptions(
-    users,
-    plan.salesId,
-    assessmentOf(original).managerId,
-  );
-  if (options.length !== 1) return null;
-  const ops = structuredClone(operationsOf(original));
-  const pending =
-    ops.assessment?.approvals.filter(
-      (approval) =>
-        approval.planId === plan.id &&
-        approval.state === '待审批' &&
-        !options.some((user) => user.id === approval.approverId),
-    ) ?? [];
-  if (!pending.length) return null;
-  const changes = pending.map((approval) => {
-    const before = approval.approver;
-    approval.approverId = options[0].id;
-    approval.approver = options[0].name;
-    return `${before} → ${options[0].name}`;
-  });
-  return appendActivity(
-    { ...original, updatedAt: now, operations: ops },
-    {
-      id: 'system:requested-approver-repair',
-      name: '系统',
-      role: 'SmartX 系统管理员',
-    },
-    '审批',
-    '修正额度特批审批人',
-    `按用户要求匹配可切换身份：${changes.join('；')}`,
-    now,
-  );
-}
-
 export const isProjectManager = (actor: OperationActor) =>
   actor.role === 'SmartX 项目经理';
 export const isSalesUser = (user: InternalUser | undefined) =>
@@ -239,6 +207,7 @@ export function canSubmitGapApproval(record: ServiceRequest, actor: OperationAct
   if (!plan || !actor?.id || !isInternal(actor.role)) return false;
   const user = users.find(user => user.id === actor.id && user.status === '启用');
   if (!user) return false;
+  if (isDemoAdministrator(actor, users)) return true;
   const applicant = requestAudience(record) === 'internal' && isRequestApplicant(record, actor);
   const responsibleSales = actor.id === plan.salesId && actor.role === 'SmartX 销售经理' && isSalesUser(user);
   return applicant || responsibleSales;
@@ -282,7 +251,8 @@ export function assetAvailable(
       0,
     );
   // Never round an old fractional remainder up into spendable credit.
-  return Math.floor((Math.max(0, asset.balanceDays - locked) + 1e-8) * 10) / 10;
+  const projectLocked = (asset.projectReservations ?? []).reduce((sum, row) => sum + row.days, 0);
+  return Math.floor((Math.max(0, asset.balanceDays - locked - projectLocked - (asset.projectConsumptions ?? []).reduce((sum, row) => sum + row.days, 0)) + 1e-8) * 10) / 10;
 }
 export function assessmentLockIssue(
   record: ServiceRequest,
@@ -293,6 +263,11 @@ export function assessmentLockIssue(
   if (record.status === '已取消') return null;
   const plan = currentPlan(record);
   if (!plan) return null;
+  if (assessmentOf(record).confirmation?.planId === plan.id) {
+    if (plan.freezeOnConfirmation && !plan.frozenAt) return '发起客户确认时须冻结关联资产。';
+    if (requestApprovalRemainingDays(record) > 1e-8)
+      return '服务依据额度不足，审批通过后才能发起客户确认。';
+  }
   const entitlementIssue = entitlementLockIssue(record, records, objects);
   if (entitlementIssue) return entitlementIssue;
   if (plan.effort !== assessedEffort(record)) return '服务依据与计价总人天不一致，请重新关联。';
@@ -367,7 +342,7 @@ export function applyAssessmentAction(
   if (action.type === 'hardware-review') {
     if (!hardwareItems(record).length) throw new Error('当前请求未命中本轮硬件评估触发条件。');
     if (assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('材料评估已通过，双方评估结论已锁定。');
-    if (!canPerformAssessmentRole(record, actor, 'hardware', users) || !isHardwareProductManager(actor) || !hardwareReviewers(users).some(user => user.id === actor.id)) throw new Error('仅已启用的硬件产品经理可提交硬件产品经理评估。');
+    if (!isDemoAdministrator(actor, users) && (!canPerformAssessmentRole(record, actor, 'hardware', users) || !isHardwareProductManager(actor) || !hardwareReviewers(users).some(user => user.id === actor.id))) throw new Error('仅已启用的硬件产品经理可提交硬件产品经理评估。');
     text(action.opinion, '评估意见');
     if (!['需补充', '评估通过'].includes(action.outcome)) throw new Error('请选择有效评估结论。');
     const hardware = assessment.hardware = { reviewerId: actor.id, reviewer: actor.name, assignmentId: assessment.hardware?.assignmentId ?? crypto.randomUUID(), rounds: assessment.hardware?.rounds ?? [] };
@@ -388,8 +363,7 @@ export function applyAssessmentAction(
       if (issue) throw new Error(issue);
     }
     const id = crypto.randomUUID();
-    assessment.managerId = actor.id;
-    assessment.manager = actor.name;
+    if (!isDemoAdministrator(actor)) { assessment.managerId = actor.id; assessment.manager = actor.name; }
     assessment.rounds.push({
       id,
       authorId: actor.id,
@@ -489,6 +463,7 @@ export function applyAssessmentAction(
     if (plan) assessment.plans.at(-1)!.releasedAt = now;
     assessment.plans.push({
       entitlementAllocations: effortEntitlementAllocations(assessment.effort?.lines),
+      freezeOnConfirmation: true,
       id: crypto.randomUUID(),
       roundId: round.id,
       effort: effort,
@@ -503,18 +478,23 @@ export function applyAssessmentAction(
       if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
     });
     title = plan ? '调整服务依据' : '服务依据关联';
-    detail = `计价总人天 ${effort} · 冻结 ${planAssetDays(assessment.plans.at(-1))} 人天`;
+    detail = `计价总人天 ${effort} · 关联 ${planAssetDays(assessment.plans.at(-1))} 人天`;
   } else if (action.type === 'gap-submit') {
     if (!plan || !canSubmitGapApproval(record, actor, users))
       throw new Error('仅本请求的内部申请人或方案指定的销售可发起额度特批。');
     const methodIssue = allocationMethodIssue(record, plan.allocations, assets);
     if (methodIssue) throw new Error(methodIssue);
-    const gap = planGap(plan);
-    positive(gap);
-    text(action.reason, '特批原因');
+    const remaining = requestApprovalRemainingDays(record);
+    const manual = action.days !== undefined || action.method !== undefined;
+    if (remaining <= 1e-8) throw new Error('额度已足够，无需重复提交审批。');
+    if (manual && !['远程', '现场'].includes(action.method ?? '')) throw new Error('请选择远程或现场服务方式。');
+    const days = manual ? action.days! : remaining;
+    positive(days);
+    const gaps = manual ? [{ method: action.method!, days }] : requestApprovalRemaining(record);
+    text(action.reason, '申请理由');
     if (
       assessment.approvals.some(
-        (a) => a.planId === plan.id && ['待审批', '已通过'].includes(a.state),
+        (a) => a.planId === plan.id && a.state === '待审批',
       )
     )
       throw new Error('该方案已发起特批，请勿重复提交。');
@@ -536,8 +516,9 @@ export function applyAssessmentAction(
       ...(workflow ? { workflow } : {}),
       id: crypto.randomUUID(),
       planId: plan.id,
-      days: gap,
-      gaps: planDayGaps(plan),
+      ...(manual ? { manualAmount: true as const } : {}),
+      days,
+      gaps,
       reason: action.reason.trim(),
       authorId: actor.id,
       author: actor.name,
@@ -548,7 +529,7 @@ export function applyAssessmentAction(
     });
     category = '审批';
     title = workflow ? '发起特殊审批' : '发起额度特批';
-    detail = `缺口 ${formatDayRequirements(planDayGaps(plan)) || `${gap} 人天`} · ${action.reason}${workflow ? ` · ${workflow.ruleName} · ${workflow.steps.map(step => step.approver).join(' → ')}` : ''}`;
+    detail = `申请额度 ${formatDayRequirements(gaps) || `${days} 人天`} · ${action.reason}${workflow ? ` · ${workflow.ruleName} · ${workflow.steps.map(step => step.approver).join(' → ')}` : ''}`;
   } else if (action.type === 'gap-decide') {
     const approval = assessment.approvals.find((a) => a.id === action.id);
     if (
@@ -557,7 +538,7 @@ export function applyAssessmentAction(
       approval.planId !== plan?.id
     )
       throw new Error('审批已处理或资产方案已变更。');
-    if (!approval.workflow && (
+    if (!approval.workflow && !isDemoAdministrator(actor, users) && (
       !['SmartX 销售经理', 'SmartX 系统管理员'].includes(actor.role) ||
       actor.id !== approval.approverId ||
       actor.id === approval.authorId ||
@@ -582,11 +563,9 @@ export function applyAssessmentAction(
     if (!canManageAssessmentBasis(record, actor, customers, users)) throw new Error(assessmentBasisPermissionMessage(record));
     if (!plan || assessedEffort(record) === undefined || !assessment.rounds.some(round => round.outcome === '评估通过')) throw new Error('请先完成材料评估、人天核定和服务依据关联。');
     const gap = planGap(plan);
-    const approval = assessment.approvals.find(
-      (a) => a.planId === plan.id && a.state === '已通过' && a.days >= gap,
-    );
-    if (gap > 1e-8 && !approval)
+    if (requestApprovalRemainingDays(record) > 1e-8)
       throw new Error('资产不足，请由内部申请人或负责销售发起特批并经上级审批通过。');
+    if (plan.freezeOnConfirmation) assessment.plans.at(-1)!.frozenAt ??= now;
     const round = assessment.rounds.find((r) => r.id === plan.roundId)!;
     assessment.confirmation = {
       at: now,

@@ -1,7 +1,5 @@
 'use client';
 import { materialRequirementLabel } from '@/lib/material-requirements';
-
-import { requestFieldLabel } from '@/lib/request-field-labels';
 import { fieldRequirementLabels } from '@/lib/request-field-requirements';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -72,7 +70,7 @@ function ConfigSnapshot({
       </p>
       {config.fields.map((id) => (
         <p key={id}>
-          {requestFieldLabel(id, config.fieldNames?.[id] ?? id)}：
+          {(config.fieldNames?.[id] ?? id)}：
           {config.fieldRequiredWhen?.[id] ? fieldRequirementLabels[config.fieldRequiredWhen[id]] : config.fieldRequired?.[id] === false ? '选填' : '必填'}
           {config.fieldOptions?.[id]
             ? `；可用选项：${config.fieldOptions[id].join('、')}`
@@ -175,22 +173,21 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
           <DialogHeader>
             <DialogTitle>服务目录历史版本</DialogTitle>
             <DialogDescription>
-              只读查看目录及两套申请配置。在线链接保留历史地址，外部文档内容由文档平台管理。
+              在线链接保留历史地址，外部文档内容由文档平台管理。
             </DialogDescription>
           </DialogHeader>
           <div className="catalog-history-toolbar">
             <span id="catalog-history-version-label">查看版本</span>
             <Select value={String(index)} onValueChange={value => { if (value !== null) setIndex(Number(value)); }} disabled={!entries.length}>
               <SelectTrigger aria-labelledby="catalog-history-version-label" className="catalog-history-select">
-                <SelectValue>{selected ? `v${selected.service.version ?? 1} · ${selected.reason}` : '读取版本中…'}</SelectValue>
+                <SelectValue>{selected ? `v${selected.service.version ?? 1} · ${historyTime(selected.savedAt)}` : '读取版本中…'}</SelectValue>
               </SelectTrigger>
               <SelectContent className="catalog-history-select-popup" align="start" alignItemWithTrigger={false}>
                 {entries.map((entry, i) => <SelectItem key={i} value={String(i)}>
-                  <span className="catalog-history-option"><strong>v{entry.service.version ?? 1} · {entry.reason}</strong><small>{historyTime(entry.savedAt)}</small></span>
+                  <span className="catalog-history-option"><strong>v{entry.service.version ?? 1} · {historyTime(entry.savedAt)}</strong></span>
                 </SelectItem>).reverse()}
               </SelectContent>
             </Select>
-            <span className="catalog-history-readonly">只读快照</span>
           </div>
           <div className="catalog-history-body">
           {error && <p role="alert" className="sr-error">{error}</p>}

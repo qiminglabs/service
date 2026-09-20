@@ -36,7 +36,8 @@ export function RequestFormBuilder({
   config,
   fields,
   products,
-  busy,
+  busy: saving,
+  readonly = false,
   update,
 }: {
   service: CatalogService;
@@ -44,8 +45,10 @@ export function RequestFormBuilder({
   fields: RequestField[];
   products: string[];
   busy: boolean;
+  readonly?: boolean;
   update: (config: RequestConfig) => void;
 }) {
+  const busy = saving || readonly;
   const [selected, select] = useState('method');
   const templateInput = useRef<HTMLInputElement>(null);
   const [query, search] = useState('');
@@ -189,7 +192,7 @@ export function RequestFormBuilder({
     >
       <aside className="rf-library">
         <h3>可用字段</h3>
-        <p className="sr-help">拖入表单，或点击添加</p>
+        {!readonly && <p className="sr-help">拖入表单，或点击添加</p>}
         <Input
           aria-label="搜索可用字段"
           placeholder="搜索字段"
@@ -203,7 +206,7 @@ export function RequestFormBuilder({
               <button
                 type="button"
                 key={f.id}
-                disabled={busy}
+                disabled={saving || (readonly && !order.includes(f.id))}
                 onPointerDown={(event) => beginDrag(event, f.id)}
                 onClick={() =>
                   order.includes(f.id) ? select(f.id) : add(f.id)
@@ -229,7 +232,7 @@ export function RequestFormBuilder({
       <main className="rf-center">
         <div className="rf-preview-heading">
           <strong>申请表单预览</strong>
-          <span>按字段顺序自动排列 · 拖动可调整先后顺序</span>
+          {!readonly && <span>按字段顺序自动排列 · 拖动可调整先后顺序</span>}
         </div>
         <div className="rf-paper">
           <h3>{service.name}</h3>
@@ -248,10 +251,10 @@ export function RequestFormBuilder({
                   <button
                     type="button"
                     className="rf-select-field"
-                    disabled={busy}
+                    disabled={saving}
                     onPointerDown={(event) => beginDrag(event, id)}
                     onClick={() => select(id)}
-                    aria-label={`配置${f.name}`}
+                    aria-label={`${readonly ? '查看' : '配置'}${f.name}`}
                   >
                     <span>
                       {f.name} {config.fieldRequiredWhen?.[id] ? <small>{fieldRequirementLabels[config.fieldRequiredWhen[id]]}</small> : required(id) && <em>*</em>}
@@ -294,7 +297,7 @@ export function RequestFormBuilder({
                 </div>
               );
             }} />
-            <div className="rf-drop-hint">拖动字段到此处添加</div>
+            {!readonly && <div className="rf-drop-hint">拖动字段到此处添加</div>}
           </div>
           <section className="rf-materials">
             <div className="sr-panel-heading">
@@ -325,12 +328,12 @@ export function RequestFormBuilder({
                 key={m.id}
                 className="rf-material-preview"
                 data-selected={selected === `material:${m.id}`}
-                disabled={busy}
+                disabled={saving}
                 onClick={() => {
                   select(`material:${m.id}`);
                   setMaterialError('');
                 }}
-                aria-label={`配置材料${m.name || '未命名材料'}`}
+                aria-label={`${readonly ? '查看' : '配置'}材料${m.name || '未命名材料'}`}
               >
                 <span className="rf-material-title">
                   {m.name || '未命名材料'}
@@ -549,7 +552,6 @@ export function RequestFormBuilder({
             {selected === 'method' ? (
               <p className="sr-help">
                 引用服务目录：{service.deliveryMethods.join('、')}
-                。必填与可选项不可编辑。
               </p>
             ) : selected === 'businessObjects' ? (
               <fieldset disabled={busy || fixed}>

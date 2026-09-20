@@ -3,21 +3,20 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { AtSign, Paperclip, FileText } from 'lucide-react';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
 import { Popover } from '@/components/ui/popover';
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import { MentionOptionLabel } from '@/components/mention-option-label';
-import { internalProjectProvider } from '@/lib/service-project-providers';
 import type { CustomerRef } from '@/lib/service-requests';
 import { readLocal, storedFile, downloadFile, type ContactRef, type InternalUser, type ServiceRequest, type StoredFile } from '@/lib/service-requests';
 import { isInternal, meetingAttachmentAccept, meetingAttachmentIssue, type OperationActor } from '@/lib/request-operations';
 import { addSupplement, canAddSupplement, visibleSupplements } from '@/lib/request-supplements';
 
-import { mentionQuery, editMentions, insertMention, supplementMentionUsers, addMentionCollaborator, type SupplementMention } from '@/lib/supplement-mentions';
+import { mentionQuery, editMentions, insertMention, supplementMentionUsers, type SupplementMention, type RequestMentionDirectory } from '@/lib/supplement-mentions';
 
-export function RequestSupplements({ record, actor, customerId, users, contacts = [], customers = [], busy, save }: {
+export function RequestSupplements({ record, actor, customerId, users, contacts = [], customers = [], directory = {}, busy, save }: {
+  directory?: RequestMentionDirectory;
   record: ServiceRequest; actor: OperationActor; customerId?: string; users: InternalUser[]; contacts?: ContactRef[]; customers?: CustomerRef[]; busy: boolean;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
 }) {
@@ -32,15 +31,13 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
   const listId = useId();
   const activeMention = useRef<HTMLButtonElement>(null);
   const [error, setError] = useState('');
-  const [pendingMention, setPendingMention] = useState<{ user: InternalUser; start: number; end: number } | null>(null);
-  const [joiningError, setJoiningError] = useState('');
   const [working, setWorking] = useState(false);
   const lock = useRef(false);
   const uploadInput = useRef<HTMLInputElement>(null);
-  const disabled = busy || working || !!pendingMention;
+  const disabled = busy || working;
   const editable = canAddSupplement(record, actor, customerId);
   const items = visibleSupplements(record, actor);
-  const mentionUsers = supplementMentionUsers(record, actor, users, contacts);
+  const mentionUsers = supplementMentionUsers(record, actor, users, contacts, { ...directory, customers });
   const matches = query ? mentionUsers.filter(user => (isInternal(actor.role) ? `${user.name} ${user.email} ${user.department}` : user.name).toLowerCase().includes(query.query.toLowerCase())).slice(0, 12) : [];
   const selectedOption = Math.min(activeOption, Math.max(0, matches.length - 1));
   useEffect(() => { if (query) activeMention.current?.scrollIntoView({ block: 'nearest' }); }, [selectedOption, query?.query]);
@@ -55,55 +52,9 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
   }
   function chooseMention(user: InternalUser) {
     if (!query || disabled) return;
-    if (isInternal(actor.role) && !record.externalCollaborators?.some(person => person.contactId === user.id) && !record.internalParticipants?.some(person => person.userId === user.id)) {
-      setPendingMention({ user, start: query.start, end: caret }); setJoiningError(''); setQuery(null);
-      return;
-    }
     insertSelectedMention(user, query.start, caret);
   }
-  function cancelMention() {
-    if (busy || working || !pendingMention) return;
-    // Remove the unfinished @ query, retaining the rest of the comment and attachments.
-    const next = comment.slice(0, pendingMention.start) + comment.slice(pendingMention.end);
-    setMentions(previous => editMentions(comment, next, previous));
-    setComment(next); setCaret(pendingMention.start); setQuery(null); setPendingMention(null); setJoiningError('');
-  }
-  async function confirmMention() {
-    if (!pendingMention || busy || working || lock.current) return;
-    lock.current = true; setWorking(true); setJoiningError('');
-    try {
-      const [references, requests] = await Promise.all([
-        readLocal<{ id: string; payload?: { users?: InternalUser[]; contacts?: ContactRef[] } }>('references'),
-        readLocal<ServiceRequest>('requests'),
-      ]);
-      const latest = requests.find(item => item.id === record.id);
-      if (!latest || latest.updatedAt !== record.updatedAt) throw new Error('请求已更新，请取消并刷新后重新选择，避免覆盖其他人的修改。');
-      const user = references.find(reference => reference.id === 'workspace')?.payload?.users?.find(user => user.id === pendingMention.user.id);
-      if (!user || user.status !== '启用') throw new Error('该用户已停用或不存在，请取消后重新选择。');
-      const next = addMentionCollaborator(record, actor, user, true);
-      if (next !== record && !(await save(next, `${user.name} 已加入内部协作人`))) {
-        setJoiningError('加入协作人失败，尚未插入 @，请重试或取消。'); return;
-      }
-      insertSelectedMention(user, pendingMention.start, pendingMention.end);
-      setPendingMention(null);
-    } catch (error) { setJoiningError(error instanceof Error ? error.message : '加入协作人失败，请重试。'); }
-    finally { lock.current = false; setWorking(false); }
-  }
-
   return <section className="sr-panel sr-ops-panel">
-    <AlertDialog open={!!pendingMention} onOpenChange={open => { if (!open) cancelMention(); }}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>加入内部协作人？</AlertDialogTitle>
-          <AlertDialogDescription>{pendingMention?.user.name} 尚未加入当前请求的内部协作人。确认加入后，该用户可访问此请求，并可在留言中被 @。</AlertDialogDescription>
-        </AlertDialogHeader>
-        {joiningError && <p className="sr-error" role="alert">{joiningError}</p>}
-        <AlertDialogFooter>
-          <Button variant="outline" disabled={busy || working} onClick={cancelMention}>不加入，不 @</Button>
-          <Button disabled={busy || working} onClick={() => void confirmMention()}>{working ? '正在加入…' : '加入并 @'}</Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
     <div className="sr-ops-heading"><div><h3>补充信息</h3></div></div>
     <div className="sr-supplements-body">
       {editable ? <div className="sr-supplement-composer">
@@ -127,9 +78,7 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
             <div role="listbox" id={listId} aria-label="可 @ 的协作人">
               {matches.map((user, index) => <button type="button" role="option" aria-selected={index === selectedOption} id={`${listId}-${index}`} key={user.id} ref={index === selectedOption ? activeMention : undefined}
                 onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveOption(index)} onClick={() => chooseMention(user)}>
-                <MentionOptionLabel name={user.name} email={user.email} companyName={record.externalCollaborators?.some(person => person.contactId === user.id)
-                  ? customers.find(customer => customer.id === contacts.find(contact => contact.id === user.id)?.customerId)?.name
-                  : internalProjectProvider.name} />
+                <MentionOptionLabel name={user.name} email={user.email} companyName={user.companyName} />
               </button>)}
             </div>
             {!matches.length && <span className="sr-mention-empty">没有匹配的可选用户</span>}
@@ -168,10 +117,10 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
           if (disabled || lock.current) return;
           lock.current = true; setWorking(true); setError('');
           try {
-            const references = await readLocal<{ id: string; payload?: { users?: InternalUser[]; contacts?: ContactRef[] } }>('references');
+            const references = await readLocal<{ id: string; payload?: RequestMentionDirectory & { users?: InternalUser[]; contacts?: ContactRef[] } }>('references');
             const workspace = references.find(reference => reference.id === 'workspace')?.payload;
             const latestUsers = workspace?.users ?? [];
-            const next = addSupplement(record, actor, customerId, { id: crypto.randomUUID(), authorId: actor.id, author: actor.name, at: new Date().toISOString(), comment, mentions, files, externalVisible: isInternal(actor.role) ? externalVisible : true }, latestUsers, workspace?.contacts ?? []);
+            const next = addSupplement(record, actor, customerId, { id: crypto.randomUUID(), authorId: actor.id, author: actor.name, at: new Date().toISOString(), comment, mentions, files, externalVisible: isInternal(actor.role) ? externalVisible : true }, latestUsers, workspace?.contacts ?? [], workspace);
             if (await save(next, '补充信息已发布')) { setComment(''); setMentions([]); setFiles([]); setQuery(null); setExternalVisible(!isInternal(actor.role)); }
             else setError('保存失败，填写内容已保留，请重试。');
           } catch (error) { setError(error instanceof Error ? error.message : '发布失败'); }
@@ -181,7 +130,7 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
         </div>
         {error && <p role="alert" className="sr-error">{error}</p>}
 
-      </div> : <p className="sr-help">当前阶段仅可查看已提交的补充资料。</p>}
+      </div> : null}
       <div className="sr-supplement-records">
         {[...items].reverse().map(item => <article key={item.id} className="sr-assessment-plan">
           <div className="sr-assessment-round-title"><strong>{item.author}</strong><time className="sr-help" dateTime={item.at}>{new Date(item.at).toLocaleString('zh-CN', { hour12: false })}</time>{isInternal(actor.role) && (item.externalVisible ? <CustomerVisibleBadge /> : <span className="sr-assessment-badge">仅内部可见</span>)}</div>

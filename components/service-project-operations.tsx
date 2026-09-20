@@ -1,4 +1,7 @@
 'use client';
+
+import { isPartnerCreatedProject } from '@/lib/service-project-work-order-policy';
+import { canActForUser } from '@/lib/demo-permissions';
 import { useRef, useState, type ReactNode } from 'react';
 import { Video, Clock3, Plus, Play, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,40 +26,42 @@ import {
 } from '@/components/ui/dialog';
 import { DateField } from '@/components/date-field';
 import { TimeField } from '@/components/time-field';
+import { roundDays } from '@/lib/day-quantity';
 import {
   downloadFile,
   storedFile,
   type StoredFile,
+  type CatalogService,
 } from '@/lib/service-requests';
 import {
-  worklogHours,
-  formatWorklogHours,
-  isAdministrator,
-  migrateRoleLabel,
-  localDate,
-  meetingAttachments,
-  meetingAttachmentAccept,
-  meetingAttachmentIssue,
-  meetingTranscript,
-  type OperationActor,
-  type RequestMeeting,
-  type RequestWorklog,
+worklogHours,
+formatWorklogHours,
+isAdministrator,localDate,
+meetingAttachments,
+meetingAttachmentAccept,
+meetingAttachmentIssue,
+meetingTranscript,
+type OperationActor,
+type RequestMeeting
 } from '@/lib/request-operations';
 import {
   canManageServiceProjects,
+  projectItemAudience,
   type ServiceProjectRecord,
 } from '@/lib/service-projects';
 import { projectOperationsOf } from '@/lib/service-project-activity';
+import { calculateWorklogPricing, projectWorklogPricing, projectWorklogTotals, type ProjectWorklog, type WorklogPricing } from '@/lib/project-worklog-pricing';
 import {
   canRecordProjectWorklog,
+  canConfirmProjectWorklog,
   type ProjectOperationAction,
 } from '@/lib/service-project-operations';
 const stamp = (s: string) =>
   new Date(s).toLocaleString('zh-CN', { hour12: false });
 function Tag({ children }: { children: string }) {
-  const tone = ['有效', '已通过', '已结束'].includes(children)
+  const tone = ['有效', '已通过', '已结束', '已确认'].includes(children)
     ? 'green'
-    : ['待审批', '待核对', '已预约', '进行中'].includes(children)
+    : ['待审批', '待核对', '已预约', '进行中', '待确认'].includes(children)
       ? 'blue'
       : ['已拒绝'].includes(children)
         ? 'amber'
@@ -117,8 +122,12 @@ export function ServiceProjectOperations({
   actor,
   busy,
   save,
+  services,
+  onOpenWorkOrder,
 }: {
   record: ServiceProjectRecord;
+  services: CatalogService[];
+  onOpenWorkOrder: (id: string) => void;
   actor: OperationActor;
   busy: boolean;
   save: (action: ProjectOperationAction) => Promise<string | null>;
@@ -129,7 +138,7 @@ export function ServiceProjectOperations({
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('全部');
   const [meeting, setMeeting] = useState<RequestMeeting | null>(null);
-  const [worklog, setWorklog] = useState<RequestWorklog | null>(null);
+  const [worklog, setWorklog] = useState<ProjectWorklog | null>(null);
   const [voidWorklog, setVoidWorklog] = useState(false);
   const [working, setWorking] = useState(false);
   const lock = useRef(false);
@@ -137,8 +146,12 @@ export function ServiceProjectOperations({
   const closed = ['已完成', '已取消'].includes(record.status);
   const editable =
     !closed && !busy && !working && canManageServiceProjects(actor, record);
-  const canLog = editable && canRecordProjectWorklog(record, actor);
+  const canLog = !busy && !working && canRecordProjectWorklog(record, actor);
   const activeLogs = ops.worklogs.filter((log) => !log.voidedAt);
+  const totals = projectWorklogTotals(record, services);
+  const pendingLogs = activeLogs.filter(log => !log.confirmedAt);
+  const canConfirm = !busy && !working && canConfirmProjectWorklog(record, actor);
+  const hasOrders = record.workOrders?.some(order => order.status !== '已取消');
   const activities = [...ops.activities].sort((a, b) =>
     b.at.localeCompare(a.at),
   );
@@ -269,15 +282,17 @@ export function ServiceProjectOperations({
           )}
         </section>
       </TabsContent>
-      <TabsContent value="worklogs">
+      {projectItemAudience(actor) === 'internal' && <>
+      {!isPartnerCreatedProject(record) && <TabsContent value="worklogs">
         <section className="sr-panel sr-ops-panel">
           <div className="sr-ops-heading">
             <div>
               <h3>工时</h3>
-              <p>记录项目成员的实际投入，不等于客户计费人天。</p>
             </div>
+            <div className="sr-project-worklog-actions">
+            {canConfirmProjectWorklog(record, actor) && pendingLogs.length > 0 && <Button variant="outline" disabled={!canConfirm} onClick={() => void run({ type: 'worklog-confirm', ids: pendingLogs.map(log => log.id) })}>确认全部待确认工时（{pendingLogs.length}）</Button>}
             <Button
-              disabled={!canLog}
+              disabled={!canLog || !hasOrders}
               onClick={() => {
                 setWorklog(null);
                 setVoidWorklog(false);
@@ -287,22 +302,20 @@ export function ServiceProjectOperations({
               <Plus size={16} />
               录入工时
             </Button>
+            </div>
           </div>
+          {!dialog && <ErrorText error={error} />}
           <div className="sr-ops-summary">
             <Summary
               label="累计投入"
-              value={`${formatWorklogHours(activeLogs.reduce((s, w) => s + w.hours, 0))} 小时`}
+              value={`${roundDays(totals.actualHours / 8)} 人天`}
             />
+            <Summary label={totals.pending ? '预计计价人天（已计算部分）' : '预计计价人天'} value={`${roundDays(totals.billableHours / 8)} 人天`} />
             <Summary
               label="参与成员"
               value={`${new Set(activeLogs.map((w) => w.userId)).size} 人`}
             />
           </div>
-          {!canLog && !closed && (
-            <p className="sr-ops-hint">
-              项目经理可直接录入工时；内部人员需加入内部协作人，合作伙伴可录入自己的工时。
-            </p>
-          )}
           {!ops.worklogs.length ? (
             <Empty
               icon={<Clock3 />}
@@ -311,27 +324,35 @@ export function ServiceProjectOperations({
             />
           ) : (
             <div className="sr-table-scroll">
-              <table className="sr-table app-list-table sr-worklog-table">
+              <table className="sr-table app-list-table sr-worklog-table sr-project-worklog-table">
                 <colgroup>
                   <col className="sr-worklog-name-col" />
                   <col className="sr-worklog-date-col" />
+                  <col className="sr-project-worklog-order-col" />
                   <col />
                   <col className="sr-worklog-hours-col" />
+                  <col className="sr-project-worklog-pricing-col" />
                   <col className="sr-worklog-type-col" />
+                  <col className="sr-project-worklog-confirm-col" />
                   <col className="sr-worklog-actions-col" />
                 </colgroup>
                 <thead>
                   <tr>
                     <th>姓名</th>
-                    <th>工作日期 / 时间</th>
+                    <th>时间</th>
+                    <th>关联工单</th>
                     <th>工作内容</th>
-                    <th>工时</th>
+                    <th>实际工时</th>
+                    <th>预计计价工时</th>
                     <th>类型</th>
+                    <th>工时确认</th>
                     <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ops.worklogs.map((w) => (
+                  {ops.worklogs.map((w) => {
+                    const order = record.workOrders?.find(order => order.id === w.workOrderId);
+                    return (
                     <tr key={w.id}>
                       <td>{w.userName}</td>
                       <td>
@@ -342,6 +363,7 @@ export function ServiceProjectOperations({
                           </small>
                         )}
                       </td>
+                      <td className="sr-ops-cell-wrap">{order ? <button type="button" className="wo-overview-link" title={order.id} disabled={busy || working} onClick={() => onOpenWorkOrder(order.id)}>{order.item.serviceName}</button> : '待关联工单'}</td>
                       <td className="sr-ops-cell-wrap">{w.description}</td>
                       <td>
                         {w.voidedAt ? (
@@ -359,9 +381,12 @@ export function ServiceProjectOperations({
                           `${formatWorklogHours(w.hours)} 小时`
                         )}
                       </td>
+                      <td>{w.voidedAt ? '—' : pricingLabel(projectWorklogPricing(record, w, services))}</td>
                       <td>{w.category}</td>
+                      <td>{w.voidedAt ? '—' : <Tag>{w.confirmedAt ? '已确认' : '待确认'}</Tag>}</td>
                       <td>
-                        {!w.voidedAt && w.userId === actor.id && editable ? (
+                        {!w.voidedAt && !w.confirmedAt && canConfirmProjectWorklog(record, actor) && <Button variant="ghost" disabled={!canConfirm} onClick={() => void run({ type: 'worklog-confirm', ids: [w.id] })}>确认工时</Button>}
+                        {!w.voidedAt && canActForUser(actor, w.userId) && canLog ? (
                           <>
                             <Button
                               variant="ghost"
@@ -384,18 +409,16 @@ export function ServiceProjectOperations({
                               作废
                             </Button>
                           </>
-                        ) : (
-                          '—'
-                        )}
+                        ) : (!w.voidedAt && !w.confirmedAt && canConfirmProjectWorklog(record, actor) ? null : '—')}
                       </td>
                     </tr>
-                  ))}
+                  ); })}
                 </tbody>
               </table>
             </div>
           )}
         </section>
-      </TabsContent>
+      </TabsContent>}
       <TabsContent value="activity">
         <section className="sr-panel sr-ops-panel" aria-label="活动">
           <div className="sr-ops-heading">
@@ -415,6 +438,7 @@ export function ServiceProjectOperations({
                 '协作',
                 '会议',
                 '工时',
+                '复核',
               ].map((f) => (
                 <option key={f}>{f}</option>
               ))}
@@ -439,7 +463,7 @@ export function ServiceProjectOperations({
                     </h4>
                     <p>{a.detail}</p>
                     <span>
-                      {migrateRoleLabel(a.actor)} · {stamp(a.at)}
+                      {a.actor} · {stamp(a.at)}
                     </span>
                   </div>
                 </li>
@@ -456,6 +480,7 @@ export function ServiceProjectOperations({
           )}
         </section>
       </TabsContent>
+      </>}
       <Dialog
         open={dialog !== null}
         onOpenChange={(open) => {
@@ -507,8 +532,10 @@ export function ServiceProjectOperations({
               key={`${actor.id}:${actor.role}:${worklog?.id ?? 'new'}:${voidWorklog}`}
               voiding={voidWorklog}
               log={worklog}
+              record={record}
+              services={services}
               actor={actor}
-              disabled={!editable}
+              disabled={!canLog}
               error={error}
               run={run}
               close={() => setDialog(null)}
@@ -534,19 +561,30 @@ function ErrorText({ error }: { error: string }) {
     </p>
   ) : null;
 }
+function pricingLabel(pricing: WorklogPricing) {
+  if (pricing.kind === 'hourly') return `${formatWorklogHours(pricing.hours)} 小时`;
+  if (pricing.kind === 'entitlement') return `按${pricing.unit}计价`;
+  return pricing.reason;
+}
 function WorklogForm({
   log,
+  record,
+  services,
   voiding,
   actor,
   disabled,
   error,
   run,
   close,
-}: FormActions & { log: RequestWorklog | null; voiding: boolean }) {
+}: FormActions & { log: ProjectWorklog | null; voiding: boolean; record: ServiceProjectRecord; services: CatalogService[] }) {
+  const [workOrderId, setWorkOrderId] = useState(log?.workOrderId ?? '');
+  const orders = (record.workOrders ?? []).filter(order => order.status !== '已取消' || order.id === log?.workOrderId);
+  const selectedOrder = orders.find(order => order.id === workOrderId);
   const [date, setDate] = useState(log?.date ?? localDate());
   const [startTime, setStartTime] = useState(log?.startTime ?? '');
   const [endTime, setEndTime] = useState(log?.endTime ?? '');
   const hours = worklogHours(startTime, endTime);
+  const pricing = selectedOrder && hours !== null ? calculateWorklogPricing(selectedOrder, hours, services, selectedOrder.id === log?.workOrderId ? log.pricing : undefined) : null;
   const [category, setCategory] = useState(log?.category ?? '需求调研');
   const [description, setDescription] = useState(
     voiding ? '' : (log?.description ?? ''),
@@ -560,12 +598,18 @@ function WorklogForm({
         <DialogDescription>
           {voiding && log
             ? `${log.date} · ${formatWorklogHours(log.hours)} 小时；作废后保留原记录，不计入汇总。`
-            : `录入人：${actor.name}。按起止时间计算分钟数，自动换算为投入小时。`}
+            : `录入人：${log?.userName ?? actor.name}。按起止时间计算分钟数，自动换算为投入小时。`}
         </DialogDescription>
       </DialogHeader>
       <div className="sr-ops-form">
         {!voiding && (
           <>
+            <Field title="关联工单" required>
+              <NativeSelect aria-label="关联工单" value={workOrderId} onChange={event => setWorkOrderId(event.target.value)} disabled={disabled} required>
+                <option value="">{orders.length ? '请选择工单' : '暂无可关联工单'}</option>
+                {orders.map(order => <option key={order.id} value={order.id}>{order.id} · {order.item.serviceName}{order.status === '已取消' ? '（已取消）' : ''}</option>)}
+              </NativeSelect>
+            </Field>
             <DateField
               id="sr-work-date"
               label="日期"
@@ -623,15 +667,21 @@ function WorklogForm({
           />
         </Field>
         {!voiding && (
-          <Field title="投入小时（自动计算）">
-            <Input
-              aria-label="投入小时（自动计算）"
-              value={hours === null ? '' : formatWorklogHours(hours)}
-              readOnly
-              placeholder="选择有效起止时间后自动计算"
-            />
-          </Field>
+          <div className="sr-ops-form-row">
+            <Field title="投入小时（自动计算）">
+              <Input
+                aria-label="投入小时（自动计算）"
+                value={hours === null ? '' : formatWorklogHours(hours)}
+                readOnly
+                placeholder="选择有效起止时间后自动计算"
+              />
+            </Field>
+            <Field title="预计计价工时">
+              <Input aria-label="预计计价工时" value={pricing ? pricingLabel(pricing) : ''} readOnly />
+            </Field>
+          </div>
         )}
+        {!voiding && pricing?.kind === 'hourly' && <Field title="目录计价系数"><Input aria-label="目录计价系数" value={pricing.coefficient} readOnly /></Field>}
         <ErrorText error={error} />
       </div>
       <DialogFooter>
@@ -639,7 +689,7 @@ function WorklogForm({
           取消
         </Button>
         <Button
-          disabled={disabled}
+          disabled={disabled || (!voiding && !selectedOrder)}
           onClick={async () => {
             if (
               await run(
@@ -649,6 +699,7 @@ function WorklogForm({
                       ...(log
                         ? { type: 'worklog-edit' as const, id: log.id }
                         : { type: 'worklog-add' as const }),
+                      workOrderId,
                       date,
                       startTime,
                       endTime,

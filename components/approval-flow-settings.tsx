@@ -8,6 +8,7 @@ import { UserSearchSelect } from '@/components/user-search-select';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { canManageRouting } from '@/lib/assessment-routing-store';
+import type { ApprovalScope } from '@/lib/approval-scope';
 import { readApprovalData, saveApprovalConfig } from '@/lib/approval-flow-store';
 import { approvalConfigIssue, emptyApprovalConfig, newApprovalNode, type ApprovalConfig, type ApprovalNode } from '@/lib/approval-flows';
 import type { InternalUser } from '@/lib/service-requests';
@@ -34,7 +35,7 @@ function ApprovalStopUsers({ users, value, disabled, onChange }: { users: Intern
   </div>;
 }
 
-export function ApprovalFlowSettings({ actor, ruleId, onBack }: { actor: OperationActor; ruleId: string; onBack: () => void }) {
+export function ApprovalFlowSettings({ actor, ruleId, onBack, scope = 'request' }: { actor: OperationActor; ruleId: string; onBack: () => void; scope?: ApprovalScope }) {
   const [confirmBack, setConfirmBack] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [ruleRevision, setRuleRevision] = useState(0);
@@ -49,9 +50,9 @@ export function ApprovalFlowSettings({ actor, ruleId, onBack }: { actor: Operati
   }
   useEffect(() => {
     let active = true;
-    void readApprovalData(ruleId).then(data => { if (active) applyData(data); }).catch(error => { if (active) setError(error instanceof Error ? error.message : '审批配置读取失败。'); });
+    void readApprovalData(ruleId, scope).then(data => { if (active) applyData(data); }).catch(error => { if (active) setError(error instanceof Error ? error.message : '审批配置读取失败。'); });
     return () => { active = false; };
-  }, [ruleId]);
+  }, [ruleId, scope]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
@@ -74,7 +75,7 @@ export function ApprovalFlowSettings({ actor, ruleId, onBack }: { actor: Operati
     if (lock.current || !editable) return;
     const issue = approvalConfigIssue(config, users); if (issue) { setError(issue); return; }
     lock.current = true; setBusy(true); setError('');
-    try { const saved = await saveApprovalConfig(actor, ruleId, config, config.revision, ruleRevision); setRuleRevision(value => value + 1); setConfig(saved); setDirty(false); setNotice('审批流程配置已保存。'); }
+    try { const saved = await saveApprovalConfig(actor, ruleId, config, config.revision, ruleRevision, scope); setRuleRevision(value => value + 1); setConfig(saved); setDirty(false); setNotice('审批流程配置已保存。'); }
     catch (error) { setError(error instanceof Error ? error.message : '保存失败，请重试。'); }
     finally { lock.current = false; setBusy(false); }
   }
@@ -94,7 +95,6 @@ export function ApprovalFlowSettings({ actor, ruleId, onBack }: { actor: Operati
     <div className="approval-toolbar"><Field label="流程名称"><Input aria-label="审批流程名称" maxLength={80} value={config.name} disabled={!editable} onChange={event => edit({ ...config, name: event.target.value })} /></Field><p className="approval-policy-note">每级一位审批人，按顺序审批；任一环节驳回均退回申请人。</p></div>
     {error && <p className="sr-error" role="alert">{error}</p>}{notice && <output className="submission-rule-notice block">{notice}</output>}
     {!ready ? <p className="approval-empty">{error ? '无法加载审批配置，请刷新页面重试。' : '正在读取审批配置…'}</p> : <>
-    {!enabled && <p className="sr-help">该规则已停用，审批流程仅供查看。</p>}
     {!allowed && <p className="sr-help">仅系统管理员可维护审批流程。</p>}
     <div className="approval-designer">
       <section className="approval-canvas" aria-label="审批流程画布">

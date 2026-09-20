@@ -1,3 +1,4 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
 import { canPerformAssessmentRole } from './assessment-routing.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
 import type { OperationActor } from './request-operations';
@@ -35,7 +36,7 @@ export function currentHardwareReview(record: ServiceRequest): HardwareReview | 
 export function hardwarePassIssue(record: ServiceRequest, users: InternalUser[]): string | null {
   if (!hardwareItems(record).length) return null;
   const hardware = record.operations?.assessment?.hardware;
-  if (!hardware || (record.operations?.assessment?.routing && !canPerformAssessmentRole(record, { id: hardware.reviewerId, name: hardware.reviewer, role: 'SmartX 硬件产品经理' }, 'hardware', users)) || !hardwareReviewers(users).some(user => user.id === hardware.reviewerId)) return '请由已启用的硬件产品经理完成评估。';
+  if (!hardware || (!isDemoAdministrator({ id: hardware.reviewerId, name: hardware.reviewer, role: fixedIdentityRoles[hardware.reviewerId] ?? '' }, users) && ((record.operations?.assessment?.routing && !canPerformAssessmentRole(record, { id: hardware.reviewerId, name: hardware.reviewer, role: 'SmartX 硬件产品经理' }, 'hardware', users)) || !hardwareReviewers(users).some(user => user.id === hardware.reviewerId)))) return '请由已启用的硬件产品经理完成评估。';
   if (currentHardwareReview(record)?.outcome !== '评估通过') return '硬件产品经理评估尚未通过或材料已变化，请由硬件产品经理重新评估。';
   return null;
 }
@@ -53,7 +54,7 @@ export function hardwareAssessmentSaveIssue(next: ServiceRequest, previous: Serv
   }
   const changed = !same(before?.hardware, after?.hardware);
   const roundsChanged = !same(before?.rounds ?? [], after?.rounds ?? []);
-  const manager = !!actor?.id && actor.role === 'SmartX 项目经理' && (!before?.managerId || before.managerId === actor.id);
+  const manager = isDemoAdministrator(actor, users) || !!actor?.id && actor.role === 'SmartX 项目经理' && (!before?.managerId || before.managerId === actor.id);
   if (!same(before?.effort, after?.effort) && !manager) return '人天核定由负责项目经理执行。';
   if (passed(previous)) {
     return changed || roundsChanged ? '材料评估已通过，双方评估结论已锁定。' : null;
@@ -62,7 +63,7 @@ export function hardwareAssessmentSaveIssue(next: ServiceRequest, previous: Serv
     if (previous.status !== '待评估' || next.status !== '待评估' || !hardwareItems(previous).length || !actor?.id) return '仅待评估阶段可维护硬件产品经理评估。';
     if (hardwareReviewSource(previous) !== hardwareReviewSource(next)) return '材料已变化，请刷新后重新评估。';
     const old = before?.hardware, hardware = after?.hardware;
-    if (!isHardwareProductManager(actor) || !hardwareReviewers(users).some(user => user.id === actor.id)) return '仅已启用的硬件产品经理可提交硬件产品经理评估。';
+    if (!isDemoAdministrator(actor, users) && (!isHardwareProductManager(actor) || !hardwareReviewers(users).some(user => user.id === actor.id))) return '仅已启用的硬件产品经理可提交硬件产品经理评估。';
     if (!hardware || hardware.reviewerId !== actor.id || hardware.reviewer !== actor.name) return '评估人必须是实际提交评估的硬件产品经理。';
     // Keep the legacy grouping key for stored records; it no longer grants assignment permissions.
     if (!hardware.assignmentId || (old && hardware.assignmentId !== old.assignmentId)) return '评估记录已更新，请刷新后重试。';

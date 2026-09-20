@@ -1,6 +1,5 @@
 import type { InternalUser } from './service-requests';
 
-export const approvalConfigId = 'request-approval-flow-config';
 export type ApprovalNode = {
   id: string;
   name: string;
@@ -16,12 +15,9 @@ export function newApprovalNode(kind: 'normal' | 'org' = 'normal'): ApprovalNode
 }
 export function emptyApprovalConfig(): ApprovalConfig { return { version: 1, revision: 0, name: '服务请求审批流程', nodes: [] }; }
 
-/** Migrate retired node settings without guessing individual approvers for a role. */
 export function normalizeApprovalConfig(config: ApprovalConfig): ApprovalConfig {
-  return { ...structuredClone(config), nodes: config.nodes.map(node => {
-    const { condition: _condition, threshold: _threshold, role: _role, method: _method, missing: _missing, source, ...rest } = structuredClone(node) as Omit<ApprovalNode, 'source'> & { source: ApprovalNode['source'] | 'role'; condition?: unknown; threshold?: unknown; role?: unknown; method?: unknown; missing?: unknown };
-    return { ...rest, stopUserIds: source === 'org' ? rest.stopUserIds ?? [] : [], source: source === 'role' ? 'people' : source, userIds: source === 'people' && Array.isArray(rest.userIds) && rest.userIds.length === 1 ? rest.userIds : [], name: rest.name === '条件审批' ? '普通审批' : rest.name, reject: 'return' };
-  }) };
+  if (config.nodes.some(node => !['people', 'manager', 'org'].includes(node.source) || node.reject !== 'return' || ['condition', 'threshold', 'role', 'method', 'missing'].some(key => Object.hasOwn(node, key)))) throw new Error('审批节点格式无效，请使用当前配置。');
+  return structuredClone(config);
 }
 
 /** A reporting relationship is a directed link, never a copied display name. */

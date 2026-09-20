@@ -1,8 +1,7 @@
-import { demoSubmissionRuleReferences } from './demo-submission-rules.ts';
+import { withRequestCollaborators } from './request-collaboration.ts';
 import { writeAddress } from './request-address.ts';
 import {
-  businessObjectsEnabled, matchesObjectProduct, newItem, newRequest, openDatabase,
-  requestIssues, resolveRequestConfig, serviceAvailableForRequest, withRequestContact,
+businessObjectsEnabled,matchesObjectProduct,newItem,newRequest,requestIssues,resolveRequestConfig,serviceAvailableForRequest
 } from './service-requests.ts';
 import type { CatalogService, ContactRef, CustomerRef, InternalUser, ObjectRef, RequestConfig, ServiceRequest } from './service-requests';
 import { operationIdentities } from './internal-users.ts';
@@ -29,8 +28,6 @@ type Sources = {
   partners?: { id: string; name?: string }[];
 };
 type Reference = { id: string; payload?: unknown };
-export const requestSamplesMarker = 'service-request-samples-v1';
-export const presalesRequestSamplesMarker = 'request-samples-presales-2026-09-16-v1';
 
 // Build actual workflow snapshots, not status-only placeholders. Existing records
 // participate in reservation calculations but are never changed by initialization.
@@ -83,7 +80,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     const at = new Date(now.getTime() - (selections.length + 1 - index) * 86400000).toISOString();
     const expected = new Date(now.getTime() + (7 + index * 2) * 86400000).toISOString().slice(0, 10);
     const applicant = index === 9 ? identities.find(person => person.role === 'SmartX 系统管理员') ?? sales : sales;
-    let record = newRequest(`【示例】${titles[index]}`, customer.id, applicant.name, contact.id, applicant.id, applicant.role);
+    let record = newRequest(`【示例】${titles[index]}`, customer.id, applicant.name, applicant.id, applicant.role);
     record = { ...record, id, createdAt: at, updatedAt: at, expectedServiceDate: expected,
       requestType: index >= 13 ? '技术评估' : '服务交付',
       description: '演示数据：用于展示服务申请、材料评估及客户确认流程，不代表真实交付承诺。',
@@ -128,7 +125,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     record.externalCollaborators = [{ contactId: contact.id, name: contact.name, phone: contact.phone ?? '', email: contact.email ?? '' }];
     const presales = identities.find(person => person.role === 'SmartX 售前工程师');
     if (presales && !record.internalParticipants?.some(person => person.userId === presales.id)) record.internalParticipants = [...(record.internalParticipants ?? []), { userId: presales.id, name: presales.name }];
-    record = withRequestContact(record, sources.contacts, sources.customers, sources.users);
+    record = withRequestCollaborators(record, sources.contacts, sources.customers, sources.users);
     const issues = requestIssues(record, { ...sources, audience: 'internal' });
     if (issues.length) throw new Error(`样例申请校验未通过：${issues.join('、')}`);
     record = appendActivity(record, sales, '提交', '创建示例申请', '本地初始化的演示数据。', at);
@@ -223,48 +220,4 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     result.push(record);
   }
   return result;
-}
-
-// Marker and all five requests commit together. This also serializes concurrent
-// tabs/React effects and prevents deleted or edited samples from being recreated.
-export async function initializeRequestSamples(sources: Sources) {
-  const db = await openDatabase();
-  try {
-    return await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(['requests', 'references', 'configs'], 'readwrite');
-      const requests = tx.objectStore('requests');
-      const refs = tx.objectStore('references');
-      const marker = refs.get(requestSamplesMarker);
-      const ruleReferences = refs.getAll();
-      ruleReferences.onsuccess = () => {
-        try {
-          for (const reference of demoSubmissionRuleReferences(ruleReferences.result)) refs.put(reference);
-        } catch (error) { reject(error); tx.abort(); }
-      };
-      tx.oncomplete = () => resolve();
-      tx.onabort = () => reject(tx.error ?? new Error('初始化服务申请已中止。'));
-      tx.onerror = () => reject(tx.error);
-      marker.onsuccess = () => {
-        if (marker.result) return;
-        const records = requests.getAll();
-        const references = refs.getAll();
-        const configs = tx.objectStore('configs').getAll();
-        let pending = 3;
-        const finish = () => {
-          if (--pending) return;
-          try {
-            const samples = buildRequestSamples(sources, records.result, configs.result, references.result);
-            for (const sample of samples) requests.add(sample);
-            refs.add({ id: requestSamplesMarker, payload: { initializedAt: new Date().toISOString() } });
-          } catch (error) {
-            reject(error);
-            tx.abort();
-          }
-        };
-        records.onsuccess = references.onsuccess = configs.onsuccess = finish;
-      };
-    });
-  } finally {
-    db.close();
-  }
 }

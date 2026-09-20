@@ -1,3 +1,4 @@
+import { isDemoAdministrator } from './demo-permissions.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
 import { canPerformAssessmentRole } from './assessment-routing.ts';
 import { routingUsers } from './assessment-routing-schema.ts';
@@ -7,7 +8,7 @@ export function canCancelRequest(record: ServiceRequest, actor: OperationActor |
   return ['待评估', '待确认', '待受理'].includes(record.status)
     && !!record.operations?.assessment?.managerId
     && canPerformAssessmentRole(record, actor, 'manager', users)
-    && routingUsers(users, 'manager').some(user => user.id === actor?.id);
+    && (isDemoAdministrator(actor, users) || routingUsers(users, 'manager').some(user => user.id === actor?.id));
 }
 
 export function cancelRequest(record: ServiceRequest, actor: OperationActor, users: InternalUser[], reason: string, now = new Date().toISOString()): ServiceRequest {

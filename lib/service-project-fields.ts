@@ -5,10 +5,11 @@ export const initialProjectFields: RequestField[] = [
   { id: 'name', name: '项目名称', type: 'text', options: [] },
   {
     id: 'expectedServiceDate',
-    name: '期望服务日期',
+    name: '计划执行日期',
     type: 'date',
     options: [],
   },
+  { id: 'plannedCompletionDate', name: '计划完成日期', type: 'date', options: [] },
   {
     id: 'customerId',
     name: '客户',
@@ -43,7 +44,8 @@ export const initialProjectFields: RequestField[] = [
 
 export const projectFieldRules: Record<string, string> = {
   name: '必填，最多 100 字',
-  expectedServiceDate: '必填，使用服务申请的日期格式',
+  expectedServiceDate: '必填，启动项目时校验',
+  plannedCompletionDate: '启动项目时必填，不能早于计划执行日期',
   customerId: '必填，关联客户对象，单选',
   serviceProviderId: '合作伙伴创建时固定为所属企业；内部创建时可选择北京志凌海纳科技有限公司或合作伙伴',
   note: '选填',
@@ -66,7 +68,7 @@ export function normalizeProjectFields(
       ...stored,
       ...seed,
       referenceTarget: seed.referenceTarget,
-      name: seed.id === 'expectedServiceDate' && stored?.name?.trim() === '期望服务时间'
+      name: seed.id === 'expectedServiceDate' && ['期望服务时间', '期望服务日期'].includes(stored?.name?.trim() ?? '')
         ? seed.name
         : stored?.name?.trim() || seed.name,
       options: structuredClone(seed.options),

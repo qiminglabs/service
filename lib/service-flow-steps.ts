@@ -1,9 +1,17 @@
+import {
+  validateExecutionFormStep,
+  type ExecutionForm,
+} from './service-execution-forms.ts';
+import {
+  validateStepDeliverables,
+  type StepDocument,
+  type StepFile,
+} from './service-step-deliverables.ts';
 export const serviceStepTypes = {
   form: '表单',
   upload: '上传文件',
   document: '文档',
-  checklist: '确认清单',
-  combined: '综合执行',
+  combined: '通用',
 } as const;
 export type ServiceStepType = keyof typeof serviceStepTypes;
 export type StepInstruction =
@@ -27,12 +35,18 @@ export type ServiceFlowStep = {
   deliverToCustomer: boolean;
   materials: StepInstruction[];
   formFields: StepFormField[];
+  executionFormId?: string;
+  executionForm?: ExecutionForm;
   upload: { minFiles: number; formats: string };
   documentTemplate: string;
+  documents?: StepDocument[];
+  files?: StepFile[];
   phase: string;
+  phaseId?: string;
   subtitle: string;
   instructions: string;
   checklist: string[];
+  generalDescription?: string;
   recordRequired: boolean;
   attachmentRequired: boolean;
 };
@@ -117,7 +131,7 @@ export function parseServiceFlowSteps(
   )
     throw new Error('每个流程需配置 1–100 个有效步骤。');
   let totalBytes = 0;
-  steps.forEach((step, index) => {
+  steps.forEach((step) => {
     if (
       !required(step.name) ||
       !text(step.phase, 120) ||
@@ -130,35 +144,14 @@ export function parseServiceFlowSteps(
       typeof step.attachmentRequired !== 'boolean'
     )
       fail();
-    if (step.schemaVersion === undefined) {
-      Object.assign(step, {
-        schemaVersion: 2,
-        sequence: index + 1,
-        enabled: true,
-        required: true,
-        type: 'combined',
-        deliverToCustomer: false,
-        materials: step.instructions
-          ? [
-              {
-                id: `${step.id}-instruction`,
-                kind: 'text',
-                content: step.instructions,
-              },
-            ]
-          : [],
-        formFields: [
-          {
-            id: `${step.id}-record`,
-            name: '执行记录',
-            type: 'textarea',
-            required: step.recordRequired,
-          },
-        ],
-        upload: { minFiles: 1, formats: '' },
-        documentTemplate: '',
-      });
+    if (step.type === 'combined') {
+      step.deliverToCustomer = false;
     }
+    if (
+      step.generalDescription !== undefined &&
+      !text(step.generalDescription, 60000)
+    )
+      throw new Error('通用步骤说明不能超过 60000 字。');
     if (
       step.schemaVersion !== 2 ||
       !Number.isInteger(step.sequence) ||
@@ -201,7 +194,7 @@ export function parseServiceFlowSteps(
     }
     if (
       !Array.isArray(step.formFields) ||
-      step.formFields.length > 50 ||
+      step.formFields.length > 100 ||
       !unique(step.formFields) ||
       (step.type === 'form' && !step.formFields.length) ||
       step.formFields.some(
@@ -225,14 +218,14 @@ export function parseServiceFlowSteps(
         '上传文件数量须为 1–20，格式以扩展名填写，例如 .pdf,.docx。',
       );
     if (!text(step.documentTemplate, 20000)) fail();
-    if (step.type === 'checklist' && !step.checklist.length)
-      throw new Error('确认清单类型至少需要一个确认项。');
+    validateExecutionFormStep(step);
+    totalBytes += validateStepDeliverables(step);
     step.name = step.name.trim();
     step.phase = step.phase.trim();
     step.checklist = step.checklist.map((item) => item.trim());
   });
   if (totalBytes > 50 * 1024 * 1024)
-    throw new Error('每个流程的说明附件合计不能超过 50 MB。');
+    throw new Error('每个流程的说明附件和文档模板合计不能超过 50 MB。');
   if (new Set(steps.map((step) => step.sequence)).size !== steps.length)
     throw new Error('步骤顺序重复，请重新排序。');
   return orderedServiceSteps(steps);

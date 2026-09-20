@@ -1,20 +1,23 @@
+import { canManageProjectAsManager, isPartnerProjectCreator, projectCustomerConfirmationLocked } from './service-project-work-order-policy.ts';
+import { fixedIdentityRoles } from './internal-users.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
 import type { OperationActor } from './request-operations';
 import type { ServiceProjectRecord } from './service-projects';
-import { routingUsers } from './assessment-routing-schema.ts';
 import { appendProjectActivity } from './service-project-activity.ts';
 import { projectRequestSnapshots } from './project-request-snapshot.ts';
 import { activeRequestAssetAllocations, type ProjectReservationRelease } from './project-reservation-release.ts';
 import { activeEntitlementAllocations } from './request-entitlement-reservations.ts';
 import { sumDays } from './day-quantity.ts';
 
+export function canManageProjectLifecycle(project: ServiceProjectRecord, actor: OperationActor, users: InternalUser[]) {
+  return isPartnerProjectCreator(project, actor) || (canManageProjectAsManager(project, actor) && fixedIdentityRoles[actor.id] === actor.role && users.some(user => user.id === actor.id && user.status === '启用'));
+}
 export function canCancelServiceProject(project: ServiceProjectRecord, actor: OperationActor, users: InternalUser[]) {
-  return ['待启动', '进行中', '待复核', '待确认'].includes(project.status)
-    && actor.role === 'SmartX 项目经理' && routingUsers(users, 'manager').some(user => user.id === actor.id);
+  return !projectCustomerConfirmationLocked(project) && ['待启动', '进行中', '待复核', '待确认', '已暂停'].includes(project.status) && canManageProjectLifecycle(project, actor, users);
 }
 export function cancelServiceProject(project: ServiceProjectRecord, actor: OperationActor, users: InternalUser[], reason: string,
   source?: ServiceRequest, at = new Date().toISOString()): { project: ServiceProjectRecord; source?: ServiceRequest } {
-  if (!canCancelServiceProject(project, actor, users)) throw new Error('仅启用的项目经理可取消待启动、进行中、待复核或待确认的服务项目。');
+  if (!canCancelServiceProject(project, actor, users)) throw new Error('仅负责项目经理、伙伴项目创建人或管理员可取消客户尚未确认的项目。');
   if (!reason.trim()) throw new Error('请填写取消原因。');
   let next = structuredClone(project);
   let releasedSource: ServiceRequest | undefined;
@@ -48,7 +51,12 @@ export function cancelServiceProject(project: ServiceProjectRecord, actor: Opera
     }
     if (next.requestConversion) next.requestConversion.assessmentSnapshot = structuredClone(snapshot);
   }
+  next.workOrders = next.workOrders?.map(order => order.status === '已取消' ? order : ({
+    ...order, status: '已取消', suspension: undefined, updatedAt: at,
+    cancellation: { at, actorId: actor.id, actorName: actor.name, reason: reason.trim(), previousStatus: order.status },
+  }));
   next = { ...next, status: '已取消', revision: project.revision + 1, updatedAt: at,
-    cancellation: { at, actorId: actor.id, actor: actor.name, reason: reason.trim(), fromStatus: project.status } };
+    cancellation: { at, actorId: actor.id, actor: actor.name, reason: reason.trim(), fromStatus: project.status === '已暂停' ? project.suspension?.fromStatus ?? '进行中' : project.status } };
+  delete next.suspension;
   return { project: appendProjectActivity(next, actor, '项目', '取消服务项目', reason.trim(), at), source: releasedSource };
 }

@@ -8,13 +8,13 @@ import type { ProjectCreation, ServiceProject } from './request-projects';
 import type { ServiceProjectRecord } from './service-projects';
 import type { Partner } from './partner-directory';
 import { projectServiceProviders } from './service-project-providers.ts';
-import { mapItemFields, type ProjectItemFieldMapping, type ItemMappingDirectory } from './project-item-field-mapping.ts';
+import { mapItemFields,type ItemMappingDirectory } from './project-item-field-mapping.ts';
 
 export const requestProjectMappingId = 'request-project-mapping';
 export const mappingRules = [
   { target: 'name', label: '项目名称', section: '请求字段', sources: [['title', '申请主题'], ['description', '申请说明']], initial: 'title' },
   { target: 'customerId', label: '客户', section: '请求字段', sources: [['customerId', '请求所属客户']], initial: 'customerId' },
-  { target: 'expectedServiceDate', label: '期望服务日期', section: '请求字段', sources: [['expectedServiceDate', '期望服务日期']], initial: 'expectedServiceDate' },
+  { target: 'expectedServiceDate', label: '计划执行日期', section: '请求字段', sources: [['expectedServiceDate', '期望服务日期']], initial: 'expectedServiceDate' },
   { target: 'note', label: '项目说明', section: '请求字段', sources: [['description', '申请说明'], ['title', '申请主题'], ['id', '请求编号'], ['', '不映射']], initial: 'description' },
   { target: 'serviceProviderId', label: '服务方', section: '请求字段', sources: [['smartx', '北京志凌海纳科技有限公司'], ['', '暂不指定']], initial: 'smartx' },
   { target: 'serviceId', label: '服务目录', section: '服务项', sources: [['serviceId', '申请项的服务目录']], initial: 'serviceId' },
@@ -28,8 +28,6 @@ export type MappingTarget = typeof mappingRules[number]['target'] | 'values';
 export type RequestProjectMapping = {
   revision: number;
   customFields?: CustomFieldMapping[];
-  // Retained only to read historical project snapshots.
-  itemFields?: ProjectItemFieldMapping[];
   itemMappingMode?: 'fixed';
   fields: Record<Exclude<MappingTarget, 'values'>, string> & { values?: string };
   readonly?: Partial<Record<MappingTarget, boolean>>;
@@ -61,14 +59,14 @@ export function parseProjectMapping(raw?: unknown): RequestProjectMapping {
     for (const rule of mappingRules.filter(rule => rule.section !== '请求字段')) delete config.readonly[rule.target];
   }
   (config.readonly ??= {}).customerId = true;
-  delete config.itemFields;
   config.itemMappingMode = 'fixed';
-  return structuredClone(config);
+  const { revision, fields, readonly, customFields, itemMappingMode, updatedAt, updatedBy } = config;
+  return structuredClone({ revision, fields, readonly, customFields, itemMappingMode, updatedAt, updatedBy });
 }
 export function mappedProjectName(record: ServiceRequest, mapping: RequestProjectMapping) {
   return (mapping.fields.name === 'description' ? record.description : record.title)?.trim().slice(0, 100) || record.title;
 }
-export function mappedProjectItem(item: RequestItem, mapping: RequestProjectMapping, directory: ItemMappingDirectory = {}): RequestItem {
+export function mappedProjectItem(item: RequestItem, directory: ItemMappingDirectory = {}): RequestItem {
   const result = structuredClone(item);
   Object.assign(result, mapItemFields(item, directory));
   return result;
@@ -81,7 +79,7 @@ export function mappedServiceProject(record: ServiceRequest, project: ServicePro
   if (providerSource && providers.length !== 1) throw new Error('服务方配置无效，请重新配置映射。');
   const expectedServiceDate = project.expectedServiceDate || record.expectedServiceDate || '';
   const date = new Date(`${expectedServiceDate}T12:00:00Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(expectedServiceDate) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== expectedServiceDate) throw new Error(`请为“${project.name}”补充有效的期望服务日期。`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expectedServiceDate) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== expectedServiceDate) throw new Error(`请为“${project.name}”补充有效的计划执行日期。`);
   if (!record.customerId) throw new Error('请求缺少所属客户，无法创建项目。');
   const noteSource = mapping.fields.note as 'description' | 'title' | 'id' | '';
   return {
@@ -94,7 +92,7 @@ export function mappedServiceProject(record: ServiceRequest, project: ServicePro
     items: project.workOrders.map(order => {
       const source = record.items.find(item => item.id === order.sourceItemId);
       if (!source) throw new Error('来源服务项已变化，请重新创建。');
-      return mappedProjectItem(source, mapping, directory);
+      return mappedProjectItem(source, directory);
     }),
     collaboratorAssignmentsVersion: 1,
     collaborators: directory ? assignInitialProjectCollaborators(record.customerId, { id: creation.actorId, name: creation.actor, role: 'SmartX 项目经理' }, { customers: directory.customers ?? [], users: directory.users ?? [], contacts: directory.contacts ?? [], partners: directory.partners ?? [], partnerUsers: directory.partnerUsers ?? [] }, {}, record) : { internal: [{ id: creation.actorId, name: creation.actor, details: '负责项目经理', assignmentRoles: ['项目经理'] }] },

@@ -1,0 +1,586 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ArrowUpRight,
+  BriefcaseBusiness,
+  CalendarDays,
+  CheckCheck,
+  ClipboardList,
+  CircleAlert,
+  TriangleAlert,
+} from 'lucide-react';
+import {
+  readLocal,
+  canAccessRequest,
+  type ServiceRequest,
+  type CustomerRef,
+} from '@/lib/service-requests';
+import { readServiceProjects } from '@/lib/service-project-store';
+import { projectReviewContext } from '@/lib/service-project-review-store';
+import {
+  parseServiceProviderConfig,
+  serviceProviderSettingsId,
+} from '@/lib/service-provider-settings';
+import type { ServiceProjectRecord } from '@/lib/service-projects';
+import type { OperationActor } from '@/lib/request-operations';
+import type { ProjectCollaboratorDirectory } from '@/lib/service-project-collaborators';
+import { isResponsibleProjectManager } from '@/lib/service-project-work-order-policy';
+import { canPerformAssessmentRole } from '@/lib/assessment-routing';
+import { requestNextStep } from '@/lib/request-next-step';
+import { ExecutingEngineers } from '@/components/executing-engineers';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  activeDashboardProject,
+  projectFollowups,
+  projectOverdue,
+  projectProgress,
+  projectRisks,
+  type ProjectDashboardContext,
+} from '@/lib/project-manager-dashboard';
+
+type Props = {
+  actor: OperationActor;
+  customers: CustomerRef[];
+  directory: ProjectCollaboratorDirectory;
+  onOpen: (
+    view: 'projects' | 'requests',
+    id?: string,
+    workOrderId?: string,
+  ) => void;
+};
+type Followup = {
+  id: string;
+  title: string;
+  customerId: string;
+  kind: string;
+  view: 'projects' | 'requests';
+  date: string;
+  overdue: boolean;
+};
+const categories = [
+  '全部事项',
+  '请求评估',
+  '请求受理',
+  '项目启动',
+  '工单派单',
+  '工时确认',
+  '交付复核',
+  '待客户确认',
+];
+const localDay = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+export function ProjectManagerHome({
+  actor,
+  customers,
+  directory,
+  onOpen,
+}: Props) {
+  const [projects, setProjects] = useState<ServiceProjectRecord[]>([]);
+  const [requests, setRequests] = useState<ServiceRequest[]>([]);
+  const [reviewContext, setReviewContext] = useState<ProjectDashboardContext>();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [category, setCategory] = useState('全部事项');
+  const [projectFilter, setProjectFilter] = useState('全部在管');
+  const [query, setQuery] = useState('');
+  const [now, setNow] = useState(() => new Date());
+  const { id: actorId, name: actorName, role: actorRole } = actor;
+  useEffect(() => {
+    const reader = { id: actorId, name: actorName, role: actorRole };
+    let active = true;
+    const load = async () => {
+      try {
+        const [savedProjects, savedRequests, references] = await Promise.all([
+          readServiceProjects(reader),
+          readLocal<ServiceRequest>('requests'),
+          readLocal<{ id: string; payload?: unknown }>('references'),
+        ]);
+        if (!active) return;
+        const context: ProjectDashboardContext = {
+          ...projectReviewContext(references, savedRequests),
+          serviceProviders: parseServiceProviderConfig(
+            references.find((row) => row.id === serviceProviderSettingsId)
+              ?.payload,
+          ),
+        };
+        setProjects(savedProjects);
+        setReviewContext(context);
+        setRequests(
+          savedRequests.filter((record) =>
+            canAccessRequest(record, {
+              actor: reader,
+              directory: directory.users,
+            }),
+          ),
+        );
+        setNow(new Date());
+        setError('');
+      } catch (reason) {
+        if (active)
+          setError(
+            reason instanceof Error ? reason.message : '工作台数据读取失败。',
+          );
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void load();
+    window.addEventListener('focus', load);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', load);
+    };
+  }, [actorId, actorName, actorRole, directory.users]);
+  const today = localDay(now);
+  const weekEnd = new Date(now);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const until = localDay(weekEnd);
+  const scopedProjects = useMemo(
+    () =>
+      projects.filter(
+        (project) =>
+          actor.role === 'SmartX 系统管理员' ||
+          isResponsibleProjectManager(project, actor),
+      ),
+    [projects, actor],
+  );
+  const live = scopedProjects.filter(activeDashboardProject);
+  const dueSoon = live.filter(
+    (project) =>
+      project.plannedCompletionDate &&
+      project.plannedCompletionDate >= today &&
+      project.plannedCompletionDate <= until,
+  );
+  const risks = live
+    .map((project) => ({
+      project,
+      labels: projectRisks(project, today, reviewContext),
+    }))
+    .filter((row) => row.labels.length)
+    .sort(
+      (a, b) =>
+        Number(projectOverdue(b.project, today)) -
+        Number(projectOverdue(a.project, today)),
+    );
+  const customerName = (id: string) =>
+    customers.find((customer) => customer.id === id)?.name ?? '未关联客户';
+  const followups: Followup[] = live.flatMap((project) =>
+    projectFollowups(project).map((kind) => ({
+      id: project.id,
+      title: project.name,
+      customerId: project.customerId,
+      kind,
+      view: 'projects' as const,
+      date: project.plannedCompletionDate ?? '',
+      overdue: projectOverdue(project, today),
+    })),
+  );
+  for (const request of requests) {
+    if (['草稿', '已取消', '已转服务项目', '评估完成'].includes(request.status))
+      continue;
+    if (!canPerformAssessmentRole(request, actor, 'manager', directory.users))
+      continue;
+    const next = requestNextStep(
+      request,
+      directory.users,
+      customers,
+      directory.contacts,
+    );
+    if (!next.actor?.includes('项目经理')) continue;
+    followups.push({
+      id: request.id,
+      title: request.title,
+      customerId: request.customerId,
+      kind: request.status === '待受理' ? '请求受理' : '请求评估',
+      view: 'requests',
+      date: request.expectedServiceDate ?? '',
+      overdue: false,
+    });
+  }
+  followups.sort(
+    (a, b) =>
+      Number(b.overdue) - Number(a.overdue) ||
+      (a.date || '9999').localeCompare(b.date || '9999') ||
+      a.id.localeCompare(b.id),
+  );
+  const shownTasks = followups.filter(
+    (task) => category === '全部事项' || task.kind === category,
+  );
+  const shownProjects = live
+    .filter(
+      (project) =>
+        (projectFilter === '全部在管' ||
+          (projectFilter === '近7天到期'
+            ? dueSoon.includes(project)
+            : projectFilter === '风险项目'
+              ? projectRisks(project, today, reviewContext).length > 0
+              : project.status === projectFilter)) &&
+        `${project.name} ${project.id} ${customerName(project.customerId)}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+    )
+    .sort(
+      (a, b) =>
+        Number(projectOverdue(b, today)) - Number(projectOverdue(a, today)) ||
+        (a.plannedCompletionDate || '9999').localeCompare(
+          b.plannedCompletionDate || '9999',
+        ),
+    );
+  const activities = scopedProjects
+    .flatMap((project) =>
+      (project.operations?.activities ?? []).map((activity) => ({
+        project,
+        activity,
+      })),
+    )
+    .sort((a, b) => b.activity.at.localeCompare(a.activity.at))
+    .slice(0, 10);
+  const focusProjects = (filter: string) => {
+    setProjectFilter(filter);
+    document
+      .getElementById('pm-projects')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  if (loading) return <output className="pm-home">正在读取工作台…</output>;
+  if (error)
+    return (
+      <div className="pm-home">
+        <p role="alert" className="sr-error">
+          {error}
+        </p>
+      </div>
+    );
+  return (
+    <div className="pm-home">
+      <div className="pm-toolbar">
+        <div>
+          <strong>{actor.name}，你好</strong>
+          <span>
+            {now.toLocaleDateString('zh-CN', {
+              month: 'long',
+              day: 'numeric',
+              weekday: 'long',
+            })}
+          </span>
+        </div>
+      </div>
+      <TooltipProvider delay={120}>
+        <div className="pm-metrics">
+          {[
+            {
+              label: '在管项目',
+              value: live.length,
+              note: '未完成、未取消的项目，包含已暂停项目。',
+              icon: BriefcaseBusiness,
+              tone: 'blue',
+              action: () => focusProjects('全部在管'),
+            },
+            {
+              label: '待办与跟进',
+              value: followups.length,
+              note: '待处理及待跟进事项，同一项目不同类型分别计数。',
+              icon: ClipboardList,
+              tone: 'purple',
+              action: () => {
+                setCategory('全部事项');
+                document
+                  .getElementById('pm-tasks')
+                  ?.scrollIntoView({ behavior: 'smooth' });
+              },
+            },
+            {
+              label: '近7天到期',
+              value: dueSoon.length,
+              note: '今天起 7 天内到期的在管项目，按计划完成日期统计。',
+              icon: CalendarDays,
+              tone: 'green',
+              action: () => focusProjects('近7天到期'),
+            },
+            {
+              label: '风险项目',
+              value: risks.length,
+              note: '逾期、暂停、客户拒绝确认或服务依据不足的在管项目，按项目去重。',
+              icon: TriangleAlert,
+              tone: 'orange',
+              action: () => focusProjects('风险项目'),
+            },
+          ].map((card) => (
+            <div className="pm-metric" key={card.label}>
+              <div className="pm-metric-top">
+                <div className="pm-metric-label">
+                  <span>{card.label}</span>
+                  <Tooltip>
+                    <TooltipTrigger
+                      className="pm-metric-info"
+                      aria-label={`${card.label}统计说明`}
+                    >
+                      <CircleAlert size={15} aria-hidden="true" />
+                    </TooltipTrigger>
+                    <TooltipContent
+                      className="pm-metric-tooltip"
+                      side="bottom"
+                      align="start"
+                    >
+                      <strong>{card.label}</strong>
+                      <p>{card.note}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <card.icon
+                  className={`pm-icon pm-${card.tone}`}
+                  size={17}
+                  aria-hidden="true"
+                />
+              </div>
+              <button
+                type="button"
+                className="pm-metric-action"
+                aria-label={`查看${card.label}：${card.value}项`}
+                onClick={card.action}
+              >
+                <strong>
+                  {card.value}
+                  <small>项</small>
+                </strong>
+                <ArrowUpRight size={15} aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </TooltipProvider>
+      <div className="pm-columns">
+        <section className="pm-panel" id="pm-tasks">
+          <div className="pm-panel-heading">
+            <h2>
+              待办与跟进 <span>{followups.length}</span>
+            </h2>
+            <select
+              aria-label="事项类型"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+            >
+              {categories.map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          </div>
+          <div className="pm-task-list">
+            {shownTasks.length ? (
+              shownTasks.map((task) => (
+                <button
+                  type="button"
+                  className="pm-task"
+                  key={`${task.view}:${task.id}:${task.kind}`}
+                  onClick={() => onOpen(task.view, task.id)}
+                >
+                  <span
+                    className={`pm-task-symbol ${task.overdue ? 'pm-orange' : 'pm-blue'}`}
+                  >
+                    <ClipboardList size={17} />
+                  </span>
+                  <span className="pm-task-copy">
+                    <strong>{task.title || task.id}</strong>
+                    <small>
+                      {customerName(task.customerId)} · {task.id}
+                    </small>
+                  </span>
+                  <span className="pm-task-end">
+                    <span className="pm-tag">{task.kind}</span>
+                    <small className={task.overdue ? 'pm-danger' : ''}>
+                      {task.date
+                        ? `${task.date}${task.overdue ? ' · 已逾期' : ''}`
+                        : '未设置日期'}
+                    </small>
+                  </span>
+                  <ArrowUpRight size={15} />
+                </button>
+              ))
+            ) : (
+              <Empty text="当前没有待跟进事项" />
+            )}
+          </div>
+        </section>
+        <section className="pm-panel">
+          <div className="pm-panel-heading">
+            <h2>最近动态</h2>
+          </div>
+          <div className="pm-activity-list">
+            {activities.length ? (
+              activities.map(({ project, activity }) => (
+                <button
+                  type="button"
+                  className="pm-activity"
+                  key={`${project.id}:${activity.id}`}
+                  onClick={() => onOpen('projects', project.id)}
+                >
+                  <span className="pm-activity-dot" />
+                  <span>
+                    <strong>
+                      {activity.actor} · {activity.title}
+                    </strong>
+                    <small>{project.name}</small>
+                  </span>
+                  <time>
+                    {new Date(activity.at).toLocaleString('zh-CN', {
+                      month: '2-digit',
+                      day: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })}
+                  </time>
+                </button>
+              ))
+            ) : (
+              <Empty text="暂无项目动态" />
+            )}
+          </div>
+        </section>
+      </div>
+      <section className="pm-panel" id="pm-projects">
+        <div className="pm-panel-heading">
+          <h2>
+            项目进展 <span>{shownProjects.length}</span>
+          </h2>
+          <button
+            type="button"
+            className="pm-link"
+            onClick={() => onOpen('projects')}
+          >
+            全部服务项目 <ArrowUpRight size={15} />
+          </button>
+        </div>
+        <div className="pm-project-toolbar">
+          <div className="pm-filters">
+            {[
+              '全部在管',
+              '待启动',
+              '进行中',
+              '待复核',
+              '待确认',
+              '已暂停',
+              '近7天到期',
+              '风险项目',
+            ].map((value) => (
+              <button
+                type="button"
+                aria-pressed={projectFilter === value}
+                key={value}
+                onClick={() => setProjectFilter(value)}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+          <input
+            aria-label="搜索项目"
+            placeholder="搜索项目 / 客户"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+        <div className="pm-table-wrap">
+          <table className="pm-table">
+            <thead>
+              <tr>
+                <th>项目 / 客户</th>
+                <th>项目经理</th>
+                <th>状态</th>
+                <th>步骤完成进度</th>
+                <th>计划完成</th>
+                <th>
+                  <span className="sr-only">操作</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shownProjects.map((project) => {
+                const progress = projectProgress(project);
+                return (
+                  <tr key={project.id}>
+                    <td>
+                      <button
+                        type="button"
+                        className="pm-project-name"
+                        onClick={() => onOpen('projects', project.id)}
+                      >
+                        {project.name}
+                      </button>
+                      <small>{customerName(project.customerId)}</small>
+                    </td>
+                    <td>
+                      {project.collaborators?.internal
+                        ?.filter((person) =>
+                          person.assignmentRoles?.includes('项目经理'),
+                        )
+                        .map((person) => person.name)
+                        .join('、') || '未指派'}
+                    </td>
+                    <td>
+                      <span className="pm-tag" data-status={project.status}>
+                        {project.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div
+                        className="pm-progress"
+                        title="已完成或跳过的步骤／总步骤"
+                      >
+                        <progress
+                          aria-label={`${project.name}已完成或跳过 ${progress.completed} 步／共 ${progress.total} 步`}
+                          value={progress.percent}
+                          max={100}
+                        />
+                        <span>
+                          {progress.completed}/{progress.total}
+                        </span>
+                      </div>
+                    </td>
+                    <td
+                      className={
+                        projectOverdue(project, today) ? 'pm-danger' : ''
+                      }
+                    >
+                      {project.plannedCompletionDate || '未设置'}
+                      {projectOverdue(project, today) && <small>已逾期</small>}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="pm-link"
+                        onClick={() => onOpen('projects', project.id)}
+                      >
+                        查看
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {!shownProjects.length && <Empty text="暂无符合条件的项目" />}
+        </div>
+      </section>
+      <ExecutingEngineers
+        projects={projects}
+        managerId={actor.role === 'SmartX 系统管理员' ? undefined : actor.id}
+        onOpen={(projectId, orderId) => onOpen('projects', projectId, orderId)}
+      />
+    </div>
+  );
+}
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="pm-empty">
+      <CheckCheck size={24} />
+      <span>{text}</span>
+    </div>
+  );
+}

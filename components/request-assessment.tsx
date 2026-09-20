@@ -1,4 +1,8 @@
 'use client';
+
+import { canActForUser } from '@/lib/demo-permissions';
+import { effectiveRequestApprovals, requestApprovalRemaining, requestApprovalRemainingDays } from '@/lib/request-approval-quota';
+import { requestBasisIsFrozen } from '@/lib/project-reservation-release';
 import { requestTypeOf } from '@/lib/request-types';
 
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
@@ -8,6 +12,7 @@ import { createApprovalExecution, type ApprovalExecution } from '@/lib/approval-
 import type { ValidationFailure } from '@/lib/submission-validation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ArrowRight, CheckCircle2, TriangleAlert } from 'lucide-react';
+import { AssessmentApprovalCard } from '@/components/assessment-approval-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,15 +34,13 @@ import {
   customerOwner,
   assessedEffort,
   currentPlan,
-  planAssetDays,
   planGap,
   assetAvailable,
   applyAssessmentAction,
 } from '@/lib/request-assessment';
-import { activeEntitlementAllocations, effortEntitlementAllocations, entitlementLabel } from '@/lib/request-entitlement-reservations';
+import { associatedEntitlementAllocations, effortEntitlementAllocations, entitlementLabel } from '@/lib/request-entitlement-reservations';
 import { assetDayMethod, requestDayRequirements, coverageByMethod, allocationMethodIssue, planDayGaps, formatDayRequirements } from '@/lib/request-asset-coverage';
 import type { AssessmentAction, GapApproval } from '@/lib/request-assessment';
-import { requestAudience } from '@/lib/request-collaboration';
 import { hardwareItems, currentHardwareReview, hardwarePassIssue } from '@/lib/request-hardware-assessment';
 import type { OperationActor, RequestAsset } from '@/lib/request-operations';
 import { readLocal } from '@/lib/service-requests';
@@ -143,7 +146,7 @@ export function RequestAssessment({
     effort = assessedEffort(record);
   const effortTotals = effortTotalsByMethod(record, a.effort?.lines ?? []);
   const presales = requestTypeOf(record) === '技术评估';
-  const entitlementAllocations = activeEntitlementAllocations(record);
+  const entitlementAllocations = associatedEntitlementAllocations(record);
   const passed = a.rounds.some((r) => r.outcome === '评估通过');
   const needsHardware = hardwareItems(record).length > 0;
   const hardwareRound = passed ? a.hardware?.rounds.at(-1) : currentHardwareReview(record);
@@ -155,16 +158,17 @@ export function RequestAssessment({
   const confirmationLabel = record.status === '已取消' ? '已取消' : customerConfirmed ? '客户已确认' : '等待客户确认';
   const gap = planGap(plan);
   const dayGaps = planDayGaps(plan);
-  const gapDescription = formatDayRequirements(dayGaps) || `${fmt(gap)} 人天`;
-  const approved =
-    plan &&
-    a.approvals.some(
-      (v) => v.planId === plan.id && v.state === '已通过' && v.days >= gap,
-    );
+  const approved = !!plan && requestApprovalRemainingDays(record) <= 1e-8;
   const waiting =
     plan &&
     a.approvals.some((v) => v.planId === plan.id && v.state === '待审批');
-  const currentApprovals = a.approvals.filter(item => item.planId === plan?.id && item.state !== '已失效').slice(-1);
+  const currentApprovals = a.approvals.filter(item => item.planId === plan?.id && item.state !== '已失效');
+  const approvedBasisRows = effectiveRequestApprovals(record).flatMap(approval => {
+    const requirements = approval.gaps?.length ? approval.gaps : dayGaps;
+    return requirements.length
+      ? requirements.map(row => ({ id: `${approval.id}:${row.method}`, method: row.method, days: row.days }))
+      : [{ id: approval.id, method: requestDayRequirements(record).length === 1 ? requestDayRequirements(record)[0].method : '—', days: approval.days }];
+  });
   const editable = record.status === '待评估' && !busy;
   const manager =
     canPerformAssessmentRole(record, actor, 'manager', users);
@@ -371,18 +375,19 @@ export function RequestAssessment({
                   {a.effort?.estimatedDays !== undefined && <div className="sr-pricing-primary"><span>预估总人天</span><strong>{fmt(a.effort.estimatedDays)} <small>人天</small></strong></div>}
                 </>}
               </div>
-              {!!a.effort?.lines?.length && <ul className="sr-pricing-details" aria-label="服务目录计价明细">
-                {a.effort.lines.map(line => <li key={line.itemId}>
-                  <div className="sr-pricing-service"><strong>{line.serviceName}</strong><span>{record.items.find(item => item.id === line.itemId)?.method}</span></div>
-                  <div className="sr-pricing-equation">
-                    <span><small>{line.kind === 'entitlement' ? '差额权益' : '预估'}</small> {line.kind === 'entitlement' ? (line.deficitEntitlements ? fmt(line.deficitEntitlements) : '—') : `${fmt(line.estimatedDays)} 人天`}</span>
-                    <span className="sr-pricing-operator" aria-hidden="true">×</span>
-                    <span><small>{line.kind === 'entitlement' ? '换算系数' : '计价系数'}</small> {fmt(line.priceCoefficient)}</span>
-                    <span className="sr-pricing-operator" aria-hidden="true">=</span>
-                    <strong aria-label={`计价 ${fmt(line.billableDays)} 人天`}>{fmt(line.billableDays)} <small>人天</small></strong>
-                  </div>
-                </li>)}
-              </ul>}
+              {!!a.effort?.lines?.length && <div className="sr-table-scroll">
+                <table className="sr-table app-list-table sr-assessment-effort-table" aria-label="服务目录计价明细">
+                  <colgroup><col style={{ width: '34%' }} /><col style={{ width: '14%' }} /><col style={{ width: '16%' }} /><col style={{ width: '18%' }} /><col style={{ width: '18%' }} /></colgroup>
+                  <thead><tr><th>服务目录</th><th>服务方式</th><th>预估人天</th><th>计价系数</th><th>计价人天</th></tr></thead>
+                  <tbody>{a.effort.lines.map(line => <tr key={line.itemId}>
+                    <td>{line.serviceName}{line.kind === 'entitlement' && <small>差额权益 {fmt(line.deficitEntitlements ?? 0)} 份 × 换算系数 {fmt(line.priceCoefficient)} = {fmt(line.billableDays)} 人天</small>}</td>
+                    <td>{record.items.find(item => item.id === line.itemId)?.method ?? '—'}</td>
+                    <td>{line.kind === 'entitlement' ? '—' : fmt(line.estimatedDays)}</td>
+                    <td>{line.kind === 'entitlement' ? '—' : fmt(line.priceCoefficient)}</td>
+                    <td>{fmt(line.billableDays)}</td>
+                  </tr>)}</tbody>
+                </table>
+              </div>}
             </>
           )}
           {a.effort?.note && (
@@ -400,109 +405,52 @@ export function RequestAssessment({
               </StepTitle>
               {plan && <RecordMeta author={plan.author} at={plan.at} />}
             </div>
-            {passed && effort !== undefined && basisOwner && editable && (
-              <Button
-                variant="default"
-                disabled={!loaded || disabled || !!waiting}
-                onClick={() => open('plan')}
-              >
-                关联依据
-              </Button>
-            )}
+            {passed && effort !== undefined && editable && (basisOwner || canSubmitGapApproval(record, actor, users)) && <div className="project-review-basis-actions">
+              {basisOwner && <Button variant="outline" disabled={!loaded || disabled || !!waiting} onClick={() => open('plan')}>补充服务依据</Button>}
+              <Button disabled={!loaded || disabled || !plan || !canSubmitGapApproval(record, actor, users) || !!waiting || !!approved || gap <= 1e-8} onClick={() => open('gap')}>发起额度审批</Button>
+            </div>}
           </div>
-          {waiting && (
-            <p className="sr-help">
-              额度特批审批中，人天核定与服务依据暂不可修改。
-            </p>
-          )}
           {plan ? (
             <>
-              <div className="sr-basis-assets">
-                <div className="sr-basis-assets-heading">
-                  <h5>客户资产占用</h5>
-                  {plan.allocations.length > 0 && <span>人天资产合计：{fmt(planAssetDays(plan))} 人天</span>}
-                </div>
-                {plan.allocations.length || entitlementAllocations.length ? (
-                  <ul className="sr-basis-asset-list" aria-label="已冻结人天资产及权益">
-                    {plan.allocations.map(asset => (
-                      <li key={asset.assetId}>
-                        <span className="sr-basis-asset-kind">人天资产</span>
-                        <div className="sr-basis-asset-name"><strong>{asset.name}</strong><small>{asset.assetId}</small></div>
-                        <strong className="sr-basis-asset-quantity">{fmt(asset.days)} <small>人天</small></strong>
-                        <Badge>已冻结</Badge>
-                      </li>
-                    ))}
-                    {entitlementAllocations.map(allocation => (
-                      <li key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
-                        <span className="sr-basis-asset-kind">{entitlementLabel(allocation.kind)}</span>
-                        <div className="sr-basis-asset-name"><strong>{allocation.name}</strong></div>
-                        <strong className="sr-basis-asset-quantity" aria-label={`冻结权益数量 ${allocation.quantity}`}>{allocation.quantity}</strong>
-                        <Badge>已冻结</Badge>
-                      </li>
-                    ))}
-                  </ul>
-                ) : <p className="sr-help">{plan.effort > 0 ? '暂无已冻结的客户资产。' : '本次无需占用客户资产。'}</p>}
+              <div className="sr-table-scroll">
+                <table className="sr-table app-list-table sr-assessment-effort-table" aria-label="已关联服务依据">
+                  <colgroup><col style={{ width: '34%' }} /><col style={{ width: '14%' }} /><col style={{ width: '34%' }} /><col style={{ width: '18%' }} /></colgroup>
+                  <thead><tr><th>服务依据</th><th>服务方式</th><th>来源</th><th>关联依据人天</th></tr></thead>
+                  <tbody>
+                    {plan.allocations.map(asset => <tr key={asset.assetId}>
+                      <td>{asset.name}<small>{asset.assetId} · {requestBasisIsFrozen(record) ? '已冻结' : '已关联'}</small></td>
+                      <td>{asset.method ?? assetDayMethod(asset) ?? '—'}</td>
+                      <td>客户资产</td>
+                      <td>{fmt(asset.days)}</td>
+                    </tr>)}
+                    {entitlementAllocations.map(allocation => <tr key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+                      <td>{entitlementLabel(allocation.kind)}<small>{allocation.name} · {requestBasisIsFrozen(record) ? '已冻结' : '已关联'} {allocation.quantity} 份</small></td>
+                      <td>—</td><td>服务权益</td><td>—</td>
+                    </tr>)}
+                    {approvedBasisRows.map(row => <tr key={row.id}>
+                      <td>{row.method === '—' ? '额度审批' : `${row.method}额度审批`}</td>
+                      <td>{row.method}</td><td>服务请求审批</td><td>{fmt(row.days)}</td>
+                    </tr>)}
+                    {!plan.allocations.length && !entitlementAllocations.length && !approvedBasisRows.length && <tr><td colSpan={4}>{plan.effort > 0 ? '暂无已关联的服务依据。' : '本次无需占用客户资产。'}</td></tr>}
+                  </tbody>
+                </table>
               </div>
-              {gap > 1e-8 && (
-                <div className="sr-assessment-gap">
-                  <div>
-                    <strong>人天资产缺口：{gapDescription}</strong>
-                    <p>
-                      {approved
-                        ? '额度特批已通过，可发起客户确认。'
-                        : waiting
-                          ? '已发起额度特批，等待指定上级审批。'
-                          : requestAudience(record) === 'internal'
-                            ? `由内部申请人或负责销售 ${plan.salesName} 发起额度特批，再交上级审批。`
-                            : `由 ${plan.salesName} 发起额度特批，再交上级审批。`}
-                    </p>
-                  </div>
-                  {editable &&
-                    canSubmitGapApproval(record, actor, users) &&
-                    !waiting &&
-                    !approved && (
-                      <Button disabled={disabled} onClick={() => open('gap')}>
-                        发起额度特批
-                      </Button>
-                    )}
-                </div>
-              )}
-              <p className="sr-basis-owner">负责销售：{plan.salesName}</p>
+
             </>
           ) : (
             <p className="sr-help">
               {effort === undefined
                 ? '完成人天核定后，关联客户资产或额外服务额度。'
-                : requestAudience(record) === 'internal'
-                  ? '请选择客户资产并填写冻结人天；不足部分由内部申请人或负责销售发起额度特批。'
-                  : '请选择客户资产并填写冻结人天；不足部分由负责销售发起额度特批。'}
+                : '尚未关联服务依据。'}
             </p>
           )}
           {currentApprovals.length > 0 && (
             <div className="sr-assessment-approvals">
               {currentApprovals.map((v) => (
-                <article key={v.id}>
-                  <div>
-                    <strong>{formatDayRequirements(v.gaps ?? dayGaps) || `${fmt(v.days)} 人天`}额度特批</strong>{' '}
-                    <Badge>{v.state}</Badge>
-                    <p>{v.reason}</p>
-                    <small>
-                      {v.author} 发起 · {v.workflow ? v.workflow.ruleName : '上级审批人：' + v.approver} · {stamp(v.at)}
-                    </small>
-                    {v.workflow && <ol className="sr-approval-step-history">{v.workflow.steps.map(step => <li key={step.id}>
-                      <strong>{step.nodeName} · {step.approver}</strong> <Badge>{step.state}</Badge>
-                      {step.cutoff && <small>审批截止人</small>}{step.fallback && <small>默认审批人兜底：{step.fallbackReason}</small>}
-                      {step.note && <p>{step.note} · {stamp(step.decidedAt!)}</p>}
-                    </li>)}</ol>}
-                    {v.note && (
-                      <p className="sr-ops-decision">
-                        {v.decidedBy}：{v.note}
-                      </p>
-                    )}
-                  </div>
+                <AssessmentApprovalCard key={v.id} approval={v} fallbackGaps={dayGaps}>
                   {editable &&
                     v.state === '待审批' &&
-                    v.approverId === actor.id && (
+                    canActForUser(actor, v.approverId) && (
                       <Button
                         variant="default"
                         disabled={disabled}
@@ -514,7 +462,7 @@ export function RequestAssessment({
                         处理审批
                       </Button>
                     )}
-                </article>
+                </AssessmentApprovalCard>
               ))}
             </div>
           )}
@@ -527,7 +475,7 @@ export function RequestAssessment({
               </StepTitle>
               {confirmedDecision ? <RecordMeta author={confirmedDecision.actor} at={confirmedDecision.at} /> : a.confirmation && <RecordMeta author={a.confirmation.by} at={a.confirmation.at} />}
             </div>
-            {!a.confirmation && basisOwner && editable && confirmationReady && (
+            {!a.confirmation && basisOwner && editable && (
               <Button disabled={!canConfirm || disabled} onClick={() => open('confirm')}>
                 发起客户确认<ArrowRight size={15} />
               </Button>
@@ -541,7 +489,7 @@ export function RequestAssessment({
               : a.confirmation ? '服务依据已提交，等待客户确认。' : !plan
               ? '完成服务依据关联后，可发起客户确认。'
               : gap > 1e-8 && !approved
-                ? '等待额度特批通过后，可发起客户确认。'
+                ? '等待服务依据充足后，可发起客户确认。'
                 : '服务依据已足额覆盖，请核对请求概览与预计消耗资产后发起客户确认。'}
           </p>
         </section></>}
@@ -561,7 +509,7 @@ export function RequestAssessment({
             <>
               <DialogHeader>
                 <DialogTitle>确认发起客户确认</DialogTitle>
-                <DialogDescription>请核对以下请求与预计消耗资产，确认后将提交给客户确认。</DialogDescription>
+                <DialogDescription>{requestBasisIsFrozen(record) ? '请核对以下请求与预计消耗资产，已关联资产及权益将继续保持冻结，提交给客户确认。' : '请核对以下请求与预计消耗资产，确认发起后将冻结已关联的人天资产及服务权益，并提交给客户确认。'}</DialogDescription>
               </DialogHeader>
               <div className="sr-confirmation-preview">
                 <section className="sr-customer-visible-panel">
@@ -584,10 +532,10 @@ export function RequestAssessment({
                     <h4>待客户确认的服务资产消耗</h4>
                     <CustomerVisibleBadge />
                   </div>
-                  {plan && (plan.allocations.length || activeEntitlementAllocations(record).length) ? (
+                  {plan && (plan.allocations.length || associatedEntitlementAllocations(record).length) ? (
                     <>
                       <div className="sr-assessment-allocations">
-                        {activeEntitlementAllocations(record).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+                        {associatedEntitlementAllocations(record).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
                           <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
                         </div>)}
                         {plan.allocations.map(asset => (
@@ -624,7 +572,6 @@ export function RequestAssessment({
             pricingContext={livePricingContext}
             record={record}
             users={users}
-            actor={actor}
             assets={assets}
             records={records}
             approval={approval}
@@ -647,7 +594,6 @@ function AssessmentForm({
   mode,
   record,
   users,
-  actor,
   assets,
   records,
   approval,
@@ -663,7 +609,6 @@ function AssessmentForm({
   pricingContext: EntitlementPricingContext;
   record: ServiceRequest;
   users: InternalUser[];
-  actor: OperationActor;
   assets: RequestAsset[];
   records: ServiceRequest[];
   approval: GapApproval | null;
@@ -697,6 +642,13 @@ function AssessmentForm({
   catch (error) { entitlementIssue = error instanceof Error ? error.message : '无法获取权益信息'; }
   const [effortNote, setEffortNote] = useState(a.effort?.note ?? '');
   const requirements = requestDayRequirements(record);
+  const remainingGaps = requestApprovalRemaining(record);
+  const defaultApprovalMethod = remainingGaps[0]?.method ?? requirements[0]?.method ?? '远程';
+  const [approvalMethod, setApprovalMethod] = useState<'远程' | '现场'>(defaultApprovalMethod);
+  const [approvalDays, setApprovalDays] = useState(String(remainingGaps.find(row => row.method === defaultApprovalMethod)?.days ?? requestApprovalRemainingDays(record)));
+  const requestedDays = parseDayQuantity(approvalDays);
+  const validApprovalDays = requestedDays !== null && requestedDays > 0 && requestedDays <= 100000;
+
   const [amounts, setAmounts] = useState<Record<string, string>>(
     Object.fromEntries(
       plan?.allocations.filter(v => { const asset = assets.find(asset => asset.id === v.assetId); return asset && requirements.some(row => row.method === assetDayMethod(asset)); }).map((v) => [v.assetId, String(v.days)]) ?? [],
@@ -729,8 +681,8 @@ function AssessmentForm({
     'hardware-review': '硬件产品经理评估',
     round: '材料评估',
     effort: '人天核定',
-    plan: '服务依据关联',
-    gap: '发起额度特批',
+    plan: '补充服务依据',
+    gap: '发起额度审批',
     decide: '上级审批额度特批',
   };
   async function submit() {
@@ -747,7 +699,7 @@ function AssessmentForm({
           .map(([assetId, v]) => ({ assetId, days: Number(v) })),
       });
     if (mode === 'gap')
-      return run({ type: 'gap-submit', reason: opinion });
+      return run({ type: 'gap-submit', method: approvalMethod, days: requestedDays ?? NaN, reason: opinion });
   }
   return (
     <>
@@ -761,7 +713,7 @@ function AssessmentForm({
           <DialogDescription>
             {mode === 'effort'
               ? '人天类按预估人天 × 计价系数计价；权益类按差额权益 × 换算系数计价。计价结果逐项四舍五入到一位小数后汇总。'
-              : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`}
+              : mode === 'gap' ? record.title : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`}
           </DialogDescription>
         )}
       </DialogHeader>
@@ -872,14 +824,14 @@ function AssessmentForm({
                 </div>) : <div><dt>计价人天</dt><dd><strong>{fmt(assessed ?? 0)}</strong><span>人天</span></dd></div>}
               </dl>
             </section>
-            <section className="sr-basis-card sr-basis-freezing" aria-label="冻结">
-              <div className="sr-basis-section-heading"><h4>冻结</h4></div>
+            <section className="sr-basis-card sr-basis-freezing" aria-label="关联">
+              <div className="sr-basis-section-heading"><h4>关联</h4></div>
             {!!effortEntitlementAllocations(a.effort?.lines).length && <section className="sr-asset-method-group">
-              <div className="sr-asset-method-heading"><h5>服务权益</h5><span>冻结数量</span></div>
+              <div className="sr-asset-method-heading"><h5>服务权益</h5><span>关联数量</span></div>
               <div className="sr-assessment-allocations">{effortEntitlementAllocations(a.effort?.lines).map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
                 <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
               </div>)}</div>
-              <p className="sr-help">保存服务依据后冻结权益；调整核定结果、退回草稿或取消请求时按人天规则释放。</p>
+              <p className="sr-help">保存后仅关联服务依据，发起客户确认时冻结资产及权益。</p>
             </section>}
             <div className="sr-asset-method-groups">
               {coverage.map(row => {
@@ -890,8 +842,8 @@ function AssessmentForm({
                       const available = assetAvailable(asset, records, record.id);
                       const maxDays = Math.max(0, Math.min(available ?? 0, row.days - (row.lockedDays - (Number(amounts[asset.id]) || 0))));
                       return <div key={asset.id}>
-                        <span><strong>{asset.name}</strong><small>{asset.id} · {available === null ? '余额未维护' : `可冻结 ${fmt(available)} 人天`}</small></span>
-                        <label className="sr-basis-freeze-input"><Input aria-label={`${asset.name} ${asset.id} 冻结${row.method}人天`} placeholder="0" type="number" min="0" step="0.1" max={maxDays}
+                        <span><strong>{asset.name}</strong><small>{asset.id} · {available === null ? '余额未维护' : `剩余可用 ${fmt(available)} 人天`}</small></span>
+                        <label className="sr-basis-freeze-input"><Input aria-label={`${asset.name} ${asset.id} 关联${row.method}人天`} placeholder="0" type="number" min="0" step="0.1" max={maxDays}
                           disabled={disabled || available === null} value={amounts[asset.id] ?? ''}
                           onChange={event => setAmounts(old => ({ ...old, [asset.id]: event.target.value }))} /><span>人天</span></label>
                       </div>;
@@ -899,20 +851,29 @@ function AssessmentForm({
                     {!matchingAssets.length && <p className="sr-help">暂无可用的{row.method}人天资产。</p>}
                   </div>
                   <div className="sr-asset-method-summary" aria-live="polite">
-                    <span>已选冻结 {fmt(row.lockedDays)} 人天</span>
+                    <span>已选关联 {fmt(row.lockedDays)} 人天</span>
                     {row.gap > 0 ? <strong className="sr-assessment-gap-preview">{row.method}资产缺少：{fmt(row.gap)} 人天</strong>
                       : <span>{row.method}资产已足额覆盖</span>}
                   </div>
                 </section>;
               })}
             </div>
-            {!coverage.length && !effortEntitlementAllocations(a.effort?.lines).length && <p className="sr-help">无需冻结资产或权益。</p>}
+            {!coverage.length && !effortEntitlementAllocations(a.effort?.lines).length && <p className="sr-help">无需关联资产或权益。</p>}
             {allocationIssue && <p className="sr-error" role="alert">{allocationIssue}</p>}
             </section>
           </div>
         )}
+        {mode === 'gap' && <>
+          <Field title="服务方式"><NativeSelect aria-label="服务方式" value={approvalMethod} disabled={disabled} onChange={event => {
+            const method = event.target.value as '远程' | '现场';
+            setApprovalMethod(method);
+            setApprovalDays(String(remainingGaps.find(row => row.method === method)?.days ?? 0));
+          }}><option value="远程">远程</option><option value="现场">现场</option></NativeSelect></Field>
+          <Field title="申请人天"><Input aria-label="申请人天" type="number" min="0.1" max="100000" step="0.1" value={approvalDays} disabled={disabled} onChange={event => setApprovalDays(event.target.value)} /></Field>
+          {approvalDays !== '' && !validApprovalDays && <p className="sr-error" role="alert">申请人天须大于 0，按 0.1 粒度填写且不超过 100000。</p>}
+        </>}
         {(mode === 'gap' || mode === 'decide') && (
-          <Field title={mode === 'gap' ? '额度特批原因 *' : '审批意见 *'}>
+          <Field title={mode === 'gap' ? '申请理由 *' : '审批意见 *'}>
             <Textarea
               rows={4}
               disabled={disabled}
@@ -970,7 +931,7 @@ function AssessmentForm({
             </Button>
           </>
         ) : (
-          <Button disabled={disabled || (mode === 'gap' && (!approvalRoute || !opinion.trim())) || (mode === 'hardware-review' && !opinion.trim()) || (mode === 'round' && outcome === '评估通过' && !!hardwareIssue) || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!pricingReady || !sales || !!allocationIssue))} onClick={() => void submit()}>
+          <Button disabled={disabled || (mode === 'gap' && (!approvalRoute || !opinion.trim() || !validApprovalDays)) || (mode === 'hardware-review' && !opinion.trim()) || (mode === 'round' && outcome === '评估通过' && !!hardwareIssue) || (mode === 'effort' && (!pricingReady || !!pricingIssue)) || (mode === 'plan' && (!pricingReady || !sales || !!allocationIssue))} onClick={() => void submit()}>
             {mode === 'hardware-review' ? '保存评估结论' : mode === 'round'
               ? '保存评估结论'
               : mode === 'effort'

@@ -1,3 +1,6 @@
+import { demoServiceExecution, populateDemoWorkOrders } from './demo-service-execution.ts';
+import { startProjectWorkOrders, submitProjectReview } from './service-work-orders.ts';
+import type { ServiceFlowConfig } from './service-flows';
 import type { ServiceRequest } from './service-requests';
 import type { PartnerUser } from './partner-directory';
 import type { buildRequestSamples } from './demo-service-requests';
@@ -5,20 +8,23 @@ import { operationIdentities } from './internal-users.ts';
 import { createServiceProjects } from './request-projects.ts';
 import { defaultProjectMapping, mappedServiceProject } from './request-project-mapping.ts';
 import { applyCustomerDecision } from './request-customer-decision.ts';
-import { newServiceProject, editServiceProject, serviceProjectStatuses, type ServiceProjectRecord, type ServiceProjectStatus } from './service-projects.ts';
+import { newServiceProject, serviceProjectStatuses, type ServiceProjectRecord, type ServiceProjectStatus } from './service-projects.ts';
 import { assignInitialProjectCollaborators } from './project-collaborator-assignment.ts';
 import { appendProjectActivity } from './service-project-activity.ts';
 import { addProjectSupplement } from './service-project-supplements.ts';
 import { applyProjectOperation } from './service-project-operations.ts';
 import { cancelServiceProject } from './service-project-cancellation.ts';
+import { applyProjectReview, calculateProjectReviewEffort, canManageProjectReviewBasis, projectReviewCoverage, updateProjectReviewReservations, settleProjectSource, type ProjectReviewContext } from './service-project-review.ts';
+import { parseMailConfig } from './service-mail-templates.ts';
 
 type Sources = Parameters<typeof buildRequestSamples>[0] & { partnerUsers?: (Partial<PartnerUser> & { id: string })[] };
 
 // Use the same conversion, lifecycle, cancellation and quota-release operations
 // as normal projects. The reset commits requests and projects together.
-export function buildProjectSamples(sources: Sources, samples: ServiceRequest[], now = new Date()) {
+export function buildProjectSamples(sources: Sources, samples: ServiceRequest[], now = new Date(), executionConfig?: ServiceFlowConfig, approvalRules?: ProjectReviewContext['rules']) {
   const requests = structuredClone(samples);
   const projects: ServiceProjectRecord[] = [];
+  const confirmationTargets = new Map<string, ServiceProjectStatus>();
   const directory = {
     ...sources,
     partners: (sources.partners ?? []).flatMap(partner => partner.name ? [{ ...partner, name: partner.name, status: '启用' as const }] : []),
@@ -28,22 +34,34 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
   const manager = operationIdentities(sources.users).find(user => user.role === 'SmartX 项目经理');
   if (!manager) throw new Error('初始化服务项目需要有效的项目经理。');
   const at = new Date(now.getTime() - 86400000).toISOString();
+  const execution = executionConfig ?? demoServiceExecution(sources, at).config;
+  const engineer = operationIdentities(sources.users).find(user => user.role === 'SmartX 服务工程师') ?? manager;
   const enrich = (project: ServiceProjectRecord, target: ServiceProjectStatus, emptyPublic = false) => {
+    if (engineer.id !== manager.id && !project.collaborators?.internal?.some(person => person.id === engineer.id)) project = { ...project, collaborators: { ...project.collaborators, internal: [...(project.collaborators?.internal ?? []), { id: engineer.id, name: engineer.name, details: '' }] } };
     project = addProjectSupplement(project, manager, { comment: '【演示】内部核对资源和交付范围。', files: [], mentions: [], externalVisible: false }, sources.users);
     if (!emptyPublic) {
       const contact = sources.contacts.find(person => person.customerId === project.customerId && person.status === '启用');
       if (contact) project = addProjectSupplement(project, { id: contact.id, name: contact.name, role: '客户' },
         { comment: '【演示】已确认服务窗口，请按计划安排实施。', files: [], mentions: [], externalVisible: true }, sources.users, directory);
     }
-    const operationAt = new Date().toISOString();
+    const operationAt = at;
     project = applyProjectOperation(project, { type: 'meeting-create', title: '【演示】项目启动沟通', participantNames: [manager.name] }, manager, operationAt);
     const meetingId = project.operations!.meetings[0].id;
     project = applyProjectOperation(project, { type: 'meeting-end', id: meetingId }, manager, operationAt);
     project = applyProjectOperation(project, { type: 'meeting-materials', id: meetingId, transcript: '【演示】确认服务范围、协作人和实施窗口，交付后由客户确认。' }, manager, operationAt);
-    project = applyProjectOperation(project, { type: 'worklog-add', date: at.slice(0, 10), startTime: '09:00', endTime: '10:30', category: '客户沟通', description: '【演示】启动会议与服务范围核对。' }, manager, operationAt);
     for (const status of serviceProjectStatuses.slice(1, serviceProjectStatuses.indexOf(target) + 1)) {
       if (status === '已取消') break;
-      project = editServiceProject(project, { ...project, status }, manager, sources.customers, directory.partners);
+      if (status === '进行中') {
+        project = startProjectWorkOrders({ ...project, plannedCompletionDate: new Date(new Date(`${project.expectedServiceDate}T12:00:00Z`).getTime() + 3 * 86400000).toISOString().slice(0, 10) }, manager, sources.users, execution, sources, at);
+        if (project.createdSite !== '合作伙伴中心') project = applyProjectOperation(project, { type: 'worklog-add', workOrderId: project.workOrders![0].id, date: at.slice(0, 10), startTime: '09:00', endTime: '10:30', category: '客户沟通', description: '【演示】启动会议与服务范围核对。' }, manager, operationAt);
+        const partner = project.createdSite === '合作伙伴中心' ? directory.partnerUsers.find(user => project.collaborators?.partner?.some(person => person.id === user.id)) : undefined;
+        const executor = partner ? { id: partner.id, name: partner.name, role: '合作伙伴服务工程师' } : engineer;
+        project = populateDemoWorkOrders(project, executor, emptyPublic ? 'cancel' : target === '进行中' ? 'progress' : 'complete', at);
+      } else if (status === '待确认' || status === '已完成') {
+        // Finish the review only after all source requests and projects exist.
+        confirmationTargets.set(project.id, target);
+        break;
+      } else if (status === '待复核') project = submitProjectReview(project, engineer, at);
       project = appendProjectActivity(project, manager, '项目', '变更项目状态', status);
     }
     return project;
@@ -73,8 +91,8 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
     }
     requests[index] = request;
   }
-  for (const [i, status] of (['待复核', '已完成', '待启动'] as const).entries()) {
-    const customer = sources.customers.find(customer => customer.status === '启用' && sources.contacts.some(person => person.customerId === customer.id && person.status === '启用'));
+  for (const [i, status] of (['待复核', '已完成', '进行中'] as const).entries()) {
+    const customer = sources.customers.find(customer => customer.status === '启用' && requests.some(request => request.customerId === customer.id && request.items.length) && sources.contacts.some(person => person.customerId === customer.id && person.status === '启用'));
     if (!customer) throw new Error('项目样例缺少有效客户。');
     const partner = i === 2 ? directory.partnerUsers.find(user => directory.partners.some(company => company.id === user.partnerId)) : undefined;
     const actor = partner ? { id: partner.id, name: partner.name, role: '合作伙伴服务工程师' } : manager;
@@ -88,8 +106,50 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
         internal: [{ id: manager.id, name: manager.name, details: '', assignmentRoles: ['项目经理'] }],
         partner: partner ? directory.partnerUsers.filter(user => user.partnerId === partner.partnerId).map(user => ({ id: user.id, name: user.name, details: user.email })) : [],
       }) };
+    const sourceItems = [...new Map(requests.filter(request => request.customerId === customer.id).flatMap(request => request.items).filter(item => status !== '已完成' || !['巡检权益', '升级权益'].includes(sources.services.find(service => service.id === item.serviceId)?.priceUnit ?? '')).map(item => [item.serviceId, item])).values()].slice(0, 2);
+    if (!sourceItems.length) throw new Error('项目样例缺少可用服务项。');
+    project.items = sourceItems.map((item, index) => ({ ...structuredClone(item), id: `${project.id}-ITEM-${index + 1}` }));
     project = appendProjectActivity(project, actor, '项目', '创建项目', project.id, at);
     projects.push(enrich(project, status));
   }
-  return { requests, projects };
+  const identities = operationIdentities(sources.users);
+  const admin = identities.find(actor => actor.role === 'SmartX 系统管理员');
+  if (!admin) throw new Error('初始化项目复核需要有效的系统管理员。');
+  const ctx: ProjectReviewContext = { ...directory, requests, assets: structuredClone(sources.assets), businessObjects: structuredClone(sources.businessObjects),
+    rules: approvalRules ?? { version: 1, rules: [], defaultUserId: admin.id }, conversions: { inspection: { days: 0.3, version: 1 }, upgrade: { days: 0.3, version: 1 } }, mailTemplates: parseMailConfig(undefined) };
+  for (let index = 0; index < projects.length; index++) {
+    let project = projects[index];
+    if (project.status !== '待复核') continue;
+    project = applyProjectOperation(project, { type: 'worklog-confirm', ids: project.operations!.worklogs.map(log => log.id) }, manager, at);
+    project = applyProjectReview(project, { type: 'effort', items: calculateProjectReviewEffort(project, ctx).map(line => ({ itemId: line.itemId, finalBillableDays: line.billableDays })), note: '【示例】按实际工时核定。' }, manager, ctx, at);
+    Object.assign(ctx, updateProjectReviewReservations(project, ctx));
+    const target = confirmationTargets.get(project.id);
+    if (target) {
+      const owner = identities.find(actor => canManageProjectReviewBasis(project, actor, ctx));
+      if (!owner) throw new Error('项目样例缺少服务依据负责人。');
+      for (const row of projectReviewCoverage(project, ctx).filter(row => row.gap > 0)) {
+        project = applyProjectReview(project, { type: 'gap-submit', method: row.method, days: row.gap, reason: '【示例】批准本次演示项目服务额度。' }, owner, ctx, at);
+        while (project.review!.approvals.at(-1)!.state === '待审批') {
+          const approval = project.review!.approvals.at(-1)!;
+          const approver = identities.find(actor => actor.id === approval.approverId);
+          if (!approver) throw new Error('项目样例缺少当前环节审批人。');
+          project = applyProjectReview(project, { type: 'gap-decide', id: approval.id, approve: true, note: '【示例】同意。' }, approver, ctx, at);
+        }
+      }
+      const contact = sources.contacts.find(person => person.status === '启用' && project.collaborators?.customer?.some(member => member.id === person.id))!;
+      project = applyProjectReview(project, { type: 'confirm', note: '【示例】请确认交付内容及服务消耗。', mail: {
+        kind: 'project', date: at.slice(0, 10), subject: `${project.name} · 交付确认`, to: contact.email || 'customer@example.com', cc: '',
+        greeting: contact.name, customerEngineers: contact.name, projectManager: manager.name, engineers: engineer.name,
+        startTime: '09:00', endTime: '10:30', serviceNumber: project.id, workContent: '【示例】已完成服务执行及交付验证。', nextPlan: '【示例】请客户确认交付结果。',
+      } }, owner, ctx, at);
+      if (target === '已完成') {
+        project = applyProjectReview(project, { type: 'customer-decision', confirmationId: project.review!.confirmations.at(-1)!.id, accepted: true, reason: '' }, { id: contact.id, name: contact.name, role: '客户' }, ctx, at);
+        Object.assign(ctx, updateProjectReviewReservations(project, ctx));
+        const source = settleProjectSource(project, ctx);
+        if (source) requests[requests.findIndex(request => request.id === source.id)] = source;
+      }
+    }
+    projects[index] = project;
+  }
+  return { requests, projects, assets: ctx.assets, businessObjects: ctx.businessObjects };
 }
