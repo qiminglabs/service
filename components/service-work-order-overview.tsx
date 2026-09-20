@@ -89,7 +89,7 @@ export function ServiceWorkOrderOverview({
                   return (
                     <tr key={order.id}>
                       {canAssign && <td className="wo-overview-select-cell"><Checkbox aria-label={`选择工单 ${order.item.serviceName} ${order.id}`} disabled={busy || ['已完成', '已取消'].includes(order.status)} checked={!['已完成', '已取消'].includes(order.status) && selectedOrderIds.includes(order.id)} onCheckedChange={checked => setSelectedOrderIds(ids => checked ? [...ids, order.id] : ids.filter(id => id !== order.id))} /></td>}
-                      <td>
+                      <td className="wo-overview-text-cell">
                         <button
                           type="button"
                           className="wo-overview-link"
@@ -102,10 +102,10 @@ export function ServiceWorkOrderOverview({
                           {order.id}
                         </small>
                       </td>
-                      <td>
+                      <td className="wo-overview-text-cell">
                         {assignedEngineers(order).length ? assignedEngineers(order).map(person => <span className="wo-overview-assignee" key={`${person.group}:${person.id}`}>{person.name}<small>{person.group === 'internal' ? '原厂工程师' : '合作伙伴工程师'}</small></span>) : <span className="wo-overview-muted">未指派</span>}
                       </td>
-                      <td>
+                      <td className="wo-overview-text-cell">
                         <span
                           className="wo-status"
                           data-tone={

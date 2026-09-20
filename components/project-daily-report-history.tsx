@@ -4,17 +4,23 @@ import { type ConfirmationMail } from '@/lib/project-confirmation-notice';
 import type { ProjectConfirmation } from '@/lib/service-project-review';
 
 import { useState, type ReactNode } from 'react';
-import { CalendarDays, Download, Mail } from 'lucide-react';
+import { CalendarDays, Eye, Mail } from 'lucide-react';
 import { ReportBody } from '@/components/report-body';
 import { ProjectReportFilesSection } from '@/components/project-report-files';
 import type { ReportNode } from '@/lib/report-templates';
 import type { ProjectReportFile } from '@/lib/project-report-files';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { CustomerVisibleBadge } from '@/components/customer-visible-badge';
 import {
   dailyReportDate,
   dailyReportLines,
-  dailyReportEmlWithFiles,
   dailyReportHistory,
   dailyReportTemplate,
   reportMailText,
@@ -141,18 +147,6 @@ export function ReportPreview({
     </article>
   );
 }
-async function exportReport(report: ProjectDailyReportView) {
-  const url = URL.createObjectURL(
-    new Blob([await dailyReportEmlWithFiles(report)], {
-      type: 'message/rfc822',
-    }),
-  );
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${report.date}-${report.projectName.replace(/[\\/:*?"<>|]/g, '_')}-${report.kind === 'project' ? '项目报告' : '服务日报'}.eml`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 export function DailyReportsPanel({
   reports: records,
@@ -167,20 +161,8 @@ export function DailyReportsPanel({
   action?: ReactNode;
   notice?: string;
 }) {
-  const [exportError, setExportError] = useState('');
-  const [exportingId, setExportingId] = useState('');
-  async function download(report: ProjectDailyReportView) {
-    if (exportingId) return;
-    setExportingId(report.id);
-    setExportError('');
-    try {
-      await exportReport(report);
-    } catch {
-      setExportError('邮件导出失败，请重试。');
-    } finally {
-      setExportingId('');
-    }
-  }
+  const [viewingId, setViewingId] = useState('');
+  const viewing = records.find((report) => report.id === viewingId);
   const reports = [...records].sort(
     (a, b) =>
       b.date.localeCompare(a.date) || b.recordedAt.localeCompare(a.recordedAt),
@@ -199,11 +181,6 @@ export function DailyReportsPanel({
         </div>
         {action}
       </div>
-      {exportError && (
-        <p className="sr-error" role="alert">
-          {exportError}
-        </p>
-      )}
       {notice && <output className="sr-notice">{notice}</output>}
       {reports.length ? (
         <div className="sr-table-scroll">
@@ -227,23 +204,13 @@ export function DailyReportsPanel({
                 <tr key={report.id}>
                   <td className="daily-report-subject-cell">
                     <strong>{report.subject}</strong>
-                    {report.to && (
-                      <small
-                        title={`收件人：${report.to}${report.cc ? `；抄送：${report.cc}` : ''}`}
-                      >
-                        收件人：{report.to}
-                      </small>
-                    )}
                   </td>
                   <td>
                     {report.kind === 'project' ? '项目报告' : '每日工作日报'}
                   </td>
                   <td>{report.authorName}</td>
                   <td>
-                    <span
-                      className="wo-status"
-                      data-tone="blue"
-                    >
+                    <span className="wo-status" data-tone="blue">
                       {report.confirmation
                         ? confirmations.find(
                             (item) => item.id === report.confirmation!.id,
@@ -265,12 +232,11 @@ export function DailyReportsPanel({
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={!!exportingId}
-                      onClick={() => void download(report)}
-                      aria-label={`导出邮件：${report.subject}`}
+                      onClick={() => setViewingId(report.id)}
+                      aria-label={`查看邮件：${report.subject}`}
                     >
-                      <Download size={14} />
-                      {exportingId === report.id ? '导出中…' : '导出邮件'}
+                      <Eye size={14} />
+                      查看邮件
                     </Button>
                   </td>
                 </tr>
@@ -286,6 +252,52 @@ export function DailyReportsPanel({
           <h4>暂无服务日报</h4>
         </div>
       )}
+      <Dialog
+        open={!!viewing}
+        onOpenChange={(open) => {
+          if (!open) setViewingId('');
+        }}
+      >
+        <DialogContent
+          className="daily-report-dialog"
+          aria-describedby={undefined}
+        >
+          <DialogHeader>
+            <DialogTitle>查看邮件</DialogTitle>
+          </DialogHeader>
+          {viewing && (
+            <div className="daily-report-compose is-confirm">
+              <div className="daily-report-live-preview">
+                <div className="daily-report-preview-label">
+                  {viewing.subject}
+                </div>
+                <div className="daily-report-confirm-recipients">
+                  <p>
+                    <strong>收件人</strong>
+                    {viewing.to || '—'}
+                  </p>
+                  {viewing.cc && (
+                    <p>
+                      <strong>抄送</strong>
+                      {viewing.cc}
+                    </p>
+                  )}
+                  <span className="daily-report-status">本地发送</span>
+                </div>
+                <ReportPreview
+                  report={viewing}
+                  projectName={viewing.projectName}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewingId('')}>
+              关闭
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

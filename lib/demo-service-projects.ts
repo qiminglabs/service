@@ -15,7 +15,8 @@ import { addProjectSupplement } from './service-project-supplements.ts';
 import { applyProjectOperation } from './service-project-operations.ts';
 import { cancelServiceProject } from './service-project-cancellation.ts';
 import { applyProjectReview, calculateProjectReviewEffort, canManageProjectReviewBasis, projectReviewCoverage, updateProjectReviewReservations, settleProjectSource, type ProjectReviewContext } from './service-project-review.ts';
-import { parseMailConfig } from './service-mail-templates.ts';
+import { canonicalMailTemplate, parseMailConfig } from './service-mail-templates.ts';
+import { applyMailTemplate, sendProjectDailyReport } from './service-project-daily-reports.ts';
 
 type Sources = Parameters<typeof buildRequestSamples>[0] & { partnerUsers?: (Partial<PartnerUser> & { id: string })[] };
 
@@ -33,7 +34,7 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
   };
   const manager = operationIdentities(sources.users).find(user => user.role === 'SmartX 项目经理');
   if (!manager) throw new Error('初始化服务项目需要有效的项目经理。');
-  const at = new Date(now.getTime() - 86400000).toISOString();
+  const at = new Date(now.getTime() - 4 * 86400000).toISOString();
   const execution = executionConfig ?? demoServiceExecution(sources, at).config;
   const engineer = operationIdentities(sources.users).find(user => user.role === 'SmartX 服务工程师') ?? manager;
   const enrich = (project: ServiceProjectRecord, target: ServiceProjectStatus, emptyPublic = false) => {
@@ -57,6 +58,24 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
         const partner = project.createdSite === '合作伙伴中心' ? directory.partnerUsers.find(user => project.collaborators?.partner?.some(person => person.id === user.id)) : undefined;
         const executor = partner ? { id: partner.id, name: partner.name, role: '合作伙伴服务工程师' } : engineer;
         project = populateDemoWorkOrders(project, executor, emptyPublic ? 'cancel' : target === '进行中' ? 'progress' : 'complete', at);
+        const contact = sources.contacts.find(person => person.status === '启用' && project.collaborators?.customer?.some(member => member.id === person.id));
+        if (!contact) throw new Error('初始化服务日报需要有效的客户协作人。');
+        const customerName = sources.customers.find(customer => customer.id === project.customerId)?.name ?? '';
+        const stages = [
+          { title: '实施准备', work: '已核对服务范围、环境清单及实施窗口。\n已完成参与人员和操作前检查项确认。', plan: '按计划开展服务实施，持续记录执行进展。' },
+          { title: '实施进展', work: `围绕${(project.items ?? []).map(item => item.serviceName).join('、')}开展服务实施。\n已记录现场检查结果，并与客户同步当前进展。`, plan: '继续推进剩余步骤，整理验证记录和待确认事项。' },
+          { title: '验证进展', work: '已整理当前实施记录，并对已完成部分开展验证。\n已同步问题清单与后续跟进责任人。', plan: emptyPublic ? '等待客户确认调整后的实施安排。' : target === '进行中' ? '继续完成剩余实施与验证工作。' : '整理交付文件，提交复核并跟进客户确认。' },
+        ];
+        for (const [day, stage] of stages.entries()) {
+          const recordedAt = new Date(Date.parse(at) + (day * 24 + 6) * 3600000).toISOString();
+          const date = recordedAt.slice(0, 10);
+          const input = applyMailTemplate({
+            kind: 'daily', date, subject: `【示例日报】${project.name} · ${stage.title}`, to: contact.email || 'customer@example.com', cc: '',
+            greeting: `${customerName}的老师`, customerEngineers: contact.name, projectManager: manager.name, engineers: executor.name,
+            startTime: '09:00', endTime: '18:00', serviceNumber: project.id, relatedFiles: [], workContent: stage.work, nextPlan: stage.plan,
+          }, canonicalMailTemplate(parseMailConfig(undefined), 'daily', undefined, customerName), project.name);
+          project = sendProjectDailyReport(project, executor, { ...input, subject: `【示例日报】${project.name} · ${date} · ${stage.title}`, workContent: stage.work, nextPlan: stage.plan }, recordedAt);
+        }
       } else if (status === '待确认' || status === '已完成') {
         // Finish the review only after all source requests and projects exist.
         confirmationTargets.set(project.id, target);
@@ -120,6 +139,7 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
   for (let index = 0; index < projects.length; index++) {
     let project = projects[index];
     if (project.status !== '待复核') continue;
+    const at = new Date(now.getTime() - 86400000).toISOString();
     project = applyProjectOperation(project, { type: 'worklog-confirm', ids: project.operations!.worklogs.map(log => log.id) }, manager, at);
     project = applyProjectReview(project, { type: 'effort', items: calculateProjectReviewEffort(project, ctx).map(line => ({ itemId: line.itemId, finalBillableDays: line.billableDays })), note: '【示例】按实际工时核定。' }, manager, ctx, at);
     Object.assign(ctx, updateProjectReviewReservations(project, ctx));

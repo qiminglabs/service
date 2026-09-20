@@ -1,14 +1,15 @@
 'use client';
 
-import { lazy, Suspense, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { downloadFile } from '@/lib/service-requests';
 import { createDownloadZip, safeDownloadName } from '@/lib/download-zip';
 import type { ProjectFile } from '@/lib/service-project-files';
 
-const LocalDocumentEditor = lazy(() => import('@/components/local-document-editor').then(module => ({ default: module.LocalDocumentEditor })));
+import { ReportBody } from '@/components/report-body';
+import type { ReportNode } from '@/lib/report-templates';
 const stamp = (value: string) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : '—';
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
@@ -44,17 +45,31 @@ export function ServiceProjectFiles({ projectName, items }: { projectName: strin
         <td><Checkbox aria-label={`选择 ${item.file.name}`} checked={selected.includes(item.id)} disabled={busy} onCheckedChange={checked => setSelected(current => checked ? [...current, item.id] : current.filter(id => id !== item.id))} /></td>
         <td title={item.file.name}>{item.file.name}</td><td>{item.kind}</td><td>{size(item.file.blob.size)}</td>
         <td>{item.orderName}<small>{item.orderId}</small></td><td>{item.stepName}</td><td>{item.submittedBy}</td><td>{stamp(item.submittedAt)}</td>
-        <td>{item.file.onlineDocument && <Button variant="ghost" onClick={() => setViewingId(item.id)}>查看</Button>}<Button variant="ghost" onClick={() => downloadFile(item.file)}>下载</Button></td>
+        <td><div className="sr-project-file-actions">{item.file.onlineDocument && <Button variant="ghost" onClick={() => setViewingId(item.id)}>查看</Button>}<Button className="sr-project-file-download" variant="ghost" onClick={() => downloadFile(item.file)}>下载</Button></div></td>
       </tr>)}
       {!items.length && <tr><td colSpan={9}>暂无文件</td></tr>}
       </tbody>
     </table></div>
     <Dialog open={!!viewing?.file.onlineDocument} onOpenChange={open => { if (!open) setViewingId(''); }}>
-      <DialogContent className="sr-project-file-viewer" aria-describedby={undefined}>
-        <DialogHeader><DialogTitle>{viewing?.file.name}</DialogTitle></DialogHeader>
-        {viewing?.file.onlineDocument && <Suspense fallback={<p className="sr-help">正在打开在线文档…</p>}>
-          <LocalDocumentEditor key={viewing.id} value={viewing.file.onlineDocument} readonly busy={false} dirty={false} onChange={() => {}} onBack={() => setViewingId('')} />
-        </Suspense>}
+      <DialogContent className="daily-report-dialog sr-project-file-viewer" aria-describedby={undefined}>
+        <DialogHeader><DialogTitle>查看项目文件</DialogTitle></DialogHeader>
+        {viewing?.file.onlineDocument && (
+          <div className="sr-project-file-reading" role="region" aria-label="项目文件正文" tabIndex={0}>
+            <div className="sr-project-file-reading-inner">
+              <p className="sr-project-file-meta">
+                <span>{viewing.orderName} · {viewing.stepName}</span>
+                <span>{viewing.submittedBy} · {stamp(viewing.submittedAt)}</span>
+              </p>
+              <article className="sr-project-file-paper" aria-label={viewing.file.onlineDocument.title || viewing.file.name}>
+                <header><h2>{viewing.file.onlineDocument.title || viewing.file.name}</h2></header>
+                {viewing.file.onlineDocument.richText
+                  ? <ReportBody body={viewing.file.onlineDocument.richText as ReportNode} />
+                  : <div className="report-paper">{viewing.file.onlineDocument.content}</div>}
+              </article>
+            </div>
+          </div>
+        )}
+        <DialogFooter><Button variant="outline" onClick={() => setViewingId('')}>关闭</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   </section>;
