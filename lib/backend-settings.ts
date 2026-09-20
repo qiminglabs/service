@@ -1,4 +1,5 @@
 export const backendSettingsSections = [
+  { key: 'operation-permissions', label: '操作权限', tabs: [{ key: 'permission-list', label: '操作权限清单' }] },
   { key: 'forms', label: '服务请求字段', tabs: [{ key: 'request-items', label: '服务项字段' }, { key: 'application-fields', label: '服务申请字段' }] },
   { key: 'project-forms', label: '服务项目字段', tabs: [{ key: 'project-fields', label: '服务项目字段' }] },
   { key: 'request-flow', label: '服务请求流程', tabs: [

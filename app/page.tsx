@@ -2,6 +2,7 @@
 import { commitCatalogVersion, createStoredCatalogService, canManageCatalog } from '@/lib/catalog-versions';
 import { responsibleTeams } from '@/lib/customer-teams';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
+import { OperationPermissionSettings } from '@/components/operation-permission-settings';
 import { parseDayQuantity, formatDays } from '@/lib/day-quantity';
 import { calculateBillableDays } from '@/lib/request-pricing';
 import { isEntitlementService } from '@/lib/service-requests';
@@ -1619,7 +1620,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               </RequestFieldsContext.Provider>
             </BusinessObjectProductsContext.Provider>
           ) : activeView === 'field-settings' ? (
-            <RequestFieldSettings
+            settingsSection === 'operation-permissions' ? <OperationPermissionSettings identities={identities} initialActorId={currentActor.id} /> : <RequestFieldSettings
               key={settingsSection}
               section={settingsSection}
               actor={currentActor.name}
