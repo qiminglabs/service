@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { GripVertical, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -182,7 +184,7 @@ export function ExecutionFormBuilder({
         {field ? (
           <>
             <label className="rf-property-input">
-              <span>字段名称 *</span>
+              <span>字段名称 <RequiredMark /></span>
               <Input
                 disabled={disabled}
                 required

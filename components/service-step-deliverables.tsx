@@ -1,4 +1,6 @@
 'use client';
+
+import { RequiredMark } from '@/components/required-mark';
 import { StepReportTemplateSelect } from '@/components/step-report-template-select';
 
 import { useState } from 'react';
@@ -83,7 +85,7 @@ export function ServiceStepDeliverables({
             </Button>
           </div>
           <label className="approval-field">
-            <span>{label}名称 *</span>
+            <span>{label}名称 <RequiredMark /></span>
             <Input
               required
               maxLength={120}

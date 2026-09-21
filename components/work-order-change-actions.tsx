@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -389,7 +391,7 @@ export function ReturnProjectReviewButton(props: Props) {
     <Dialog open={open} onOpenChange={value => { if (!props.busy) setOpen(value); }}><DialogContent showCloseButton={!props.busy}>
       <DialogHeader><DialogTitle>退回执行</DialogTitle><DialogDescription>{props.project.name}</DialogDescription></DialogHeader>
       <div className="sr-ops-form">
-        <label className="sr-ops-field"><span>退回原因 *</span><Textarea aria-label="退回原因" required maxLength={2000} disabled={props.busy} value={reason} onChange={event => setReason(event.target.value)} /></label>
+        <label className="sr-ops-field"><span>退回原因 <RequiredMark /></span><Textarea aria-label="退回原因" required maxLength={2000} disabled={props.busy} value={reason} onChange={event => setReason(event.target.value)} /></label>
         {error && <p className="sr-error" role="alert">{error}</p>}
       </div>
       <DialogFooter><Button variant="outline" disabled={props.busy} onClick={() => setOpen(false)}>取消</Button><Button disabled={props.busy || !reason.trim()} onClick={() => void submit()}>确认退回</Button></DialogFooter>

@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ArrowDown,
@@ -53,7 +55,7 @@ import {
   setFlowReportTemplates,
 } from '@/lib/flow-report-templates';
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <label className="approval-field">
       <span>{label}</span>
@@ -242,7 +244,7 @@ export function ServiceFlowDesigner({
         </div>
       </header>
       <div className="service-flow-metadata">
-        <Field label="流程名称 *">
+        <Field label={<>流程名称 <RequiredMark /></>}>
           <Input
             aria-label="服务流程名称"
             required
@@ -530,7 +532,7 @@ export function ServiceFlowDesigner({
               <h3>步骤设置{step && <small>第 {step.sequence} 步</small>}</h3>
               {step ? (
                 <fieldset disabled={!editable} key={step.id}>
-                  <Field label="步骤名称 *">
+                  <Field label={<>步骤名称 <RequiredMark /></>}>
                     <Input
                       aria-label="步骤名称"
                       required

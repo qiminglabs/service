@@ -3927,6 +3927,7 @@ body:has(.sr-ops-dialog) [data-slot='dialog-overlay'] { z-index: 230; }
 .sr-ops-form { display: flex; flex-direction: column; gap: 18px; padding: 10px 0 18px; min-width: 0; }
 .sr-ops-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; font-size: 14px; color: #536277; }
 .sr-ops-field em { color: #de665f; font-style: normal; }
+.required-mark { color: #dc2626; }
 .sr-ops-field [data-slot='native-select-wrapper'] { width: 100%; }
 .sr-ops-field [data-slot='native-select'], .sr-ops-field input { min-height: 40px; }
 .sr-ops-field textarea { font-size: 14px; line-height: 1.7; min-height: 88px; }

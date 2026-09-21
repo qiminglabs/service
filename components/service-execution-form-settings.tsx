@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Plus, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -134,7 +136,7 @@ export function ServiceExecutionFormSettings({
           </header>
           <div className="service-flow-metadata">
             <label className="approval-field">
-              <span>表单名称 *</span>
+              <span>表单名称 <RequiredMark /></span>
               <Input
                 required
                 maxLength={120}

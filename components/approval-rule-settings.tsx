@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { ApprovalAllocationPreview } from '@/components/approval-allocation-preview';
@@ -193,7 +195,7 @@ export function ApprovalRuleSettings({ actor, scope = 'request' }: { actor: Oper
       <DialogContent className="submission-rule-dialog" aria-describedby={undefined}><DialogHeader><DialogTitle>{revision === null ? '新建特殊审批规则' : '编辑特殊审批条件'}</DialogTitle></DialogHeader>
         {draft && <form className="submission-rule-form" onSubmit={event => { event.preventDefault(); void save(); }}>
           <fieldset className="submission-rule-form-body approval-rule-fields" disabled={busy}>
-            <label htmlFor="approval-rule-name" className="submission-rule-field"><span>规则名称 *</span><Input id="approval-rule-name" required maxLength={80} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} placeholder="例如：金融客户现场服务审批" /></label>
+            <label htmlFor="approval-rule-name" className="submission-rule-field"><span>规则名称 <RequiredMark /></span><Input id="approval-rule-name" required maxLength={80} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} placeholder="例如：金融客户现场服务审批" /></label>
             <label htmlFor="approval-rule-priority" className="submission-rule-field"><span className="routing-field-heading"><span>优先级</span><em aria-hidden="true">*</em></span><Input id="approval-rule-priority" required type="number" min={1} max={9999} step={1} value={Number.isFinite(draft.priority) ? draft.priority : ''} onChange={event => { setDraft({ ...draft, priority: event.target.value === '' ? NaN : Number(event.target.value) }); setTestResult(undefined); setFormError(''); }} /><small className="sr-help">填写 1–9999 的整数，数字越小越优先，不能与其他启用规则重复。</small>{duplicate && <p className="sr-error" role="alert">优先级重复，请选择其他数字。</p>}</label>
             <label htmlFor="approval-rule-requirement" className="submission-rule-field">
               <span className="routing-field-heading"><span>自然语言描述</span><em aria-hidden="true">*</em></span>

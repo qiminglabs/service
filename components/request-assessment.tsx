@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { canActForUser } from '@/lib/demo-permissions';
 import { effectiveRequestApprovals, requestApprovalRemaining, requestApprovalRemainingDays } from '@/lib/request-approval-quota';
 import { requestBasisIsFrozen } from '@/lib/project-reservation-release';
@@ -119,7 +121,7 @@ function RecordMeta({ author, at }: { author: string; at: string }) {
     </div>
   );
 }
-function Field({ title, children }: { title: string; children: ReactNode }) {
+function Field({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <label className="sr-ops-field">
       <span>{title}</span>
@@ -720,7 +722,7 @@ function AssessmentForm({
       <div className="sr-ops-form">
         {(mode === 'round' || mode === 'hardware-review') && (
           <>
-            <Field title="评估结论 *">
+            <Field title={<>评估结论 <RequiredMark /></>}>
               <NativeSelect
                 value={outcome}
                 disabled={disabled}
@@ -730,7 +732,7 @@ function AssessmentForm({
                 <option disabled={mode === 'round' && !!hardwareIssue}>评估通过</option>
               </NativeSelect>
             </Field>
-            <Field title="评估意见 *">
+            <Field title={<>评估意见 <RequiredMark /></>}>
               <Textarea
                 rows={4}
                 value={opinion}
@@ -873,7 +875,7 @@ function AssessmentForm({
           {approvalDays !== '' && !validApprovalDays && <p className="sr-error" role="alert">申请人天须大于 0，按 0.1 粒度填写且不超过 100000。</p>}
         </>}
         {(mode === 'gap' || mode === 'decide') && (
-          <Field title={mode === 'gap' ? '申请理由 *' : '审批意见 *'}>
+          <Field title={<>{mode === 'gap' ? '申请理由' : '审批意见'} <RequiredMark /></>}>
             <Textarea
               rows={4}
               disabled={disabled}

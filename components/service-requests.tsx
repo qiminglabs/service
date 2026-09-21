@@ -1,4 +1,6 @@
 'use client';
+
+import { RequiredMark } from '@/components/required-mark';
 import { withRequestCollaborators, applicantRemovalIssue } from '@/lib/request-collaboration';
 
 import { canSubmitRequest, requestCollaboratorsLocked } from '@/lib/request-collaboration';
@@ -1531,7 +1533,7 @@ export function RequestWorkspace(props: Props) {
             </DialogDescription>
           </DialogHeader>
           <label className="sr-ops-field">
-            <span>退回原因 *</span>
+            <span>退回原因 <RequiredMark /></span>
             <Textarea
               value={returnDraftReason}
               disabled={busy}

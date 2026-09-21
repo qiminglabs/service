@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -45,7 +47,7 @@ export function ServiceStepFormSelect({
   return (
     <div className="service-step-deliverables">
       <label className="approval-field">
-        <span>服务步骤表单 *</span>
+        <span>服务步骤表单 <RequiredMark /></span>
         <NativeSelect
           aria-label="选择服务步骤表单"
           disabled={!editable || !forms}

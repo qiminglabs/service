@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Plus } from 'lucide-react';
 import {
@@ -49,7 +51,7 @@ import {
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : '操作失败，请重试。';
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <label className="submission-rule-field">
       <span>{label}</span>
@@ -868,7 +870,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                   className="service-flow-rule-fields"
                 >
                   <div className="routing-form-row">
-                    <Field label="规则名称 *">
+                    <Field label={<>规则名称 <RequiredMark /></>}>
                       <Input
                         required
                         maxLength={120}
@@ -881,7 +883,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                         }
                       />
                     </Field>
-                    <Field label="优先级 *">
+                    <Field label={<>优先级 <RequiredMark /></>}>
                       <Input
                         required
                         type="number"
@@ -905,7 +907,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                       />
                     </Field>
                   </div>
-                  <Field label="分配服务流程 *">
+                  <Field label={<>分配服务流程 <RequiredMark /></>}>
                     <FlowSelect
                       allowNew
                       config={config}
@@ -925,7 +927,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                       setFormError('');
                     }}
                   />
-                  <Field label="自然语言描述 *">
+                  <Field label={<>自然语言描述 <RequiredMark /></>}>
                     <Textarea
                       required
                       rows={4}

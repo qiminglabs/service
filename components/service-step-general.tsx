@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -53,7 +55,7 @@ function GeneralStepPreview({
         </DialogHeader>
         <div className="sr-document-body service-general-preview">
           <label className="approval-field">
-            <span>说明{step.recordRequired ? ' *' : '（选填）'}</span>
+            <span>说明{step.recordRequired ? <> <RequiredMark /></> : '（选填）'}</span>
             <Textarea
               rows={7}
               maxLength={60000}
@@ -68,7 +70,7 @@ function GeneralStepPreview({
             />
           </label>
           <div className="service-flow-step-heading">
-            <strong>附件{step.attachmentRequired ? ' *' : '（选填）'}</strong>
+            <strong>附件{step.attachmentRequired ? <> <RequiredMark /></> : '（选填）'}</strong>
             <Button variant="outline" onClick={() => upload.current?.click()}>
               <Upload size={14} />
               上传附件

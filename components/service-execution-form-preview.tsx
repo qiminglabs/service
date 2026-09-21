@@ -1,5 +1,7 @@
 'use client';
 
+import { RequiredMark } from '@/components/required-mark';
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,7 +51,7 @@ export function ExecutionFormPreview({
                   <div className="submission-rule-field">
                     <span>
                       {field.name}
-                      {field.required && ' *'}
+                      {field.required && <> <RequiredMark /></>}
                     </span>
                     <ExecutionFieldControl
                       field={field}
