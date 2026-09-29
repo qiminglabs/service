@@ -11,6 +11,10 @@ import {
   type ScheduleSnapshot,
 } from './scheduling.ts';
 import type { OperationActor } from './request-operations';
+import {
+  applyPersonalCalendarAction,
+  type PersonalCalendarAction,
+} from './personal-scheduling.ts';
 
 // Read scheduling and projects from the same snapshot; write reservation and assignment atomically.
 export async function schedulingTransaction(
@@ -67,25 +71,37 @@ export async function schedulingTransaction(
 
 export async function personalSchedulingTransaction(
   actor: OperationActor,
+  mutation?: { revision: number; action: PersonalCalendarAction },
 ): Promise<PersonalScheduleSnapshot> {
   const db = await openDatabase();
   try {
     return await new Promise((resolve, reject) => {
-      const tx = db.transaction('references', 'readonly');
-      const read = tx.objectStore('references').getAll();
+      const tx = db.transaction(
+        'references',
+        mutation ? 'readwrite' : 'readonly',
+      );
+      const store = tx.objectStore('references');
+      const read = store.getAll();
       let result: PersonalScheduleSnapshot;
       tx.oncomplete = () => resolve(result);
-      tx.onabort = () =>
-        reject(tx.error ?? new Error('服务日历读取失败。'));
+      tx.onabort = () => reject(tx.error ?? new Error('服务日历读取失败。'));
       tx.onerror = () => reject(tx.error ?? new Error('服务日历读取失败。'));
       read.onsuccess = () => {
         try {
           const rows = read.result as { id: string; payload?: unknown }[];
           const directory = assignmentDirectoryFromRows(rows);
-          result = personalScheduleSnapshot(
-            scheduleFromRows(rows, directory),
+          const snapshot = scheduleFromRows(rows, directory);
+          result = personalScheduleSnapshot(snapshot, actor);
+          if (!mutation) return;
+          if (snapshot.data.revision !== mutation.revision)
+            throw new Error('日历已更新，请关闭窗口后重新打开登记。');
+          const data = applyPersonalCalendarAction(
+            snapshot,
             actor,
+            mutation.action,
           );
+          store.put({ id: schedulingId, payload: data });
+          result = personalScheduleSnapshot({ ...snapshot, data }, actor);
         } catch (cause) {
           reject(cause);
           tx.abort();

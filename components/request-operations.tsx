@@ -406,7 +406,7 @@ export function RequestOperationsTabs({
                           <th>工作内容</th>
                           <th>工时</th>
                           <th>类型</th>
-                          <th>操作</th>
+                          <th data-list-actions>操作</th>
                         </tr>
                       </thead>
                       <tbody>

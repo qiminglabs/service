@@ -321,7 +321,7 @@ export function RequestFieldSettings({
                   {projectTab && <th>填写规则</th>}
                   <th>修改时间</th>
                   <th>修改人</th>
-                  <th>操作</th>
+                  <th data-list-actions>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -481,7 +481,7 @@ export function RequestFieldSettings({
                       <tr>
                         <th>选项名称</th>
                         <th>状态</th>
-                        <th>操作</th>
+                        <th data-list-actions>操作</th>
                       </tr>
                     </thead>
                     <tbody>

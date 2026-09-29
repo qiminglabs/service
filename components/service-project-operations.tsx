@@ -346,7 +346,7 @@ export function ServiceProjectOperations({
                     <th>预计计价工时</th>
                     <th>类型</th>
                     <th>工时确认</th>
-                    <th>操作</th>
+                    <th data-list-actions>操作</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -683,7 +683,7 @@ function SchedulePanel({
       <SheetContent className="schedule-sheet" showCloseButton={!busy}>
         <SheetHeader>
           <SheetTitle>{title}</SheetTitle>
-          <SheetDescription className="sr-only">调度工作台</SheetDescription>
+          <SheetDescription className="sr-only">服务调度</SheetDescription>
         </SheetHeader>
         <div className="schedule-sheet-body">
           <fieldset disabled={busy}>

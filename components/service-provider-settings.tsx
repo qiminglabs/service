@@ -55,7 +55,7 @@ export function ServiceProviderSettings({ actor }: { actor: OperationActor }) {
   function providerTable(enabled: boolean) {
     const providers = entries.filter(entry => entry.enabled === enabled);
     return <div className="table-scroll"><table className="reference-table app-list-table provider-settings-table">
-      <thead><tr><th>企业名称</th><th>企业状态</th><th>{enabled ? '修改时间' : '停用时间'}</th><th>{enabled ? '修改人' : '停用人'}</th><th>状态</th><th>操作</th></tr></thead>
+      <thead><tr><th>企业名称</th><th>企业状态</th><th>{enabled ? '修改时间' : '停用时间'}</th><th>{enabled ? '修改人' : '停用人'}</th><th>状态</th><th data-list-actions>操作</th></tr></thead>
       <tbody>{providers.map(entry => {
         const partner = data?.partners.find(partner => partner.id === entry.partnerId);
         const name = partner?.name ?? '企业已移除';

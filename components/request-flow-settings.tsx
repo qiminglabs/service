@@ -352,7 +352,7 @@ export function RequestFlowSettings({
                 <th>版本 / 状态</th>
                 <th>修改时间</th>
                 <th>修改人</th>
-                <th>操作</th>
+                <th data-list-actions>操作</th>
               </tr>
             </thead>
             <tbody>

@@ -7,6 +7,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import {
+  calendarState,
   slotState,
   type Booking,
   type Resource,
@@ -33,6 +34,9 @@ export function SchedulingDayCell({
   onOpen: (projectId: string, orderId: string) => void;
 }) {
   const day = slotState(snapshot, person, slot);
+  const conflict =
+    day.bookings.length > 0 &&
+    calendarState(snapshot.data, person, slot).state === 'unavailable';
   const describe = (booking: Booking) => {
     const project = snapshot.projects.find(
       (project) => project.id === booking.projectId,
@@ -54,9 +58,15 @@ export function SchedulingDayCell({
     <td>
       <div
         className="schedule-slot"
-        data-state={day.state}
-        aria-label={`${person.name} ${slot.date} ${day.bookings.length ? `${day.bookings.length} 个工单` : day.label}`}
+        data-state={conflict ? 'conflict' : day.state}
+        aria-label={`${person.name} ${slot.date} ${day.bookings.length ? `${day.bookings.length} 个工单` : day.label}${conflict ? '，排期冲突' : ''}`}
       >
+        {day.exceptions.length > 0 && (
+          <small className="schedule-personal-note">
+            {day.exceptions.map((entry) => entry.kind).join('、')}
+            {conflict ? ' · 排期冲突' : ''}
+          </small>
+        )}
         {day.bookings.length ? (
           <>
             {day.bookings.slice(0, 3).map((booking) => {
@@ -96,7 +106,6 @@ export function SchedulingDayCell({
                   </PopoverTitle>
                   <div
                     className="schedule-orders-list"
-                    tabIndex={0}
                     aria-label={`全部 ${day.bookings.length} 个工单`}
                   >
                     {day.bookings.map((booking) => {

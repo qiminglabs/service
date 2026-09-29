@@ -140,7 +140,7 @@ export function ApprovalRuleSettings({ actor, scope = 'request' }: { actor: Oper
     <section className="routing-rules" aria-label="条件审批规则">
     <div className="submission-rules-toolbar"><div><strong>条件审批规则</strong></div>{allowed && <Button disabled={!ready || busy} onClick={() => edit()}><Plus size={16} />新建规则</Button>}</div>
     <div className="table-scroll"><table className="reference-table app-list-table approval-rules-table">
-      <thead><tr><th>优先级</th><th>规则名称</th><th>自然语言描述</th><th>审批节点数量</th><th>版本 / 状态</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
+      <thead><tr><th>优先级</th><th>规则名称</th><th>自然语言描述</th><th>审批节点数量</th><th>版本 / 状态</th><th>修改时间</th><th>修改人</th><th data-list-actions>操作</th></tr></thead>
       <tbody>{activeRules.map(rule => <tr key={rule.id}>
         <td>{rule.priority}</td><td><strong>{rule.name}</strong></td><td>
           <div className="submission-rule-requirement">

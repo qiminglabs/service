@@ -126,7 +126,7 @@ export function ServiceProjects({
 }: {
   initialProjectId?: string;
   initialWorkOrderId?: string;
-  initialWorkOrderView?: 'work-orders' | 'work-order-overview';
+  initialWorkOrderView?: 'work-orders' | 'work-order-overview' | 'worklogs';
   customers: CustomerRef[];
   actor: OperationActor;
   fields: RequestField[];
@@ -239,7 +239,8 @@ export function ServiceProjects({
             const project = result.find(project => project.id === initialProjectId);
             if (project) {
               show(project);
-              if (initialWorkOrderId && project.workOrders?.some(order => order.id === initialWorkOrderId)) {
+              if (initialWorkOrderView === 'worklogs' && !isPartnerCreatedProject(project)) setDetailTab('worklogs');
+              else if (initialWorkOrderId && project.workOrders?.some(order => order.id === initialWorkOrderId)) {
                 setSelectedWorkOrderId(initialWorkOrderId);
                 setDetailTab(initialWorkOrderView === 'work-order-overview' && canViewWorkOrderOverview(project, actor) ? 'work-order-overview' : 'work-orders');
               }
@@ -1133,7 +1134,7 @@ export function ServiceProjects({
                 <th>{labels.status}</th>
                 {projectItemAudience(actor) === 'internal' && <th>创建站点</th>}
                 <th>创建时间/创建人</th>
-                <th>操作</th>
+                <th data-list-actions>操作</th>
               </tr>
             </thead>
             <tbody>

@@ -83,7 +83,7 @@ export function buildSchedulingSamples(
         serviceProviderId: partnerId
           ? `partner:${partnerId}`
           : internalProjectProvider.id,
-        note: '调度工作台演示记录。',
+        note: '服务调度演示记录。',
       },
       manager,
       customers,

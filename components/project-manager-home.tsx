@@ -27,6 +27,8 @@ import type { OperationActor } from '@/lib/request-operations';
 import type { ProjectCollaboratorDirectory } from '@/lib/service-project-collaborators';
 import { isResponsibleProjectManager } from '@/lib/service-project-work-order-policy';
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
+import { WorkspaceFollowups, WorkspaceRecentActivity } from '@/components/workspace-followups';
+import { projectWorkspaceFollowups, sortWorkspaceFollowups, workspaceActivities } from '@/lib/workspace-dashboard';
 import { requestNextStep } from '@/lib/request-next-step';
 import {
   Tooltip,
@@ -36,7 +38,6 @@ import {
 } from '@/components/ui/tooltip';
 import {
   activeDashboardProject,
-  projectFollowups,
   projectOverdue,
   projectProgress,
   projectRisks,
@@ -48,15 +49,6 @@ type Props = {
   customers: CustomerRef[];
   directory: ProjectCollaboratorDirectory;
   onOpen: (view: 'projects' | 'requests', id?: string) => void;
-};
-type Followup = {
-  id: string;
-  title: string;
-  customerId: string;
-  kind: string;
-  view: 'projects' | 'requests';
-  date: string;
-  overdue: boolean;
 };
 const categories = [
   '全部事项',
@@ -166,17 +158,7 @@ export function ProjectManagerHome({
     );
   const customerName = (id: string) =>
     customers.find((customer) => customer.id === id)?.name ?? '未关联客户';
-  const followups: Followup[] = live.flatMap((project) =>
-    projectFollowups(project).map((kind) => ({
-      id: project.id,
-      title: project.name,
-      customerId: project.customerId,
-      kind,
-      view: 'projects' as const,
-      date: project.plannedCompletionDate ?? '',
-      overdue: projectOverdue(project, today),
-    })),
-  );
+  const followups = projectWorkspaceFollowups(live, today);
   for (const request of requests) {
     if (['草稿', '已取消', '已转服务项目', '评估完成'].includes(request.status))
       continue;
@@ -199,15 +181,7 @@ export function ProjectManagerHome({
       overdue: false,
     });
   }
-  followups.sort(
-    (a, b) =>
-      Number(b.overdue) - Number(a.overdue) ||
-      (a.date || '9999').localeCompare(b.date || '9999') ||
-      a.id.localeCompare(b.id),
-  );
-  const shownTasks = followups.filter(
-    (task) => category === '全部事项' || task.kind === category,
-  );
+  sortWorkspaceFollowups(followups);
   const shownProjects = live
     .filter(
       (project) =>
@@ -228,15 +202,7 @@ export function ProjectManagerHome({
           b.plannedCompletionDate || '9999',
         ),
     );
-  const activities = scopedProjects
-    .flatMap((project) =>
-      (project.operations?.activities ?? []).map((activity) => ({
-        project,
-        activity,
-      })),
-    )
-    .sort((a, b) => b.activity.at.localeCompare(a.activity.at))
-    .slice(0, 10);
+  const activities = workspaceActivities(scopedProjects);
   const focusProjects = (filter: string) => {
     setProjectFilter(filter);
     document
@@ -254,18 +220,6 @@ export function ProjectManagerHome({
     );
   return (
     <div className="pm-home">
-      <div className="pm-toolbar">
-        <div>
-          <strong>{actor.name}，你好</strong>
-          <span>
-            {now.toLocaleDateString('zh-CN', {
-              month: 'long',
-              day: 'numeric',
-              weekday: 'long',
-            })}
-          </span>
-        </div>
-      </div>
       <TooltipProvider delay={120}>
         <div className="pm-metrics">
           {[
@@ -351,93 +305,8 @@ export function ProjectManagerHome({
         </div>
       </TooltipProvider>
       <div className="pm-columns">
-        <section className="pm-panel" id="pm-tasks">
-          <div className="pm-panel-heading">
-            <h2>
-              待办与跟进 <span>{followups.length}</span>
-            </h2>
-            <select
-              aria-label="事项类型"
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-            >
-              {categories.map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </div>
-          <div className="pm-task-list">
-            {shownTasks.length ? (
-              shownTasks.map((task) => (
-                <button
-                  type="button"
-                  className="pm-task"
-                  key={`${task.view}:${task.id}:${task.kind}`}
-                  onClick={() => onOpen(task.view, task.id)}
-                >
-                  <span
-                    className={`pm-task-symbol ${task.overdue ? 'pm-orange' : 'pm-blue'}`}
-                  >
-                    <ClipboardList size={17} />
-                  </span>
-                  <span className="pm-task-copy">
-                    <strong>{task.title || task.id}</strong>
-                    <small>
-                      {customerName(task.customerId)} · {task.id}
-                    </small>
-                  </span>
-                  <span className="pm-task-end">
-                    <span className="pm-tag">{task.kind}</span>
-                    <small className={task.overdue ? 'pm-danger' : ''}>
-                      {task.date
-                        ? `${task.date}${task.overdue ? ' · 已逾期' : ''}`
-                        : '未设置日期'}
-                    </small>
-                  </span>
-                  <ArrowUpRight size={15} />
-                </button>
-              ))
-            ) : (
-              <Empty text="当前没有待跟进事项" />
-            )}
-          </div>
-        </section>
-        <section className="pm-panel">
-          <div className="pm-panel-heading">
-            <h2>最近动态</h2>
-          </div>
-          <div className="pm-activity-list">
-            {activities.length ? (
-              activities.map(({ project, activity }) => (
-                <button
-                  type="button"
-                  className="pm-activity"
-                  key={`${project.id}:${activity.id}`}
-                  onClick={() => onOpen('projects', project.id)}
-                >
-                  <span className="pm-activity-dot" />
-                  <span>
-                    <strong>
-                      {activity.actor} · {activity.title}
-                    </strong>
-                    <small>{project.name}</small>
-                  </span>
-                  <time>
-                    {new Date(activity.at).toLocaleString('zh-CN', {
-                      month: '2-digit',
-                      day: '2-digit',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: false,
-                    })}
-                  </time>
-                </button>
-              ))
-            ) : (
-              <Empty text="暂无项目动态" />
-            )}
-          </div>
-        </section>
+        <WorkspaceFollowups id="pm-tasks" tasks={followups} categories={categories} selectedCategory={category} onCategoryChange={setCategory} customerName={customerName} onOpen={onOpen} />
+        <WorkspaceRecentActivity activities={activities} customerName={customerName} onOpen={onOpen} emptyText="暂无项目动态" />
       </div>
       <section className="pm-panel" id="pm-projects">
         <div className="pm-panel-heading">

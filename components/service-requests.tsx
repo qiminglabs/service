@@ -823,7 +823,7 @@ export function RequestWorkspace(props: Props) {
                     <th>状态</th>
                     {isInternal(props.currentActor.role) && <th>创建站点</th>}
                     <th>创建时间/创建人</th>
-                    <th>操作</th>
+                    <th data-list-actions>操作</th>
                   </tr>
                 </thead>
                 <tbody>

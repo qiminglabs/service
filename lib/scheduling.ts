@@ -51,6 +51,10 @@ export type CalendarException = {
     | '调休休息'
     | '加班上班';
   note: string;
+  source?: 'engineer';
+  createdById?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 export type WorkCalendar = {
   weekdays: number[];
@@ -212,7 +216,7 @@ export function assertScheduler(
       (user) => user.id === actor.id && user.status === '启用',
     )
   )
-    throw new Error('当前身份不能访问调度工作台。');
+    throw new Error('当前身份不能访问服务调度。');
 }
 export function personalScheduleSnapshot(
   snapshot: ScheduleSnapshot,

@@ -9,6 +9,7 @@ import { isEntitlementService } from '@/lib/service-requests';
 import { CatalogHistory } from '@/components/catalog-history';
 import { InitializeDataButton } from '@/components/initialize-data-button';
 import { resetLocalDemoData, updateSchedulingDemoNames } from '@/lib/initialize-demo-data';
+import { initializeEngineerWorklogSamples } from '@/lib/demo-engineer-worklogs';
 import {
   resolveOperationActor,
   operationIdentities,
@@ -109,14 +110,15 @@ import {
 import { initialApplicationFields, normalizeApplicationFields } from '@/lib/request-application-fields';
 import { initialProjectFields, normalizeProjectFields } from '@/lib/service-project-fields';
 import { ProjectManagerHome } from '@/components/project-manager-home';
+import { CollaborationHome } from '@/components/collaboration-home';
 import { SchedulingWorkbench } from '@/components/scheduling-workbench';
-import { ServiceCalendar } from '@/components/service-calendar';
+import { ServiceEngineerHome } from '@/components/service-calendar';
 import { ServiceProjects } from '@/components/service-projects';
 import { CustomerServiceProjects } from '@/components/customer-service-projects';
 import { importedServiceCatalogSeeds } from './service-catalog-import';
 
 type ServiceStatus = '草稿' | '已启用' | '已停用';
-type ViewKey = 'manager-home' | 'scheduling' | 'service-calendar' | 'requests' | 'projects' | 'catalog' | 'reference-data' | 'field-settings';
+type ViewKey = 'collaboration-home' | 'manager-home' | 'scheduling' | 'service-calendar' | 'requests' | 'projects' | 'catalog' | 'reference-data' | 'field-settings';
 type ReferenceTab =
   | 'customers'
   | 'contacts'
@@ -426,9 +428,10 @@ const navigation: Array<{
   label: string;
   icon: LucideIcon;
 }> = [
-  { key: 'manager-home', label: '项目经理主页', icon: LayoutDashboard },
-  { key: 'scheduling', label: '调度工作台', icon: CalendarDays },
-  { key: 'service-calendar', label: '服务日历', icon: CalendarDays },
+  { key: 'collaboration-home', label: '主页', icon: LayoutDashboard },
+  { key: 'manager-home', label: '项目经理工作台', icon: LayoutDashboard },
+  { key: 'scheduling', label: '服务调度', icon: CalendarDays },
+  { key: 'service-calendar', label: '工程师工作台', icon: LayoutDashboard },
   {
     key: 'requests',
     label: '服务请求',
@@ -738,10 +741,10 @@ function initialDemoWorkspace() {
 
 function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const resetting = useRef(false);
-  const [selectedView, setActiveView] = useState<ViewKey>('manager-home');
+  const [selectedView, setActiveView] = useState<ViewKey>('collaboration-home');
   const [initialProjectId, setInitialProjectId] = useState('');
   const [initialWorkOrderId, setInitialWorkOrderId] = useState('');
-  const [initialWorkOrderView, setInitialWorkOrderView] = useState<'work-orders' | 'work-order-overview'>('work-orders');
+  const [initialWorkOrderView, setInitialWorkOrderView] = useState<'work-orders' | 'work-order-overview' | 'worklogs'>('work-orders');
   const [initialRequestId, setInitialRequestId] = useState('');
   const projectLinkHandled = useRef(false);
   const [settingsSection, setSettingsSection] = useState<BackendSettingsSection>('forms');
@@ -842,7 +845,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 
   useEffect(() => {
     let active = true;
-    resetLocalDemoData(initialDemoWorkspace(), true).then(() => updateSchedulingDemoNames()).then(() => readLocal<{
+    resetLocalDemoData(initialDemoWorkspace(), true).then(() => updateSchedulingDemoNames()).then(() => initializeEngineerWorklogSamples()).then(() => readLocal<{
       id: string;
       payload: {
         customerOwnersInitialized?: boolean;
@@ -1463,7 +1466,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           onInitialize={initializeAllData}
           initializationDisabled={!referencesReady}
         />
-        <main className="content-area" data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
+        <main className={`content-area content-area--workspace${['projects', 'requests', 'catalog', 'reference-data', 'field-settings'].includes(activeView) ? ' content-area--list' : ''}`} data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
           {referenceStorageError && (
             <p role="alert" className="sr-error">
               {referenceStorageError}
@@ -1472,10 +1475,10 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           {!(activeView === 'catalog' && detailService) && <section className="page-header">
             <div>
               <h1>
-                {activeView === 'manager-home'
-                  ? '项目经理主页'
-                  : activeView === 'scheduling' ? '调度工作台'
-                  : activeView === 'service-calendar' ? '服务日历'
+                {activeView === 'collaboration-home' ? '主页' : activeView === 'manager-home'
+                  ? '项目经理工作台'
+                  : activeView === 'scheduling' ? '服务调度'
+                  : activeView === 'service-calendar' ? '工程师工作台'
                   : activeView === 'requests'
                   ? '服务请求'
                   : activeView === 'projects'
@@ -1495,7 +1498,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
             </div>
           </section>}
 
-          {activeView === 'manager-home' ? (
+          {activeView === 'collaboration-home' ? (
+            referencesReady && <CollaborationHome key={currentActor.id} actor={currentActor} customers={customers} onOpen={(view, id) => {
+              selectView(view);
+              if (view === 'projects') { setInitialProjectId(id); setInitialWorkOrderId(''); setInitialWorkOrderView('work-orders'); }
+              else setInitialRequestId(id);
+            }} />
+          ) : activeView === 'manager-home' ? (
             referencesReady && <ProjectManagerHome key={currentActor.id} actor={currentActor} customers={customers} directory={{ contacts, users, partners, partnerUsers }} onOpen={(view, id) => {
               selectView(view);
               if (view === 'projects') { setInitialProjectId(id ?? ''); setInitialWorkOrderId(''); }
@@ -1504,7 +1513,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           ) : activeView === 'scheduling' ? (
             referencesReady && portal.views.includes('scheduling') && <SchedulingWorkbench key={currentActor.id} actor={currentActor} customers={customers} onOpen={(id, workOrderId) => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(workOrderId); setInitialWorkOrderView('work-order-overview'); }} onOpenProject={id => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(''); setInitialWorkOrderView('work-orders'); }} />
           ) : activeView === 'service-calendar' ? (
-            referencesReady && portal.views.includes('service-calendar') && <ServiceCalendar key={currentActor.id} actor={currentActor} customers={customers} onOpen={(id, workOrderId) => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(workOrderId); setInitialWorkOrderView('work-order-overview'); }} />
+            referencesReady && portal.views.includes('service-calendar') && <ServiceEngineerHome onOpenWorklogs={id => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(''); setInitialWorkOrderView('worklogs'); }} key={currentActor.id} actor={currentActor} customers={customers} onOpen={(id, workOrderId) => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(workOrderId); setInitialWorkOrderView('work-orders'); }} />
           ) : activeView === 'requests' ? (
             referencesReady && portal.views.includes('requests') ? (
               <RequestFieldsContext.Provider value={resolvedRequestFields}>

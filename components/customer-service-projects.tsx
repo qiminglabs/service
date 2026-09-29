@@ -60,7 +60,7 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
   if (!ready) return <div className="sr-workspace"><p className="sr-help">正在读取服务项目…</p></div>;
   if (error) return <div className="sr-workspace"><p className="sr-error" role="alert">{error}</p><Button variant="outline" onClick={() => setReload(value => value + 1)}>重新读取</Button></div>;
   if (selectedId && !project) return <div className="sr-workspace"><p className="sr-error" role="alert">项目不存在或你已不在该项目的客户协作人名单中。</p><Button variant="outline" onClick={() => select('')}>返回服务项目列表</Button></div>;
-  if (project) return <section className="sr-workspace sr-workspace--detail catalog-detail" aria-label="客户服务项目详情">
+  if (project) return <section className="sr-workspace sr-workspace--detail catalog-detail" data-project-detail="true" aria-label="客户服务项目详情">
     <header className="detail-heading"><div>
       <button type="button" className="detail-back" onClick={() => select('')}><ArrowLeft aria-hidden="true" />返回服务项目列表</button>
       <div className="detail-title-row"><h2>{project.name}</h2><Status value={project.status} /></div>
@@ -136,10 +136,12 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
   </section>;
   const filtered = records.filter(record => (status === '全部状态' || record.status === status) && `${record.name} ${record.id} ${record.serviceProviderName}`.toLowerCase().includes(query.trim().toLowerCase()));
   return <section className="sr-workspace" aria-label="客户服务项目">
-    <div className="sr-toolbar"><div className="sr-filter-group"><div className="sr-search"><Search size={16} /><Input aria-label="搜索服务项目" placeholder="搜索项目名称、编号或服务方" value={query} onChange={event => setQuery(event.target.value)} /></div><select aria-label="筛选项目状态" value={status} onChange={event => setStatus(event.target.value)}><option>全部状态</option>{serviceProjectStatuses.map(value => <option key={value} value={value}>{serviceProjectStatusLabel(value, true)}</option>)}</select></div></div>
-    <div className="sr-table-scroll"><table className="sr-table app-list-table"><thead><tr><th>项目名称</th><th>服务方</th><th>服务项</th><th>计划执行日期</th><th>计划完成日期</th><th>状态</th><th>创建时间/创建人</th><th>操作</th></tr></thead><tbody>
+    <section className="sr-panel sr-request-list-panel">
+    <div className="sr-toolbar app-list-toolbar"><div className="sr-filter-group"><div className="sr-search"><Search size={16} /><Input aria-label="搜索服务项目" placeholder="搜索项目名称、编号或服务方" value={query} onChange={event => setQuery(event.target.value)} /></div><select aria-label="筛选项目状态" value={status} onChange={event => setStatus(event.target.value)}><option>全部状态</option>{serviceProjectStatuses.map(value => <option key={value} value={value}>{serviceProjectStatusLabel(value, true)}</option>)}</select></div></div>
+    <div className="sr-table-scroll"><table className="sr-table app-list-table"><thead><tr><th>项目名称</th><th>服务方</th><th>服务项</th><th>计划执行日期</th><th>计划完成日期</th><th>状态</th><th>创建时间/创建人</th><th data-list-actions>操作</th></tr></thead><tbody>
       {filtered.map(record => <tr key={record.id}><td><button className="sr-title-link app-list-link" onClick={() => select(record.id)}>{record.name}</button><small>{record.id}</small></td><td>{record.serviceProviderName || '未指定'}</td><td>{record.items.length} 项</td><td>{record.expectedServiceDate || '未填写'}</td><td>{record.plannedCompletionDate || '未填写'}</td><td><Status value={record.status} /></td><td>{stamp(record.createdAt)}<small>{record.createdBy || '—'}</small></td><td><Button variant="outline" size="sm" onClick={() => select(record.id)}>查看项目</Button></td></tr>)}
       {!filtered.length && <tr><td colSpan={8}>{records.length ? '暂无符合筛选条件的项目' : '暂无参与的服务项目，加入客户协作人后将在此显示。'}</td></tr>}
     </tbody></table></div>
+    </section>
   </section>;
 }

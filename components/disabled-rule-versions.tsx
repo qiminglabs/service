@@ -24,7 +24,7 @@ export function DisabledRuleVersions({ versions, targetLabel, showName = false, 
     <div className="table-scroll"><table className={`reference-table app-list-table ${showName ? 'approval-rules-table' : 'routing-table'}`}>
       <thead><tr>
         <th>优先级</th>{showName && <th>规则名称</th>}<th>自然语言描述</th><th>{targetLabel}</th>
-        <th>版本 / 状态</th><th>停用时间</th><th>停用人</th><th>操作</th>
+        <th>版本 / 状态</th><th>停用时间</th><th>停用人</th><th data-list-actions>操作</th>
       </tr></thead>
       <tbody>{versions.map(version => <tr key={version.key}>
         <td>{version.priority}</td>{showName && <td><strong>{version.name}</strong></td>}

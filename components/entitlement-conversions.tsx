@@ -125,7 +125,7 @@ export function EntitlementConversions({ actor }: { actor: string }) {
               <th>当前版本</th>
               <th>修改时间</th>
               <th>修改人</th>
-              <th>操作</th>
+              <th data-list-actions>操作</th>
             </tr>
           </thead>
           <tbody>

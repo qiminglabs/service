@@ -3,6 +3,7 @@ import type { OperationActor } from './request-operations';
 
 export type PortalType = 'staff' | 'customer' | 'partner';
 export type PortalView =
+  | 'collaboration-home'
   | 'manager-home'
   | 'scheduling'
   | 'service-calendar'
@@ -18,6 +19,7 @@ export const portalDefinitions: Record<
   staff: {
     title: '服务管理中心',
     views: [
+      'collaboration-home',
       'manager-home',
       'scheduling',
       'requests',
@@ -85,9 +87,7 @@ export function resolvePortalContext(
             ? ['manager-home', 'scheduling', 'requests', 'projects', 'catalog']
             : actor.role === 'SmartX 服务工程师'
               ? ['service-calendar', 'requests', 'projects']
-              : actor.role === 'SmartX 销售经理'
-                ? ['requests', 'projects']
-              : ['requests'],
+              : ['collaboration-home', 'requests', 'projects'],
       organizationId: 'smartx',
       organizationName: '北京志凌海纳科技有限公司',
     };

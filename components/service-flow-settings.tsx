@@ -545,7 +545,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                 <th>自然语言描述</th>
                 <th>分配流程</th>
                 <th>状态</th>
-                <th>操作</th>
+                <th data-list-actions>操作</th>
               </tr>
             </thead>
             <tbody>
@@ -644,7 +644,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                 <th>历史服务流程</th>
                 <th>停用原因</th>
                 <th>停用时间 / 操作人</th>
-                <th>操作</th>
+                <th data-list-actions>操作</th>
               </tr>
             </thead>
             <tbody>

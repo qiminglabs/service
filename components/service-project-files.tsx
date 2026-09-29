@@ -39,7 +39,7 @@ export function ServiceProjectFiles({ projectName, items }: { projectName: strin
       <colgroup><col style={{ width: 56 }} /><col style={{ width: 200 }} /><col style={{ width: 100 }} /><col style={{ width: 100 }} /><col style={{ width: 220 }} /><col style={{ width: 160 }} /><col style={{ width: 100 }} /><col style={{ width: 175 }} /><col style={{ width: 160 }} /></colgroup>
       <thead><tr>
         <th><Checkbox aria-label="全选全部文件" disabled={!items.length || busy} checked={!!items.length && chosen.length === items.length} indeterminate={chosen.length > 0 && chosen.length < items.length} onCheckedChange={checked => setSelected(checked ? items.map(item => item.id) : [])} /></th>
-        <th>名称</th><th>类型</th><th>大小</th><th>来源工单</th><th>来源步骤</th><th>提交人</th><th>提交时间</th><th>操作</th>
+        <th>名称</th><th>类型</th><th>大小</th><th>来源工单</th><th>来源步骤</th><th>提交人</th><th>提交时间</th><th data-list-actions>操作</th>
       </tr></thead>
       <tbody>{items.map(item => <tr key={item.id}>
         <td><Checkbox aria-label={`选择 ${item.file.name}`} checked={selected.includes(item.id)} disabled={busy} onCheckedChange={checked => setSelected(current => checked ? [...current, item.id] : current.filter(id => id !== item.id))} /></td>

@@ -119,7 +119,7 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
       {canManage && <Button disabled={!ready || busy} onClick={() => edit()}><Plus size={16} />新建规则</Button>}
     </div>
     <div className="table-scroll"><table className="reference-table app-list-table submission-rules-table">
-      <thead><tr><th>适用申请</th><th>自然语言描述</th><th>提示文本</th><th>版本 / 状态</th><th>修改时间</th><th>修改人</th><th>操作</th></tr></thead>
+      <thead><tr><th>适用申请</th><th>自然语言描述</th><th>提示文本</th><th>版本 / 状态</th><th>修改时间</th><th>修改人</th><th data-list-actions>操作</th></tr></thead>
       <tbody>
         {builtinSubmissionRules.map(rule => <tr key={rule.id}>
           <td>{ruleScopes[rule.scope]}</td>
@@ -133,7 +133,7 @@ export function SubmissionRuleSettings({ actor }: { actor: OperationActor }) {
     <details className="routing-rules disabled-rule-versions" aria-label="提交校验规则（已停用）">
       <summary className="submission-rules-toolbar"><strong>提交校验规则（已停用）</strong></summary>
       <div className="table-scroll"><table className="reference-table app-list-table submission-rules-table">
-        <thead><tr><th>适用申请</th><th>自然语言描述</th><th>提示文本</th><th>版本 / 状态</th><th>停用时间</th><th>停用人</th><th>操作</th></tr></thead>
+        <thead><tr><th>适用申请</th><th>自然语言描述</th><th>提示文本</th><th>版本 / 状态</th><th>停用时间</th><th>停用人</th><th data-list-actions>操作</th></tr></thead>
         <tbody>{disabledVersions.map((rule, index) => renderRule(rule, true, `${rule.id}-${rule.version ?? rule.revision}-${index}`))}
           {!disabledVersions.length && <tr><td colSpan={7} className="routing-empty">{ready ? '暂无已停用版本。' : '正在读取规则…'}</td></tr>}
         </tbody>

@@ -310,7 +310,7 @@ export function ReportTemplateSettings({
               <th>{flow ? '引用步骤' : '引用字段'}</th>
               <th>版本</th>
               <th>修改时间</th>
-              <th>操作</th>
+              <th data-list-actions>操作</th>
             </tr>
           </thead>
           <tbody>

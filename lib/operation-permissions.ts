@@ -87,6 +87,8 @@ const projectView = {
   admin: '全部项目',
   pm: '仅自己负责的项目',
   sales: '本人为内部协作人或当前待审批人的项目',
+  presales: '本人为内部协作人或当前待审批人的项目',
+  hardware: '本人为内部协作人或当前待审批人的项目',
   engineer: '本人为内部协作人或当前待审批人的项目',
   partner: '本人创建、伙伴协作或派单关联的项目',
   customer: '所属有效客户且本人为客户协作人的项目',
@@ -897,9 +899,18 @@ add(
   'C08',
   'cfg',
   '任意',
-  '查看项目经理主页',
+  '查看项目经理工作台',
   { admin: '允许', pm: '允许，仅本人负责范围' },
   '以最新门户配置为准；首页中的项目仍按访问权限筛选。',
+  'lib/portal-context.ts',
+);
+add(
+  'C10',
+  'cfg',
+  '任意',
+  '查看协作工作台',
+  { admin: '允许', sales: '允许', presales: '允许', hardware: '允许' },
+  '按本人创建、协作关系和当前待办归属汇总，记录仍按访问权限筛选。',
   'lib/portal-context.ts',
 );
 add(
@@ -949,14 +960,6 @@ export const operationPermissionRows: OperationPermissionRow[] = defs.flatMap(
           if (object === '服务申请' && role === 'partner' && !d.all) {
             result = '无页面入口';
             scope = '伙伴中心不开放服务申请';
-          }
-          if (
-            object === '服务项目' &&
-            ['presales', 'hardware'].includes(role) &&
-            !d.all
-          ) {
-            result = '无页面入口';
-            scope = '当前角色的门户未开放服务项目';
           }
           if (
             object === '服务项目' &&
