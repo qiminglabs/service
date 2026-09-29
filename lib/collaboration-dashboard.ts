@@ -32,12 +32,14 @@ import {
 import { isPartnerCreatedProject } from './service-project-work-order-policy.ts';
 
 import {
-  projectWorkspaceFollowups,
   sortWorkspaceFollowups,
   workspaceActivities,
   type WorkspaceFollowup,
 } from './workspace-dashboard.ts';
-import { projectOverdue } from './project-manager-dashboard.ts';
+import {
+  activeDashboardProject,
+  projectOverdue,
+} from './project-manager-dashboard.ts';
 
 export type CollaborationTask = WorkspaceFollowup;
 
@@ -73,10 +75,8 @@ export function collaborationDashboard(
       !myProjects.includes(project) &&
       project.collaborators?.internal?.some((person) => person.id === actor.id),
   );
-  const tasks: CollaborationTask[] = projectWorkspaceFollowups(
-    [...myProjects, ...collaborationProjects],
-    today,
-  );
+  // Record participation allows visibility, not ownership of the manager's actions.
+  const tasks: CollaborationTask[] = [];
   const addRequest = (record: ServiceRequest, kind: string) =>
     tasks.push({
       id: record.id,
@@ -223,9 +223,14 @@ export function collaborationDashboard(
   return {
     tasks,
     activities,
-    myProjects: newestFirst(myProjects),
-    myRequests: newestFirst(myRequests),
-    collaborationProjects: newestFirst(collaborationProjects),
-    collaborationRequests: newestFirst(collaborationRequests),
+    projects: newestFirst(
+      [...myProjects, ...collaborationProjects].filter(activeDashboardProject),
+    ),
+    requests: newestFirst(
+      [...myRequests, ...collaborationRequests].filter(
+        (record) =>
+          !['评估完成', '已转服务项目', '已取消'].includes(record.status),
+      ),
+    ),
   };
 }

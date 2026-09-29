@@ -24,10 +24,8 @@ type Props = {
   onOpen: (view: 'projects' | 'requests', id: string) => void;
 };
 const sections = [
-  { key: 'myProjects', label: '我的项目' },
-  { key: 'myRequests', label: '我的申请' },
-  { key: 'collaborationProjects', label: '协作项目' },
-  { key: 'collaborationRequests', label: '协作申请' },
+  { key: 'projects', label: '服务项目' },
+  { key: 'requests', label: '服务请求' },
 ] as const;
 type Section = (typeof sections)[number]['key'];
 
@@ -98,7 +96,7 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
   const section =
     selectedSection ??
     sections.find((item) => dashboard[item.key].length)?.key ??
-    'myProjects';
+    'projects';
   const records = dashboard[section];
   const visibleRequests = data.requests.filter((request) =>
     canAccessRequest(request, { actor, directory: data.context.users }),
@@ -125,11 +123,11 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
           aria-labelledby="collaboration-records-title"
         >
           <div className="pm-panel-heading">
-            <h2 id="collaboration-records-title">项目与申请</h2>
+            <h2 id="collaboration-records-title">未完成项目与申请</h2>
           </div>
           <div
             className="collaboration-record-tabs pm-filters"
-            aria-label="协作记录分类"
+            aria-label="未完成记录分类"
           >
             {sections.map((item) => (
               <button
@@ -226,7 +224,7 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
             )}
             {!records.length && (
               <Empty
-                text={`暂无${sections.find((item) => item.key === section)?.label}`}
+                text={`暂无未完成的${sections.find((item) => item.key === section)?.label}`}
               />
             )}
           </div>
