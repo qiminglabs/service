@@ -8,6 +8,34 @@ import { demoReportingUsers, demoWorkflowRuleReferences } from './demo-workflow-
 import { buildProjectSamples } from './demo-service-projects.ts';
 import { serviceMailTemplatesId, parseMailConfig } from './service-mail-templates.ts';
 import { initialProjectApprovalRules, projectApprovalRulesId } from './approval-scope.ts';
+import { buildSchedulingSamples } from './demo-scheduling.ts';
+import { assignmentDirectoryFromRows } from './service-work-order-store.ts';
+import { schedulingId } from './scheduling.ts';
+import type { ServiceProjectRecord } from './service-projects';
+
+// Rename only the old generated prefix; keep user edits and all scheduling data.
+export async function updateSchedulingDemoNames() {
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('references', 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onabort = () => reject(tx.error ?? new Error('示例项目名称更新失败。'));
+      tx.onerror = () => reject(tx.error);
+      const store = tx.objectStore('references');
+      const read = store.getAll();
+      read.onsuccess = () => {
+        const rows = read.result as { id: string; payload?: ServiceProjectRecord }[];
+        for (const row of rows) {
+          const project = row.payload;
+          if (project && row.id === `service-project:${project.id}` && project.id.startsWith('SP-DEMO-SCHEDULE-') && project.name?.startsWith('【调度演示】')) {
+            store.put({ ...row, payload: { ...project, name: project.name.replace(/^【调度演示】/, '【示例】'), revision: project.revision + 1, updatedAt: new Date().toISOString() } });
+          }
+        }
+      };
+    });
+  } finally { db.close(); }
+}
 
 export function initializeCustomerOwners<T extends CustomerRef>(customers: T[], users: InternalUser[]): T[] {
   const sales = users.find(user => user.status === '启用' && /销售/.test(user.department));
@@ -16,10 +44,11 @@ export function initializeCustomerOwners<T extends CustomerRef>(customers: T[], 
 }
 
 type InitialWorkspace = Parameters<typeof buildRequestSamples>[0] & {
+  schedulingDemo?: boolean;
   requestFields?: { id: string; name: string; options?: Array<string | { value: string; enabled: boolean }> }[];
 };
 
-export const requestedDemoResetMarker = 'demo-reset-2026-09-20-service-reports-v3';
+export const requestedDemoResetMarker = 'demo-reset-2026-09-29-scheduling-compact-v2';
 
 // Call only for an explicitly requested reset. Validate/build first;
 // then replace this application's three stores in a single rollback-safe commit.
@@ -73,6 +102,11 @@ export async function resetLocalDemoData<T extends InitialWorkspace>(initial: T,
   workspaceReference.payload = { ...workspace, customerOwnersInitialized: true, assets: generated.assets, businessObjects: generated.businessObjects };
   references.push({ id: projectApprovalRulesId, payload: projectApprovalRules });
   references.push(...generated.projects.map(project => ({ id: `service-project:${project.id}`, payload: project })));
+  if (workspace.schedulingDemo) {
+    const scheduling = buildSchedulingSamples(assignmentDirectoryFromRows(references), workspace.customers, samples, execution.config, now);
+    references.push({ id: schedulingId, payload: scheduling.data });
+    references.push(...scheduling.projects.map(project => ({ id: `service-project:${project.id}`, payload: project })));
+  }
   const db = await openDatabase();
   try {
     await new Promise<void>((resolve, reject) => {

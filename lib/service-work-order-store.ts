@@ -9,7 +9,8 @@ import type { ProjectCollaboratorDirectory } from './service-project-collaborato
 import type { FlowDictionary } from './service-flows';
 import { openDatabase, readLocal, partnerRequestConfigId, type RequestConfig, type ServiceRequest, type ObjectRef, type RequestItem, type CatalogService } from './service-requests.ts';
 import { parseServiceProviderConfig, serviceProviderSettingsId } from './service-provider-settings.ts';
-import { assignWorkOrders, type AssignmentDirectory, type WorkOrderAssignmentInput } from './work-order-assignment.ts';
+import { assignWorkOrders, canAssignWorkOrders, type AssignmentDirectory, type WorkOrderAssignmentInput } from './work-order-assignment.ts';
+import { assignmentScheduleEntries } from './work-order-assignment-schedule.ts';
 import {
   parseServiceFlowConfig,
   serviceFlowConfigId,
@@ -41,6 +42,14 @@ export function assignmentDirectoryFromRows(rows: { id: string; payload?: unknow
 }
 export async function readWorkOrderAssignmentDirectory() {
   return assignmentDirectoryFromRows(await readLocal<{ id: string; payload?: unknown }>('references'));
+}
+export async function readWorkOrderAssignmentContext(actor: OperationActor, projectId: string, orderIds: string[]) {
+  const rows = await readLocal<{ id: string; payload?: unknown }>('references');
+  const projects = rows.filter(row => row.id === `service-project:${(row.payload as ServiceProjectRecord)?.id}`)
+    .map(row => normalizeServiceProjectStatus(row.payload as ServiceProjectRecord));
+  const project = projects.find(project => project.id === projectId);
+  if (!project || !canAssignWorkOrders(project, actor)) throw new Error('当前身份或项目状态不允许指派工单。');
+  return { directory: assignmentDirectoryFromRows(rows), schedules: assignmentScheduleEntries(projects, actor, projectId, orderIds) };
 }
 export async function saveStoredWorkOrderAssignment(id: string, revision: number, actor: OperationActor, input: WorkOrderAssignmentInput) {
   return mutateProject(id, revision, actor, (project, rows) => assignWorkOrders(project, actor, input, assignmentDirectoryFromRows(rows)));

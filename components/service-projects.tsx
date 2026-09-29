@@ -115,6 +115,7 @@ const timeLabel = (value: string) =>
 export function ServiceProjects({
   initialProjectId,
   initialWorkOrderId,
+  initialWorkOrderView = 'work-orders',
   customers,
   actor,
   fields,
@@ -125,6 +126,7 @@ export function ServiceProjects({
 }: {
   initialProjectId?: string;
   initialWorkOrderId?: string;
+  initialWorkOrderView?: 'work-orders' | 'work-order-overview';
   customers: CustomerRef[];
   actor: OperationActor;
   fields: RequestField[];
@@ -231,7 +233,7 @@ export function ServiceProjects({
           setRequestNames(Object.fromEntries(requests.map(request => [request.id, request.title])));
           setReady(true);
           if (!initialProjectId) setError('');
-          const linkKey = `${initialProjectId ?? ''}:${initialWorkOrderId ?? ''}`;
+          const linkKey = `${initialProjectId ?? ''}:${initialWorkOrderId ?? ''}:${initialWorkOrderView}`;
           if (initialProjectId && openedLink.current !== linkKey) {
             openedLink.current = linkKey;
             const project = result.find(project => project.id === initialProjectId);
@@ -239,7 +241,7 @@ export function ServiceProjects({
               show(project);
               if (initialWorkOrderId && project.workOrders?.some(order => order.id === initialWorkOrderId)) {
                 setSelectedWorkOrderId(initialWorkOrderId);
-                setDetailTab('work-orders');
+                setDetailTab(initialWorkOrderView === 'work-order-overview' && canViewWorkOrderOverview(project, actor) ? 'work-order-overview' : 'work-orders');
               }
             }
             else setError(['SmartX 系统管理员', 'SmartX 项目经理'].includes(actor.role)
@@ -254,7 +256,7 @@ export function ServiceProjects({
     return () => {
       active = false;
     };
-  }, [actor, initialProjectId, initialWorkOrderId]);
+  }, [actor, initialProjectId, initialWorkOrderId, initialWorkOrderView]);
 
   async function reload() {
     setReady(false);

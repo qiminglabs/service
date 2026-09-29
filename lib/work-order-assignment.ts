@@ -19,6 +19,8 @@ export type AssignmentDirectory = ProjectCollaboratorDirectory & {
 export type AssignmentCandidate = WorkOrderAssignee & { companyId: string; companyName: string; role: string; email: string; certifications: ServiceCertification[] };
 export type WorkOrderAssignmentInput = { orderIds: string[]; assignees: Pick<WorkOrderAssignee, 'id' | 'group'>[] };
 export const engineerKey = (person: Pick<WorkOrderAssignee, 'id' | 'group'>) => `${person.group}:${person.id}`;
+export const dispatchableWorkOrders = (project: ServiceProjectRecord) =>
+  (project.workOrders ?? []).filter(order => !['已完成', '已取消'].includes(order.status));
 export function canAssignWorkOrders(project: ServiceProjectRecord, actor: OperationActor) {
   return canManageWorkOrders(project, actor) || (project.status === '进行中' && isPartnerCreatedProject(project)
     && actor.role === '合作伙伴服务工程师' && !!actor.id && project.createdById === actor.id);

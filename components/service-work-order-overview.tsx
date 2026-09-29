@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { canAssignWorkOrders } from '@/lib/work-order-assignment';
+import { canAssignWorkOrders, dispatchableWorkOrders } from '@/lib/work-order-assignment';
 import { WorkOrderAssignmentDialog } from '@/components/work-order-assignment-dialog';
 import { WorkOrderChangeAction, WorkOrderSuspensionAction } from '@/components/work-order-change-actions';
 import type { CatalogService } from '@/lib/service-requests';
@@ -41,7 +41,7 @@ export function ServiceWorkOrderOverview({
   const [notice, setNotice] = useState('');
   if (!canViewWorkOrderOverview(project, actor)) return null;
   const orders = project.workOrders ?? [];
-  const dispatchable = orders.filter(order => !['已完成', '已取消'].includes(order.status));
+  const dispatchable = dispatchableWorkOrders(project);
   const selectedOrders = dispatchable.filter(order => selectedOrderIds.includes(order.id));
   const today = new Date().toLocaleDateString('sv-SE');
   const cancelled = project.status === '已取消';

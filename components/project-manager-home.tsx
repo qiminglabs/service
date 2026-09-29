@@ -28,7 +28,6 @@ import type { ProjectCollaboratorDirectory } from '@/lib/service-project-collabo
 import { isResponsibleProjectManager } from '@/lib/service-project-work-order-policy';
 import { canPerformAssessmentRole } from '@/lib/assessment-routing';
 import { requestNextStep } from '@/lib/request-next-step';
-import { ExecutingEngineers } from '@/components/executing-engineers';
 import {
   Tooltip,
   TooltipContent,
@@ -48,11 +47,7 @@ type Props = {
   actor: OperationActor;
   customers: CustomerRef[];
   directory: ProjectCollaboratorDirectory;
-  onOpen: (
-    view: 'projects' | 'requests',
-    id?: string,
-    workOrderId?: string,
-  ) => void;
+  onOpen: (view: 'projects' | 'requests', id?: string) => void;
 };
 type Followup = {
   id: string;
@@ -568,11 +563,6 @@ export function ProjectManagerHome({
           {!shownProjects.length && <Empty text="暂无符合条件的项目" />}
         </div>
       </section>
-      <ExecutingEngineers
-        projects={projects}
-        managerId={actor.role === 'SmartX 系统管理员' ? undefined : actor.id}
-        onOpen={(projectId, orderId) => onOpen('projects', projectId, orderId)}
-      />
     </div>
   );
 }

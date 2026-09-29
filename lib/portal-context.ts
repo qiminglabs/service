@@ -4,6 +4,8 @@ import type { OperationActor } from './request-operations';
 export type PortalType = 'staff' | 'customer' | 'partner';
 export type PortalView =
   | 'manager-home'
+  | 'scheduling'
+  | 'service-calendar'
   | 'requests'
   | 'projects'
   | 'catalog'
@@ -15,7 +17,15 @@ export const portalDefinitions: Record<
 > = {
   staff: {
     title: '服务管理中心',
-    views: ['manager-home', 'requests', 'projects', 'catalog', 'reference-data', 'field-settings'],
+    views: [
+      'manager-home',
+      'scheduling',
+      'requests',
+      'projects',
+      'catalog',
+      'reference-data',
+      'field-settings',
+    ],
   },
   customer: { title: '客户中心', views: ['requests', 'projects'] },
   partner: { title: '合作伙伴中心', views: ['projects'] },
@@ -72,9 +82,11 @@ export function resolvePortalContext(
         actor.role === 'SmartX 系统管理员'
           ? portalDefinitions.staff.views
           : actor.role === 'SmartX 项目经理'
-            ? ['manager-home', 'requests', 'projects', 'catalog']
-            : ['SmartX 服务工程师', 'SmartX 销售经理'].includes(actor.role)
-              ? ['requests', 'projects']
+            ? ['manager-home', 'scheduling', 'requests', 'projects', 'catalog']
+            : actor.role === 'SmartX 服务工程师'
+              ? ['service-calendar', 'requests', 'projects']
+              : actor.role === 'SmartX 销售经理'
+                ? ['requests', 'projects']
               : ['requests'],
       organizationId: 'smartx',
       organizationName: '北京志凌海纳科技有限公司',
@@ -102,6 +114,10 @@ export function resolvePortalContext(
   return {
     type,
     ...portalDefinitions[type],
+    views:
+      type === 'partner' && actor.role === '合作伙伴服务工程师'
+        ? ['service-calendar', 'projects']
+        : portalDefinitions[type].views,
     organizationId: organization.id,
     organizationName: organization.name,
   };
