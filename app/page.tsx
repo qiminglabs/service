@@ -746,6 +746,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   const [initialWorkOrderId, setInitialWorkOrderId] = useState('');
   const [initialWorkOrderView, setInitialWorkOrderView] = useState<'work-orders' | 'work-order-overview' | 'worklogs'>('work-orders');
   const [initialRequestId, setInitialRequestId] = useState('');
+  const [detailOrigin, setDetailOrigin] = useState<{ view: ViewKey; label: string } | null>(null);
   const projectLinkHandled = useRef(false);
   const [settingsSection, setSettingsSection] = useState<BackendSettingsSection>('forms');
   const [requestCreateToken, setRequestCreateToken] = useState(0);
@@ -976,6 +977,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   }
 
   function clearDetailNavigation() {
+    setDetailOrigin(null);
     setInitialProjectId('');
     setInitialWorkOrderId('');
     setInitialWorkOrderView('work-orders');
@@ -1007,6 +1009,35 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
     setDetailServiceId(null);
     setQuery('');
   }
+
+  function openWorkspaceDetail(
+    view: 'projects' | 'requests',
+    id = '',
+    workOrderId = '',
+    workOrderView: 'work-orders' | 'work-order-overview' | 'worklogs' = 'work-orders',
+  ) {
+    if (!portal.views.includes(view)) return;
+    const originLabels: Partial<Record<ViewKey, string>> = {
+      'collaboration-home': '主页',
+      'manager-home': '项目经理工作台',
+      scheduling: '服务调度',
+      'service-calendar': '工程师工作台',
+    };
+    selectView(view);
+    const label = originLabels[activeView];
+    // Opening a list shortcut must not carry a detail return destination.
+    if (id && label) setDetailOrigin({ view: activeView, label });
+    if (view === 'projects') {
+      setInitialProjectId(id);
+      setInitialWorkOrderId(workOrderId);
+      setInitialWorkOrderView(workOrderView);
+    } else setInitialRequestId(id);
+  }
+
+  const detailBack = detailOrigin ? {
+    label: `返回${detailOrigin.label}`,
+    onBack: () => selectView(detailOrigin.view),
+  } : undefined;
 
   function selectSettingsSection(section: BackendSettingsSection) {
     if (!portal.views.includes('field-settings')) return;
@@ -1499,21 +1530,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           </section>}
 
           {activeView === 'collaboration-home' ? (
-            referencesReady && <CollaborationHome key={currentActor.id} actor={currentActor} customers={customers} onOpen={(view, id) => {
-              selectView(view);
-              if (view === 'projects') { setInitialProjectId(id); setInitialWorkOrderId(''); setInitialWorkOrderView('work-orders'); }
-              else setInitialRequestId(id);
-            }} />
+            referencesReady && <CollaborationHome key={currentActor.id} actor={currentActor} customers={customers} onOpen={openWorkspaceDetail} />
           ) : activeView === 'manager-home' ? (
-            referencesReady && <ProjectManagerHome key={currentActor.id} actor={currentActor} customers={customers} directory={{ contacts, users, partners, partnerUsers }} onOpen={(view, id) => {
-              selectView(view);
-              if (view === 'projects') { setInitialProjectId(id ?? ''); setInitialWorkOrderId(''); }
-              else setInitialRequestId(id ?? '');
-            }} />
+            referencesReady && <ProjectManagerHome key={currentActor.id} actor={currentActor} customers={customers} directory={{ contacts, users, partners, partnerUsers }} onOpen={openWorkspaceDetail} />
           ) : activeView === 'scheduling' ? (
-            referencesReady && portal.views.includes('scheduling') && <SchedulingWorkbench key={currentActor.id} actor={currentActor} customers={customers} onOpen={(id, workOrderId) => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(workOrderId); setInitialWorkOrderView('work-order-overview'); }} onOpenProject={id => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(''); setInitialWorkOrderView('work-orders'); }} />
+            referencesReady && portal.views.includes('scheduling') && <SchedulingWorkbench key={currentActor.id} actor={currentActor} customers={customers} onOpen={(id, workOrderId) => openWorkspaceDetail('projects', id, workOrderId, 'work-order-overview')} onOpenProject={id => openWorkspaceDetail('projects', id)} />
           ) : activeView === 'service-calendar' ? (
-            referencesReady && portal.views.includes('service-calendar') && <ServiceEngineerHome onOpenWorklogs={id => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(''); setInitialWorkOrderView('worklogs'); }} key={currentActor.id} actor={currentActor} customers={customers} onOpen={(id, workOrderId) => { selectView('projects'); setInitialProjectId(id); setInitialWorkOrderId(workOrderId); setInitialWorkOrderView('work-orders'); }} />
+            referencesReady && portal.views.includes('service-calendar') && <ServiceEngineerHome onOpenWorklogs={id => openWorkspaceDetail('projects', id, '', 'worklogs')} key={currentActor.id} actor={currentActor} customers={customers} onOpen={(id, workOrderId) => openWorkspaceDetail('projects', id, workOrderId)} />
           ) : activeView === 'requests' ? (
             referencesReady && portal.views.includes('requests') ? (
               <RequestFieldsContext.Provider value={resolvedRequestFields}>
@@ -1540,6 +1563,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                           partner.status === '启用',
                       ),
                   )}
+                  detailBack={detailBack}
                   initialRequestId={initialRequestId}
                   createToken={requestCreateToken}
                 />
@@ -1553,7 +1577,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               </p>
             )
           ) : activeView === 'projects' ? (
-            referencesReady && (currentActor.role === '客户' ? <CustomerServiceProjects initialProjectId={initialProjectId} key={currentActor.id} actor={currentActor} itemFields={resolvedRequestFields} services={serviceRecords} /> : <ServiceProjects initialWorkOrderView={initialWorkOrderView} initialWorkOrderId={initialWorkOrderId} initialProjectId={initialProjectId} key={currentActor.id} customers={customers} actor={currentActor} fields={projectFields}
+            referencesReady && (currentActor.role === '客户' ? <CustomerServiceProjects initialProjectId={initialProjectId} key={currentActor.id} actor={currentActor} itemFields={resolvedRequestFields} services={serviceRecords} /> : <ServiceProjects detailBack={detailBack} initialWorkOrderView={initialWorkOrderView} initialWorkOrderId={initialWorkOrderId} initialProjectId={initialProjectId} key={currentActor.id} customers={customers} actor={currentActor} fields={projectFields}
               services={serviceRecords} businessObjects={businessObjects} itemFields={resolvedRequestFields}
               collaboratorDirectory={{ contacts, users, partners, partnerUsers }} />)
           ) : activeView === 'catalog' ? (

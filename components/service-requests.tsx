@@ -152,6 +152,7 @@ type Props = {
   currentCustomerId?: string;
   partnerCollaborators: import('@/lib/partner-directory').PartnerUser[];
   partners: import('@/lib/partner-directory').Partner[];
+  detailBack?: { label: string; onBack: () => void };
   initialRequestId?: string;
   createToken: number;
 };
@@ -908,10 +909,10 @@ export function RequestWorkspace(props: Props) {
                 type="button"
                 className="detail-back"
                 disabled={busy}
-                onClick={() => { setDraft(null); setNotice(''); setError(''); }}
+                onClick={() => { if (props.detailBack) { props.detailBack.onBack(); return; } setDraft(null); setNotice(''); setError(''); }}
               >
                 <ArrowLeft aria-hidden="true" />
-                返回服务请求列表
+                {props.detailBack?.label ?? '返回服务请求列表'}
               </button>
               <div className="detail-title-row">
                 <h2>{draft.title || '未命名服务请求'}</h2>

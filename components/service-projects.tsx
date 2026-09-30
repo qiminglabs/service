@@ -113,6 +113,7 @@ const timeLabel = (value: string) =>
   new Date(value).toLocaleString('zh-CN', { hour12: false });
 
 export function ServiceProjects({
+  detailBack,
   initialProjectId,
   initialWorkOrderId,
   initialWorkOrderView = 'work-orders',
@@ -124,6 +125,7 @@ export function ServiceProjects({
   businessObjects,
   itemFields,
 }: {
+  detailBack?: { label: string; onBack: () => void };
   initialProjectId?: string;
   initialWorkOrderId?: string;
   initialWorkOrderView?: 'work-orders' | 'work-order-overview' | 'worklogs';
@@ -763,13 +765,14 @@ export function ServiceProjects({
               onClick={() => {
                 if (!leaveWorkOrder()) return;
                 workOrderDirty.current = false;
+                if (detailBack) { detailBack.onBack(); return; }
                 setOpen(false);
                 setFormError('');
                 setNotice('');
               }}
             >
               <ArrowLeft aria-hidden="true" />
-              返回服务项目列表
+              {detailBack?.label ?? '返回服务项目列表'}
             </button>
             <div className="detail-title-row">
               <h2 ref={detailHeading} tabIndex={-1}>
