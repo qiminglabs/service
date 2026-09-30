@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpRight,
   BriefcaseBusiness,
@@ -76,6 +76,8 @@ export function ProjectManagerHome({
   const [error, setError] = useState('');
   const [category, setCategory] = useState('全部事项');
   const [projectFilter, setProjectFilter] = useState('全部在管');
+  const projectListRef = useRef<HTMLDivElement>(null);
+  const [projectListMinHeight, setProjectListMinHeight] = useState(0);
   const [query, setQuery] = useState('');
   const [now, setNow] = useState(() => new Date());
   const { id: actorId, name: actorName, role: actorRole } = actor;
@@ -203,6 +205,12 @@ export function ProjectManagerHome({
         ),
     );
   const activities = workspaceActivities(scopedProjects);
+  const selectProjectFilter = (filter: string) => {
+    // Keep the document from shrinking and clamping the page's scroll position.
+    const height = projectListRef.current?.getBoundingClientRect().height ?? 0;
+    setProjectListMinHeight((previous) => Math.max(previous, height));
+    setProjectFilter(filter);
+  };
   const focusProjects = (filter: string) => {
     setProjectFilter(filter);
     document
@@ -337,7 +345,7 @@ export function ProjectManagerHome({
                 type="button"
                 aria-pressed={projectFilter === value}
                 key={value}
-                onClick={() => setProjectFilter(value)}
+                onClick={() => selectProjectFilter(value)}
               >
                 {value}
               </button>
@@ -350,7 +358,11 @@ export function ProjectManagerHome({
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
-        <div className="pm-table-wrap">
+        <div
+          className="pm-table-wrap"
+          ref={projectListRef}
+          style={{ minHeight: projectListMinHeight || undefined }}
+        >
           <table className="pm-table">
             <thead>
               <tr>

@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
-  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   Plus,
   Search,
   UserRound,
-  Users,
   ArrowUpRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -163,8 +161,6 @@ export function SchedulingWorkbench({
   const totals = snapshot
     ? slots.map((slot) => slotTotals(snapshot, filtered, slot))
     : [];
-  const capacity = totals.reduce((sum, total) => sum + total.available, 0);
-  const bookedCapacity = totals.reduce((sum, total) => sum + total.occupied, 0);
   const pending = snapshot ? pendingProjects(snapshot, actor) : [];
   const pendingVisible = pending.filter(({ project, orders }) =>
     `${project.name} ${customers.find((c) => c.id === project.customerId)?.name ?? project.customerId} ${orders.map((order) => `${order.id} ${order.item.serviceName}`).join(' ')}`
@@ -283,38 +279,6 @@ export function SchedulingWorkbench({
           </div>
         </aside>
         <div className="schedule-main">
-          <div className="schedule-summary">
-            <div>
-              <Users size={19} />
-              <span>
-                工程师
-                <strong>
-                  {filtered.length}
-                  <small>人</small>
-                </strong>
-              </span>
-            </div>
-            <div>
-              <CalendarCheck size={19} />
-              <span>
-                所选{periodName}已排容量
-                <strong>
-                  {bookedCapacity}
-                  <small>人天</small>
-                </strong>
-              </span>
-            </div>
-            <div>
-              <CalendarDays size={19} />
-              <span>
-                所选{periodName}可用容量
-                <strong>
-                  {capacity}
-                  <small>人天</small>
-                </strong>
-              </span>
-            </div>
-          </div>
           <section className="schedule-board" aria-label="工程师排期">
             <div className="schedule-toolbar">
               <div className="schedule-period">
