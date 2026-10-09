@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -56,10 +58,11 @@ import {
 } from '@/lib/flow-report-templates';
 
 function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+  const { localize } = useI18n();
   return (
     <label className="approval-field">
-      <span>{label}</span>
-      {children}
+      <span>{localize(label)}</span>
+      {localize(children)}
     </label>
   );
 }
@@ -87,6 +90,7 @@ export function ServiceFlowDesigner({
   onBack: () => void;
   onSaved: (saved: ServiceFlowConfig) => void;
 }) {
+  const { localize } = useI18n();
   const [flow, setFlow] = useState(() =>
     readonly
       ? withFlowReportTemplates(initialFlow)
@@ -229,24 +233,23 @@ export function ServiceFlowDesigner({
           onClick={() => (dirty ? setConfirmBack(true) : onBack())}
         >
           <ArrowLeft size={16} />
-          返回分配规则
-        </Button>
+          {localize("返回分配规则")}</Button>
         <div className="approval-toolbar-actions">
           <span className="sr-help">
-            {readonly ? '历史配置' : dirty ? '有未保存的修改' : '已保存'}
+            {localize(readonly ? '历史配置' : dirty ? '有未保存的修改' : '已保存')}
           </span>
-          {!readonly && (
+          {localize(!readonly && (
             <Button disabled={!editable || !dirty} onClick={() => void save()}>
               <Save size={16} />
-              {busy ? '正在保存…' : '保存流程'}
+              {localize(busy ? '正在保存…' : '保存流程')}
             </Button>
-          )}
+          ))}
         </div>
       </header>
       <div className="service-flow-metadata">
-        <Field label={<>流程名称 <RequiredMark /></>}>
+        <Field label={localize(<>{localize("流程名称")}<RequiredMark /></>)}>
           <Input
-            aria-label="服务流程名称"
+            aria-label={localize("服务流程名称")}
             required
             maxLength={120}
             value={flow.name}
@@ -254,7 +257,7 @@ export function ServiceFlowDesigner({
             onChange={(event) => edit({ ...flow, name: event.target.value })}
           />
         </Field>
-        <Field label="流程说明">
+        <Field label={localize("流程说明")}>
           <Input
             maxLength={4000}
             disabled={!editable}
@@ -262,16 +265,16 @@ export function ServiceFlowDesigner({
             onChange={(event) =>
               edit({ ...flow, description: event.target.value })
             }
-            placeholder="适用范围和服务目标"
+            placeholder={localize("适用范围和服务目标")}
           />
         </Field>
       </div>
-      {error && (
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && <output className="submission-rule-notice">{notice}</output>}
+      ))}
+      {localize(notice && <output className="submission-rule-notice">{localize(notice)}</output>)}
       <Tabs
         className="sr-ops-tabs flow-report-config"
         value={tab}
@@ -280,10 +283,10 @@ export function ServiceFlowDesigner({
         <TabsList
           className="sr-ops-tab-list"
           variant="line"
-          aria-label="流程配置"
+          aria-label={localize("流程配置")}
         >
-          <TabsTrigger value="steps">服务步骤</TabsTrigger>
-          <TabsTrigger value="templates">工单文档模板</TabsTrigger>
+          <TabsTrigger value="steps">{localize("服务步骤")}</TabsTrigger>
+          <TabsTrigger value="templates">{localize("工单文档模板")}</TabsTrigger>
         </TabsList>
         <TabsContent value="templates">
           <ReportTemplateSettings
@@ -298,19 +301,17 @@ export function ServiceFlowDesigner({
         </TabsContent>
         <TabsContent value="steps">
           <div className="approval-designer service-step-designer">
-            <section className="approval-canvas" aria-label="服务流程画布">
+            <section className="approval-canvas" aria-label={localize("服务流程画布")}>
               <div className="approval-canvas-heading">
                 <div>
                   <h3>
-                    服务流程{' '}
+                    {localize("服务流程")}{localize(' ')}
                     <span>
-                      {steps.length} 个步骤 ·{' '}
-                      {steps.filter((row) => row.enabled).length} 个启用
-                    </span>
+                      {localize(steps.length)} {localize(" 个步骤 ·")}{localize(' ')}
+                      {localize(steps.filter((row) => row.enabled).length)} {localize(" 个启用")}</span>
                   </h3>
                   <p className="sr-help">
-                    点击步骤配置内容；停用步骤不参与分配预览。
-                  </p>
+                    {localize("点击步骤配置内容；停用步骤不参与分配预览。")}</p>
                 </div>
                 <div className="service-phase-actions">
                   <Button
@@ -334,21 +335,19 @@ export function ServiceFlowDesigner({
                     }}
                   >
                     <Plus size={16} />
-                    添加阶段
-                  </Button>
+                    {localize("添加阶段")}</Button>
                   <Button
                     variant="outline"
                     disabled={!editable || steps.length >= 100}
                     onClick={() => add()}
                   >
                     <Plus size={16} />
-                    添加服务步骤
-                  </Button>
+                    {localize("添加服务步骤")}</Button>
                 </div>
               </div>
               <div className="approval-sequence">
-                <div className="approval-terminal">服务开始</div>
-                {groups
+                <div className="approval-terminal">{localize("服务开始")}</div>
+                {localize(groups
                   .filter((group) => group.id || group.steps.length)
                   .map((group, groupIndex) => (
                     <div
@@ -362,14 +361,14 @@ export function ServiceFlowDesigner({
                             ? 'service-phase-group'
                             : 'service-phase-ungrouped'
                         }
-                        aria-label={group.name || '未命名阶段'}
+                        aria-label={localize(group.name || '未命名阶段')}
                         data-ungrouped={!group.id}
                       >
-                        {group.id && (
+                        {localize(group.id && (
                           <header className="service-phase-header">
-                            {group.id ? (
+                            {localize(group.id ? (
                               <Input
-                                aria-label={`阶段 ${groupIndex + 1} 名称`}
+                                aria-label={localize(`阶段 ${groupIndex + 1} 名称`)}
                                 value={group.name}
                                 maxLength={120}
                                 disabled={!editable}
@@ -385,16 +384,16 @@ export function ServiceFlowDesigner({
                                 }
                               />
                             ) : (
-                              <strong>未分组</strong>
-                            )}
-                            {editable && (
+                              <strong>{localize("未分组")}</strong>
+                            ))}
+                            {localize(editable && (
                               <div className="service-phase-actions">
-                                {group.id && (
+                                {localize(group.id && (
                                   <>
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={`上移阶段 ${group.name}`}
+                                      aria-label={localize(`上移阶段 ${group.name}`)}
                                       disabled={groupIndex === 0}
                                       onClick={() => {
                                         const phases = [...flow.phases!];
@@ -418,7 +417,7 @@ export function ServiceFlowDesigner({
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={`下移阶段 ${group.name}`}
+                                      aria-label={localize(`下移阶段 ${group.name}`)}
                                       disabled={
                                         groupIndex === flow.phases!.length - 1
                                       }
@@ -444,8 +443,8 @@ export function ServiceFlowDesigner({
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={`删除阶段 ${group.name}，保留步骤`}
-                                      title="删除阶段，步骤保留在未分组中"
+                                      aria-label={localize(`删除阶段 ${group.name}，保留步骤`)}
+                                      title={localize("删除阶段，步骤保留在未分组中")}
                                       onClick={() =>
                                         edit(
                                           removeServiceFlowPhase(
@@ -458,112 +457,109 @@ export function ServiceFlowDesigner({
                                       <Trash2 size={14} />
                                     </Button>
                                   </>
-                                )}
+                                ))}
                                 <Button
                                   variant="outline"
                                   disabled={steps.length >= 100}
                                   onClick={() => add(group.id)}
                                 >
                                   <Plus size={14} />
-                                  添加步骤
-                                </Button>
+                                  {localize("添加步骤")}</Button>
                               </div>
-                            )}
+                            ))}
                           </header>
-                        )}
+                        ))}
                         <div className="service-phase-steps">
-                          {!group.steps.length && (
+                          {localize(!group.steps.length && (
                             <p className="sr-help">
-                              点击“添加步骤”为此阶段配置服务步骤。
-                            </p>
-                          )}
-                          {group.steps.map((item, index) => (
+                              {localize("点击“添加步骤”为此阶段配置服务步骤。")}</p>
+                          ))}
+                          {localize(group.steps.map((item, index) => (
                             <div key={item.id} className="service-phase-step">
-                              {index > 0 && (
+                              {localize(index > 0 && (
                                 <div
                                   className="approval-connector"
                                   aria-hidden="true"
                                 />
-                              )}
+                              ))}
                               <article
                                 className={`approval-node service-step-node${selected === item.id ? ' is-selected' : ''}${!item.enabled ? ' is-disabled' : ''}`}
                               >
                                 <header>
                                   <span>
-                                    步骤 {item.sequence} ·{' '}
-                                    {serviceStepTypes[item.type]}
+                                    {localize("步骤")}{localize(item.sequence)} ·{localize(' ')}
+                                    {localize(serviceStepTypes[item.type])}
                                   </span>
-                                  <span>{item.enabled ? '启用' : '停用'}</span>
+                                  <span>{localize(item.enabled ? '启用' : '停用')}</span>
                                 </header>
                                 <button
-                                  aria-label={`配置步骤 ${item.name || item.sequence}`}
+                                  aria-label={localize(`配置步骤 ${item.name || item.sequence}`)}
                                   className="approval-node-content"
                                   type="button"
                                   aria-pressed={selected === item.id}
                                   onClick={() => setSelected(item.id)}
                                 >
-                                  <strong>{item.name || '未命名步骤'}</strong>
+                                  <strong>{localize(item.name || '未命名步骤')}</strong>
                                   <span>
-                                    {item.required ? '必须完成' : '可选完成'}
-                                    {stepDeliverySummary(item) &&
-                                      ` · ${stepDeliverySummary(item)}`}
+                                    {localize(item.required ? '必须完成' : '可选完成')}
+                                    {localize(stepDeliverySummary(item) &&
+                                      ` · ${stepDeliverySummary(item)}`)}
                                   </span>
-                                  {item.materials.length > 0 && (
+                                  {localize(item.materials.length > 0 && (
                                     <small>
-                                      {item.materials.length} 项步骤说明
-                                    </small>
-                                  )}
+                                      {localize(item.materials.length)} {localize(" 项步骤说明")}</small>
+                                  ))}
                                 </button>
                               </article>
                             </div>
-                          ))}
+                          )))}
                         </div>
                       </section>
                     </div>
-                  ))}
+                  )))}
                 <div className="approval-connector" aria-hidden="true" />
-                <div className="approval-terminal">服务结束</div>
+                <div className="approval-terminal">{localize("服务结束")}</div>
               </div>
             </section>
             <aside
               className="approval-inspector service-step-inspector"
-              aria-label="服务步骤设置"
+              aria-label={localize("服务步骤设置")}
             >
-              <h3>步骤设置{step && <small>第 {step.sequence} 步</small>}</h3>
-              {step ? (
+              <h3>{localize("步骤设置")}{localize(step && <small>{localize("第")}{localize(step.sequence)} {localize(" 步")}</small>)}</h3>
+              {localize(step ? (
                 <fieldset disabled={!editable} key={step.id}>
-                  <Field label={<>步骤名称 <RequiredMark /></>}>
+                  <Field label={localize(<>{localize("步骤名称")}<RequiredMark /></>)}>
                     <Input
-                      aria-label="步骤名称"
+                      aria-label={localize("步骤名称")}
                       required
                       maxLength={120}
                       value={step.name}
                       onChange={(event) => update({ name: event.target.value })}
                     />
                   </Field>
-                  <Field label="状态">
+                  <Field label={localize("状态")}>
                     <NativeSelect
                       value={String(step.enabled)}
                       onChange={(event) =>
                         update({ enabled: event.target.value === 'true' })
                       }
                     >
-                      <option value="true">启用</option>
-                      <option value="false">停用</option>
+                      <option value="true">{localize("启用")}</option>
+                      <option value="false">{localize("停用")}</option>
                     </NativeSelect>
                   </Field>
-                  <Field label="完成要求">
+                  <Field label={localize("完成要求")}>
                     <NativeSelect
                       value={String(step.required)}
                       onChange={(event) =>
                         update({ required: event.target.value === 'true' })
                       }
                     >
-                      <option value="true">必须完成</option>
-                      <option value="false">可选完成</option>
+                      <option value="true">{localize("必须完成")}</option>
+                      <option value="false">{localize("可选完成")}</option>
                     </NativeSelect>
                   </Field>
-                  <Field label="类型">
+                  <Field label={localize("类型")}>
                     <NativeSelect
                       value={step.type}
                       onChange={(event) =>
@@ -575,37 +571,37 @@ export function ServiceFlowDesigner({
                         })
                       }
                     >
-                      {Object.entries(serviceStepTypes).map(
+                      {localize(Object.entries(serviceStepTypes).map(
                         ([value, label]) => (
                           <option key={value} value={value}>
-                            {label}
+                            {localize(label)}
                           </option>
                         ),
-                      )}
+                      ))}
                     </NativeSelect>
                   </Field>
                   <section
                     className="service-step-section"
-                    aria-label="步骤说明"
+                    aria-label={localize("步骤说明")}
                   >
                     <h4>
-                      步骤说明 <small>文本、链接、附件可组合添加</small>
+                      {localize("步骤说明")}<small>{localize("文本、链接、附件可组合添加")}</small>
                     </h4>
-                    {step.materials.map((material, index) => (
+                    {localize(step.materials.map((material, index) => (
                       <div className="service-step-material" key={material.id}>
                         <div className="service-flow-step-heading">
                           <strong>
-                            {index + 1}.{' '}
-                            {material.kind === 'text'
+                            {localize(index + 1)}.{localize(' ')}
+                            {localize(material.kind === 'text'
                               ? '文本'
                               : material.kind === 'link'
                                 ? '链接'
-                                : '附件'}
+                                : '附件')}
                           </strong>
                           <Button
                             variant="ghost"
                             size="icon"
-                            aria-label={`删除说明 ${index + 1}`}
+                            aria-label={localize(`删除说明 ${index + 1}`)}
                             onClick={() =>
                               update({
                                 materials: step.materials.filter(
@@ -617,9 +613,9 @@ export function ServiceFlowDesigner({
                             <Trash2 size={14} />
                           </Button>
                         </div>
-                        {material.kind === 'text' && (
+                        {localize(material.kind === 'text' && (
                           <Textarea
-                            aria-label={`说明 ${index + 1} 文本`}
+                            aria-label={localize(`说明 ${index + 1} 文本`)}
                             maxLength={10000}
                             rows={3}
                             value={material.content}
@@ -629,16 +625,16 @@ export function ServiceFlowDesigner({
                                 content: event.target.value,
                               })
                             }
-                            placeholder="操作指引与注意事项"
+                            placeholder={localize("操作指引与注意事项")}
                           />
-                        )}
-                        {material.kind === 'link' && (
+                        ))}
+                        {localize(material.kind === 'link' && (
                           <>
                             <Input
-                              aria-label={`说明 ${index + 1} 链接名称`}
+                              aria-label={localize(`说明 ${index + 1} 链接名称`)}
                               maxLength={300}
                               value={material.title}
-                              placeholder="链接名称"
+                              placeholder={localize("链接名称")}
                               onChange={(event) =>
                                 updateMaterial({
                                   ...material,
@@ -647,7 +643,7 @@ export function ServiceFlowDesigner({
                               }
                             />
                             <Input
-                              aria-label={`说明 ${index + 1} 链接地址`}
+                              aria-label={localize(`说明 ${index + 1} 链接地址`)}
                               maxLength={2048}
                               value={material.url}
                               placeholder="https://"
@@ -658,37 +654,36 @@ export function ServiceFlowDesigner({
                                 })
                               }
                             />
-                            {safeStepLink(material.url) && (
+                            {localize(safeStepLink(material.url) && (
                               <a
                                 href={material.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
-                                打开链接
-                              </a>
-                            )}
+                                {localize("打开链接")}</a>
+                            ))}
                           </>
-                        )}
-                        {material.kind === 'attachment' && (
+                        ))}
+                        {localize(material.kind === 'attachment' && (
                           <div className="service-step-attachment">
                             <Paperclip size={16} />
                             <button
                               type="button"
                               onClick={() => download(material)}
                             >
-                              {material.name}
+                              {localize(material.name)}
                             </button>
                             <small>
-                              {Math.max(
+                              {localize(Math.max(
                                 1,
                                 Math.ceil(material.blob.size / 1024),
-                              )}{' '}
+                              ))}{localize(' ')}
                               KB
                             </small>
                           </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
+                    )))}
                     <div className="routing-inline">
                       <Button
                         variant="outline"
@@ -696,30 +691,27 @@ export function ServiceFlowDesigner({
                         onClick={() => addMaterial('text')}
                       >
                         <FileText size={14} />
-                        添加文本
-                      </Button>
+                        {localize("添加文本")}</Button>
                       <Button
                         variant="outline"
                         disabled={step.materials.length >= 30}
                         onClick={() => addMaterial('link')}
                       >
                         <Link size={14} />
-                        添加链接
-                      </Button>
+                        {localize("添加链接")}</Button>
                       <Button
                         variant="outline"
                         disabled={step.materials.length >= 30}
                         onClick={() => fileInput.current?.click()}
                       >
                         <Paperclip size={14} />
-                        上传附件
-                      </Button>
+                        {localize("上传附件")}</Button>
                       <input
                         ref={fileInput}
                         type="file"
                         multiple
                         hidden
-                        aria-label="上传步骤说明附件"
+                        aria-label={localize("上传步骤说明附件")}
                         onChange={(event) => {
                           attach(Array.from(event.target.files ?? []));
                           event.target.value = '';
@@ -727,24 +719,22 @@ export function ServiceFlowDesigner({
                       />
                     </div>
                     <p className="sr-help">
-                      说明附件用于操作参考，单个不超过 10
-                      MB；执行时上传的成果按步骤类型配置。
-                    </p>
+                      {localize("说明附件用于操作参考，单个不超过 10 MB；执行时上传的成果按步骤类型配置。")}</p>
                   </section>
                   <section
                     className="service-step-section"
-                    aria-label="类型配置"
+                    aria-label={localize("类型配置")}
                   >
-                    <h4>{serviceStepTypes[step.type]}配置</h4>
-                    {step.type === 'form' && (
+                    <h4>{localize(serviceStepTypes[step.type])}{localize("配置")}</h4>
+                    {localize(step.type === 'form' && (
                       <ServiceStepFormSelect
                         key={step.id}
                         step={step}
                         editable={editable}
                         onChange={update}
                       />
-                    )}
-                    {(step.type === 'document' || step.type === 'upload') && (
+                    ))}
+                    {localize((step.type === 'document' || step.type === 'upload') && (
                       <ServiceStepDeliverables
                         steps={flow.steps}
                         reportTemplates={flow.reportTemplates ?? []}
@@ -754,15 +744,15 @@ export function ServiceFlowDesigner({
                         editable={editable}
                         onChange={update}
                       />
-                    )}
-                    {step.type === 'combined' && (
+                    ))}
+                    {localize(step.type === 'combined' && (
                       <ServiceStepGeneral
                         key={step.id}
                         step={step}
                         editable={editable}
                         onChange={update}
                       />
-                    )}
+                    ))}
                   </section>
                   <div className="approval-node-actions">
                     <Button
@@ -780,15 +770,13 @@ export function ServiceFlowDesigner({
                       }}
                     >
                       <Trash2 size={14} />
-                      删除步骤
-                    </Button>
+                      {localize("删除步骤")}</Button>
                   </div>
                 </fieldset>
               ) : (
                 <p className="approval-inspector-empty">
-                  在左侧选择一个服务步骤。
-                </p>
-              )}
+                  {localize("在左侧选择一个服务步骤。")}</p>
+              ))}
             </aside>
           </div>
         </TabsContent>
@@ -796,16 +784,14 @@ export function ServiceFlowDesigner({
       <Dialog open={confirmBack} onOpenChange={setConfirmBack}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>返回分配规则？</DialogTitle>
+            <DialogTitle>{localize("返回分配规则？")}</DialogTitle>
             <DialogDescription>
-              当前流程有未保存的修改，返回后将放弃这些修改。
-            </DialogDescription>
+              {localize("当前流程有未保存的修改，返回后将放弃这些修改。")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmBack(false)}>
-              继续编辑
-            </Button>
-            <Button onClick={onBack}>放弃修改并返回</Button>
+              {localize("继续编辑")}</Button>
+            <Button onClick={onBack}>{localize("放弃修改并返回")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

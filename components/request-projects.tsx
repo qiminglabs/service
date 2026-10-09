@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { normalizeServiceProjectStatus } from '@/lib/service-project-status';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -22,6 +24,7 @@ export function RequestProjectDialog({ record, actor, busy, save, close, objects
   record: ServiceRequest; actor: OperationActor; busy: boolean; objects: ObjectRef[]; saveError?: string;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>; close: () => void;
 }) {
+  const { localize } = useI18n();
   const fieldNames = Object.fromEntries(useContext(RequestFieldsContext).map(field => [field.id, field.name]));
   const [groups, setGroups] = useState<ProjectGroup[]>(() => [{ id: groupId(), name: record.title, note: '', itemIds: record.items.map(item => item.id) }]);
   const [mapping, setMapping] = useState<RequestProjectMapping | null>(null);
@@ -66,59 +69,60 @@ export function RequestProjectDialog({ record, actor, busy, save, close, objects
   }
   if (created) return <Dialog open onOpenChange={open => { if (!open) close(); }}>
     <DialogContent className="sr-project-dialog" aria-describedby={undefined}>
-      <DialogHeader><DialogTitle>服务项目已创建</DialogTitle></DialogHeader>
+      <DialogHeader><DialogTitle>{localize("服务项目已创建")}</DialogTitle></DialogHeader>
       <RequestProjects record={created} actor={actor} compact />
-      <DialogFooter className="sr-project-footer sr-project-success-footer"><Button onClick={close}>完成</Button></DialogFooter>
+      <DialogFooter className="sr-project-footer sr-project-success-footer"><Button onClick={close}>{localize("完成")}</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
   return <Dialog open onOpenChange={open => { if (!open && !busy && !working) close(); }}>
     <DialogContent className="sr-project-dialog" showCloseButton={!busy && !working}>
       <DialogHeader>
-        <DialogTitle>创建服务项目</DialogTitle>
-        <DialogDescription>将申请项拖到不同项目中，每项带入一个项目服务项及对应材料。</DialogDescription>
+        <DialogTitle>{localize("创建服务项目")}</DialogTitle>
+        <DialogDescription>{localize("将申请项拖到不同项目中，每项带入一个项目服务项及对应材料。")}</DialogDescription>
       </DialogHeader>
       <div className="sr-project-board-body">
-        <div className="sr-project-board-heading"><span title={record.title}>{record.title}</span><Button variant="outline" disabled={disabled || groups.length >= record.items.length} onClick={() => setGroups(old => [...old, { id: groupId(), name: `${mappedProjectName(record, mapping!)} · ${old.length + 1}`.slice(0, 100), expectedServiceDate: record.expectedServiceDate || '', note: '', itemIds: [] }])}><Plus size={16} />新增项目</Button></div>
+        <div className="sr-project-board-heading"><span title={localize(record.title)}>{localize(record.title)}</span><Button variant="outline" disabled={disabled || groups.length >= record.items.length} onClick={() => setGroups(old => [...old, { id: groupId(), name: `${mappedProjectName(record, mapping!)} · ${old.length + 1}`.slice(0, 100), expectedServiceDate: record.expectedServiceDate || '', note: '', itemIds: [] }])}><Plus size={16} />{localize("新增项目")}</Button></div>
         <div className="sr-project-board" data-single={groups.length === 1}>
-          {groups.map((group, groupIndex) => <section className="sr-project-group sr-project-dropzone" data-over={dropTarget === group.id} key={group.id}
-            aria-label={`项目 ${groupIndex + 1}：${group.name}`}
+          {localize(groups.map((group, groupIndex) => <section className="sr-project-group sr-project-dropzone" data-over={dropTarget === group.id} key={group.id}
+            aria-label={localize(`项目 ${groupIndex + 1}：${group.name}`)}
             onDragOver={event => { if (!disabled && dragItem.current) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTarget(group.id); } }}
             onDragLeave={event => { if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget as Node)) setDropTarget(old => old === group.id ? null : old); }}
             onDrop={event => { event.preventDefault(); if (dragItem.current) move(dragItem.current, group.id); }}>
-            <div className="sr-project-group-header"><Folder size={18} /><span>项目 {groupIndex + 1}</span><span className="sr-project-count">{group.itemIds.length} 个服务项</span>
-              {groups.length > 1 && <Button size="sm" variant="ghost" aria-label={`移除空项目 ${groupIndex + 1}`} title={group.itemIds.length ? '移出全部申请项后可删除项目' : '删除空项目'} disabled={disabled || group.itemIds.length > 0} onClick={() => setGroups(old => old.filter(item => item.id !== group.id))}><Trash2 size={15} /></Button>}
+            <div className="sr-project-group-header"><Folder size={18} /><span>{localize("项目")}{localize(groupIndex + 1)}</span><span className="sr-project-count">{localize(group.itemIds.length)} {localize(" 个服务项")}</span>
+              {localize(groups.length > 1 && <Button size="sm" variant="ghost" aria-label={localize(`移除空项目 ${groupIndex + 1}`)} title={localize(group.itemIds.length ? '移出全部申请项后可删除项目' : '删除空项目')} disabled={disabled || group.itemIds.length > 0} onClick={() => setGroups(old => old.filter(item => item.id !== group.id))}><Trash2 size={15} /></Button>)}
             </div>
-            <div className="sr-project-name"><Input aria-label={`项目 ${groupIndex + 1} 名称`} placeholder="填写项目名称" value={group.name} maxLength={100} disabled={disabled} onChange={event => setGroups(old => old.map(item => item.id === group.id ? { ...item, name: event.target.value } : item))} /></div>
-            {!record.expectedServiceDate && <div className="sr-project-name"><DateField id={`project-date-${group.id}`} label="计划执行日期" required value={group.expectedServiceDate || ''} disabled={disabled} onChange={value => setGroups(old => old.map(item => item.id === group.id ? { ...item, expectedServiceDate: value } : item))} /></div>}
+            <div className="sr-project-name"><Input aria-label={localize(`项目 ${groupIndex + 1} 名称`)} placeholder={localize("填写项目名称")} value={group.name} maxLength={100} disabled={disabled} onChange={event => setGroups(old => old.map(item => item.id === group.id ? { ...item, name: event.target.value } : item))} /></div>
+            {localize(!record.expectedServiceDate && <div className="sr-project-name"><DateField id={`project-date-${group.id}`} label={localize("计划执行日期")} required value={group.expectedServiceDate || ''} disabled={disabled} onChange={value => setGroups(old => old.map(item => item.id === group.id ? { ...item, expectedServiceDate: value } : item))} /></div>)}
             <div className="sr-project-drag-items">
-              {group.itemIds.map(itemId => {
+              {localize(group.itemIds.map(itemId => {
                 const item = record.items.find(item => item.id === itemId)!;
                 return <div className="sr-project-drag-item" key={itemId} draggable={!disabled} data-dragging={dragging === itemId}
                   onDragStart={event => { if (disabled) { event.preventDefault(); return; } dragItem.current = itemId; setDragging(itemId); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', itemId); }}
                   onDragEnd={() => { dragItem.current = null; setDragging(null); setDropTarget(null); }}>
-                  <GripVertical size={16} aria-hidden="true" /><div className="sr-project-item-info"><strong>{item.serviceName}</strong>
-                    <dl className="sr-project-item-fields">{itemDisplayFields(item, fieldNames, objects).map(field => <div key={field.key}><dt>{field.label}：</dt><dd>{field.value}</dd></div>)}</dl>
+                  <GripVertical size={16} aria-hidden="true" /><div className="sr-project-item-info"><strong>{localize(item.serviceName)}</strong>
+                    <dl className="sr-project-item-fields">{localize(itemDisplayFields(item, fieldNames, objects).map(field => <div key={field.key}><dt>{localize(field.label)}：</dt><dd>{localize(field.value)}</dd></div>))}</dl>
                   </div>
 
                 </div>;
-              })}
-              {!group.itemIds.length && <div className="sr-project-empty"><Plus size={20} /><span>拖动申请项到这里</span></div>}
+              }))}
+              {localize(!group.itemIds.length && <div className="sr-project-empty"><Plus size={20} /><span>{localize("拖动申请项到这里")}</span></div>)}
             </div>
-          </section>)}
+          </section>))}
         </div>
-        <output className="sr-only" aria-live="polite">{announcement}</output>
-        {(saveError || error || issue) && <p className="sr-project-validation" role={error ? 'alert' : 'status'}>{saveError || error || issue}</p>}
+        <output className="sr-only" aria-live="polite">{localize(announcement)}</output>
+        {localize((saveError || error || issue) && <p className="sr-project-validation" role={error ? 'alert' : 'status'}>{localize(saveError || error || issue)}</p>)}
       </div>
       <DialogFooter className="sr-project-footer">
-        <span>{groups.length} 个项目 · {record.items.length} 个服务项</span>
-        <Button variant="outline" disabled={busy || working} onClick={close}>取消</Button>
-        <Button className={!serviceProjectCreationEnabled ? 'ct-button ct-button--project-pending' : undefined} title={!serviceProjectCreationEnabled ? serviceProjectPendingMessage : undefined} disabled={disabled || !!issue || groups.some(group => !group.expectedServiceDate && !record.expectedServiceDate) || !canCreateServiceProjects(record, actor)} onClick={() => void submit()}>{!serviceProjectCreationEnabled ? '创建项目（待开发）' : working ? '创建中…' : '创建项目'}</Button>
+        <span>{localize(groups.length)} {localize(" 个项目 ·")}{localize(record.items.length)} {localize(" 个服务项")}</span>
+        <Button variant="outline" disabled={busy || working} onClick={close}>{localize("取消")}</Button>
+        <Button className={!serviceProjectCreationEnabled ? 'ct-button ct-button--project-pending' : undefined} title={localize(!serviceProjectCreationEnabled ? serviceProjectPendingMessage : undefined)} disabled={disabled || !!issue || groups.some(group => !group.expectedServiceDate && !record.expectedServiceDate) || !canCreateServiceProjects(record, actor)} onClick={() => void submit()}>{localize(!serviceProjectCreationEnabled ? '创建项目（待开发）' : working ? '创建中…' : '创建项目')}</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>;
 }
 
 export function RequestProjects({ record, actor, compact = false }: { record: ServiceRequest; actor?: OperationActor; compact?: boolean }) {
+  const { localize } = useI18n();
   const internal = !!actor && isInternal(actor.role);
   const creation = record.operations?.projectCreation;
   const [linkedProjects, setLinkedProjects] = useState<{ requestId: string; projects: Record<string, Pick<ServiceProjectRecord, 'name' | 'status'>> }>({ requestId: '', projects: {} });
@@ -141,26 +145,26 @@ export function RequestProjects({ record, actor, compact = false }: { record: Se
     return () => { active = false; window.removeEventListener('focus', refresh); };
   }, [record.id, creation, compact]);
   if (!creation) return null;
-  if (compact) return <section className="sr-project-results sr-project-results--compact" aria-label="已创建的服务项目">
-    {creation.projects.map(project => <article className="sr-project-group sr-project-result-heading" key={project.id}>
+  if (compact) return <section className="sr-project-results sr-project-results--compact" aria-label={localize("已创建的服务项目")}>
+    {localize(creation.projects.map(project => <article className="sr-project-group sr-project-result-heading" key={project.id}>
       <Folder size={18} aria-hidden="true" />
-      <strong>{project.name}</strong>
-      <code>{project.id}</code>
-      <span className="sr-project-order-state">已创建</span>
-      {actor && creation.mapping && <a className="sr-project-execute" href={`/?project=${encodeURIComponent(project.id)}&user=${encodeURIComponent(actor.id)}`} target="_blank" rel="noopener noreferrer">去执行</a>}
-    </article>)}
+      <strong>{localize(project.name)}</strong>
+      <code>{localize(project.id)}</code>
+      <span className="sr-project-order-state">{localize("已创建")}</span>
+      {localize(actor && creation.mapping && <a className="sr-project-execute" href={`/?project=${encodeURIComponent(project.id)}&user=${encodeURIComponent(actor.id)}`} target="_blank" rel="noopener noreferrer">{localize("去执行")}</a>)}
+    </article>))}
   </section>;
-  return <section className={`sr-panel sr-request-projects${internal ? ' sr-customer-visible-panel' : ''}`} aria-label="服务项目">
-    <div className="sr-panel-heading"><div className="sr-panel-title-with-visibility"><h3>服务项目</h3>{internal && <CustomerVisibleBadge />}</div></div>
-    <div className="sr-request-project-list">{creation.projects.map(project => {
+  return <section className={`sr-panel sr-request-projects${internal ? ' sr-customer-visible-panel' : ''}`} aria-label={localize("服务项目")}>
+    <div className="sr-panel-heading"><div className="sr-panel-title-with-visibility"><h3>{localize("服务项目")}</h3>{localize(internal && <CustomerVisibleBadge />)}</div></div>
+    <div className="sr-request-project-list">{localize(creation.projects.map(project => {
       const saved = linkedProjects.requestId === record.id ? linkedProjects.projects[project.id] : undefined;
       return <article className="sr-request-project-row" key={project.id}>
-        <strong>{saved?.name ?? project.name}</strong>
-        <span className="sr-project-order-state">{saved?.status ?? (creation.mapping ? '已创建' : project.status)}</span>
-        {actor && creation.mapping
-          ? <a className="sr-project-execute" href={`/?project=${encodeURIComponent(project.id)}&user=${encodeURIComponent(actor.id)}`} target="_blank" rel="noopener noreferrer">查看项目</a>
-          : <Button variant="outline" disabled title="此历史记录没有可打开的独立项目">查看项目</Button>}
+        <strong>{localize(saved?.name ?? project.name)}</strong>
+        <span className="sr-project-order-state">{localize(saved?.status ?? (creation.mapping ? '已创建' : project.status))}</span>
+        {localize(actor && creation.mapping
+          ? <a className="sr-project-execute" href={`/?project=${encodeURIComponent(project.id)}&user=${encodeURIComponent(actor.id)}`} target="_blank" rel="noopener noreferrer">{localize("查看项目")}</a>
+          : <Button variant="outline" disabled title={localize("此历史记录没有可打开的独立项目")}>{localize("查看项目")}</Button>)}
       </article>;
-    })}</div>
+    }))}</div>
   </section>;
 }

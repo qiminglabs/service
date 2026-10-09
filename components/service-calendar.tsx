@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -52,8 +54,8 @@ type Props = {
 type View = '我的工作' | '我的工时';
 type Editor = { kind: PersonalCalendarKind; entry?: CalendarException };
 const weekdays = ['一', '二', '三', '四', '五', '六', '日'];
-const dayTitle = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString('zh-CN', {
+const dayTitle = (date: string, locale = 'zh-CN') =>
+  new Date(`${date}T00:00:00`).toLocaleDateString(locale, {
     month: 'long',
     day: 'numeric',
     weekday: 'long',
@@ -71,6 +73,7 @@ export function ServiceEngineerHome({
   onOpen,
   onOpenWorklogs,
 }: Props) {
+  const { localize, locale } = useI18n();
   const [snapshot, setSnapshot] = useState<PersonalScheduleSnapshot>();
   const [worklogProjects, setWorklogProjects] = useState<
     ServiceProjectRecord[]
@@ -231,14 +234,14 @@ export function ServiceEngineerHome({
       <section
         className="eh-project-group"
         key={project.id}
-        aria-label={`项目：${project.name}`}
+        aria-label={localize(`项目：${project.name}`)}
         data-collapsed={!expanded || undefined}
       >
         <header className="eh-project-heading">
           <button
             type="button"
             className="eh-project-expand-area"
-            aria-label={`${expanded ? '收起' : '展开'} ${project.name} 的工单`}
+            aria-label={localize(`${expanded ? '收起' : '展开'} ${project.name} 的工单`)}
             aria-expanded={expanded}
             aria-controls={ordersId}
             onClick={() =>
@@ -248,24 +251,24 @@ export function ServiceEngineerHome({
               }))
             }
           />
-          <span className="eh-project-type">服务项目</span>
+          <span className="eh-project-type">{localize("服务项目")}</span>
           <div>
             <button
               type="button"
               className="eh-project-name"
-              title={project.name}
+              title={localize(project.name)}
               onClick={() => onOpen(project.id, '')}
             >
-              {project.name}
+              {localize(project.name)}
             </button>
-            <p title={customerName(project.customerId)}>
-              {customerName(project.customerId)}
+            <p title={localize(customerName(project.customerId))}>
+              {localize(customerName(project.customerId))}
             </p>
           </div>
           <span className="pm-tag" data-status={project.status}>
-            {project.status}
+            {localize(project.status)}
           </span>
-          <span className="eh-project-count">{rows.length} 张工单</span>
+          <span className="eh-project-count">{localize(rows.length)} {localize(" 张工单")}</span>
           <span
             className="eh-project-toggle"
             data-expanded={expanded}
@@ -275,7 +278,7 @@ export function ServiceEngineerHome({
           </span>
         </header>
         <div id={ordersId} hidden={!expanded}>
-          {rows.map((row) => (
+          {localize(rows.map((row) => (
             <article
               className="eh-work-item eh-project-order"
               key={engineerWorkKey(row)}
@@ -286,30 +289,30 @@ export function ServiceEngineerHome({
                     type="button"
                     onClick={() => onOpen(project.id, row.order.id)}
                   >
-                    {row.order.item.serviceName || '未命名工单'}
+                    {localize(row.order.item.serviceName || '未命名工单')}
                   </button>
                   <span className="pm-tag" data-status={row.status}>
-                    {row.status}
+                    {localize(row.status)}
                   </span>
-                  {row.overdue && (
-                    <span className="eh-overdue-tag">已逾期</span>
-                  )}
+                  {localize(row.overdue && (
+                    <span className="eh-overdue-tag">{localize("已逾期")}</span>
+                  ))}
                 </div>
                 <div className="eh-work-details">
                   <div className="eh-next-step">
-                    <span>当前步骤</span>
+                    <span>{localize("当前步骤")}</span>
                     <strong>
-                      {row.status === '已暂停'
+                      {localize(row.status === '已暂停'
                         ? '已暂停'
                         : row.status === '已取消'
                           ? '已取消'
                           : row.nextStep ||
-                            (row.total ? '步骤已完成' : '暂无执行步骤')}
+                            (row.total ? '步骤已完成' : '暂无执行步骤'))}
                     </strong>
                   </div>
                   <div className="eh-work-bottom">
                     <span>
-                      计划完成 {row.order.plannedCompletionDate || '待定'}
+                      {localize("计划完成")}{localize(row.order.plannedCompletionDate || '待定')}
                     </span>
                   </div>
                 </div>
@@ -319,25 +322,24 @@ export function ServiceEngineerHome({
                   <progress
                     value={row.completed}
                     max={row.total || 1}
-                    aria-label={`${row.order.item.serviceName}已完成或跳过 ${row.completed} 步，共 ${row.total} 步`}
+                    aria-label={localize(`${row.order.item.serviceName}已完成或跳过 ${row.completed} 步，共 ${row.total} 步`)}
                   />
                   <span>
-                    {row.completed}/{row.total} 步
-                  </span>
+                    {localize(row.completed)}/{localize(row.total)} {localize(" 步")}</span>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="eh-work-action"
-                  aria-label={`执行工单 ${row.order.item.serviceName || '未命名工单'}`}
+                  aria-label={localize(`执行工单 ${row.order.item.serviceName || '未命名工单'}`)}
                   onClick={() => onOpen(project.id, row.order.id)}
                 >
-                  {row.active ? '进入执行' : '查看工单'}
+                  {localize(row.active ? '进入执行' : '查看工单')}
                   <ArrowUpRight size={14} />
                 </Button>
               </div>
             </article>
-          ))}
+          )))}
         </div>
       </section>
     );
@@ -346,46 +348,46 @@ export function ServiceEngineerHome({
   if (!snapshot || !person)
     return (
       <div className="eh-home">
-        {error ? (
+        {localize(error ? (
           <p role="alert" className="sr-error">
-            {error}
+            {localize(error)}
           </p>
         ) : (
-          <output>正在读取工程师工作台…</output>
-        )}
+          <output>{localize("正在读取工程师工作台…")}</output>
+        ))}
       </div>
     );
 
   return (
     <div className="eh-home">
-      {error && (
+      {localize(error && (
         <p role="alert" className="sr-error">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && <output className="schedule-notice">{notice}</output>}
+      ))}
+      {localize(notice && <output className="schedule-notice">{localize(notice)}</output>)}
       <div className="eh-layout">
-        <section className="eh-main-panel" aria-label="我的工作与工时">
-          <nav className="eh-tabs" aria-label="工作台视图">
-            {(['我的工作', '我的工时'] as const).map((value) => (
+        <section className="eh-main-panel" aria-label={localize("我的工作与工时")}>
+          <nav className="eh-tabs" aria-label={localize("工作台视图")}>
+            {localize((['我的工作', '我的工时'] as const).map((value) => (
               <button
                 type="button"
                 key={value}
                 aria-current={view === value ? 'page' : undefined}
                 onClick={() => setView(value)}
               >
-                {value}
+                {localize(value)}
               </button>
-            ))}
+            )))}
           </nav>
-          {view === '我的工时' ? (
+          {localize(view === '我的工时' ? (
             <>
-              <div className="eh-worklog-dates" aria-label="工时日期筛选">
+              <div className="eh-worklog-dates" aria-label={localize("工时日期筛选")}>
                 <div className="eh-week-controls">
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="上一周"
+                    aria-label={localize("上一周")}
                     onClick={() =>
                       setWorklogDate((date) =>
                         moveScheduleViewDate(date, 'week', -1),
@@ -395,12 +397,12 @@ export function ServiceEngineerHome({
                     <ChevronLeft size={16} />
                   </Button>
                   <span className="eh-week-range" aria-live="polite">
-                    {dateRange.start} — {dateRange.end}
+                    {localize(dateRange.start)} — {localize(dateRange.end)}
                   </span>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="下一周"
+                    aria-label={localize("下一周")}
                     onClick={() =>
                       setWorklogDate((date) =>
                         moveScheduleViewDate(date, 'week', 1),
@@ -414,8 +416,7 @@ export function ServiceEngineerHome({
                     size="sm"
                     onClick={() => setWorklogDate(scheduleToday())}
                   >
-                    本周
-                  </Button>
+                    {localize("本周")}</Button>
                 </div>
               </div>
               <EngineerWorklogs
@@ -428,10 +429,10 @@ export function ServiceEngineerHome({
             <>
               <div
                 className="eh-work-filters"
-                aria-label="工单状态"
+                aria-label={localize("工单状态")}
                 ref={workFiltersRef}
               >
-                {[
+                {localize([
                   '未完成',
                   '全部',
                   '待执行',
@@ -452,86 +453,81 @@ export function ServiceEngineerHome({
                       setFilter(value);
                     }}
                   >
-                    {value}
+                    {localize(value)}
                     <span>
-                      {work.filter((row) => matchesFilter(row, value)).length}
+                      {localize(work.filter((row) => matchesFilter(row, value)).length)}
                     </span>
                   </button>
-                ))}
+                )))}
               </div>
               <div
                 className="eh-project-list eh-work-projects"
                 aria-live="polite"
               >
-                {projectPage.groups.map(renderProjectGroup)}
-                {!projectGroups.length && (
+                {localize(projectPage.groups.map(renderProjectGroup))}
+                {localize(!projectGroups.length && (
                   <div className="eh-empty">
                     <CheckCheck size={28} />
-                    <strong>暂无符合条件的工单</strong>
+                    <strong>{localize("暂无符合条件的工单")}</strong>
                   </div>
-                )}
+                ))}
               </div>
-              <nav className="eh-work-pagination" aria-label="我的工作分页">
+              <nav className="eh-work-pagination" aria-label={localize("我的工作分页")}>
                 <span aria-live="polite">
-                  第 {projectPage.start}–{projectPage.end} 个，共{' '}
-                  {projectPage.total} 个项目
-                </span>
+                  {localize("第")}{localize(projectPage.start)}–{localize(projectPage.end)} {localize(" 个，共")}{localize(' ')}
+                  {localize(projectPage.total)} {localize(" 个项目")}</span>
                 <div>
-                  <span>每页 {engineerProjectPageSize} 个</span>
+                  <span>{localize("每页")}{localize(engineerProjectPageSize)} {localize(" 个")}</span>
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={projectPage.page === 1}
                     onClick={() => changeWorkPage(projectPage.page - 1)}
-                    aria-label="上一页项目"
+                    aria-label={localize("上一页项目")}
                   >
                     <ChevronLeft size={15} />
-                    上一页
-                  </Button>
+                    {localize("上一页")}</Button>
                   <span aria-live="polite">
-                    {projectPage.page} / {projectPage.pages}
+                    {localize(projectPage.page)} / {localize(projectPage.pages)}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={projectPage.page === projectPage.pages}
                     onClick={() => changeWorkPage(projectPage.page + 1)}
-                    aria-label="下一页项目"
+                    aria-label={localize("下一页项目")}
                   >
-                    下一页
-                    <ChevronRight size={15} />
+                    {localize("下一页")}<ChevronRight size={15} />
                   </Button>
                 </div>
               </nav>
             </>
-          )}
+          ))}
         </section>
         <aside className="eh-sidebar">
           <section
             className="eh-month-panel eh-compact-calendar"
-            aria-label="服务日历"
+            aria-label={localize("服务日历")}
           >
             <div className="eh-calendar-title">
               <CalendarDays size={16} />
-              <span>服务日历</span>
+              <span>{localize("服务日历")}</span>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setEditor({ kind: '调休休息' })}
               >
                 <Coffee size={14} />
-                登记调休
-              </Button>
+                {localize("登记调休")}</Button>
             </div>
             <div className="eh-month-heading">
               <h3>
-                {selectedDate.slice(0, 4)}年{Number(selectedDate.slice(5, 7))}月
-              </h3>
+                {new Date(`${selectedDate}T00:00:00`).toLocaleDateString(locale, { year: 'numeric', month: 'long' })}</h3>
               <div>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="上一月"
+                  aria-label={localize("上一月")}
                   onClick={() =>
                     selectDate(moveScheduleViewDate(selectedDate, 'month', -1))
                   }
@@ -541,7 +537,7 @@ export function ServiceEngineerHome({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  aria-label="下一月"
+                  aria-label={localize("下一月")}
                   onClick={() =>
                     selectDate(moveScheduleViewDate(selectedDate, 'month', 1))
                   }
@@ -551,15 +547,15 @@ export function ServiceEngineerHome({
               </div>
             </div>
             <div className="eh-month-weekdays" aria-hidden="true">
-              {weekdays.map((label) => (
-                <span key={label}>{label}</span>
-              ))}
+              {localize(weekdays.map((label) => (
+                <span key={label}>{localize(label)}</span>
+              )))}
             </div>
             <div className="eh-month-grid">
-              {Array.from({ length: leadingDays }, (_, i) => (
+              {localize(Array.from({ length: leadingDays }, (_, i) => (
                 <span aria-hidden="true" key={`before${i}`} />
-              ))}
-              {month.dates.map((date) => {
+              )))}
+              {localize(month.dates.map((date) => {
                 const state = states.get(date)!;
                 const off =
                   calendarState(snapshot.data, person, { date }).state ===
@@ -568,40 +564,40 @@ export function ServiceEngineerHome({
                   <button
                     type="button"
                     key={date}
-                    aria-label={`${date}，${off ? '休息' : '上班'}，${state.bookings.length}张工单`}
+                    aria-label={localize(`${date}，${off ? '休息' : '上班'}，${state.bookings.length}张工单`)}
                     aria-pressed={date === selectedDate}
                     data-today={date === today || undefined}
                     data-off={off || undefined}
                     onClick={() => selectDate(date)}
                   >
-                    <span>{Number(date.slice(8))}</span>
+                    <span>{localize(Number(date.slice(8)))}</span>
                     <div className="eh-day-dots" aria-hidden="true">
-                      {!!state.bookings.length && <i data-kind="work" />}
+                      {localize(!!state.bookings.length && <i data-kind="work" />)}
                     </div>
                   </button>
                 );
-              })}
-              {Array.from({ length: trailingDays }, (_, i) => (
+              }))}
+              {localize(Array.from({ length: trailingDays }, (_, i) => (
                 <span aria-hidden="true" key={`after${i}`} />
-              ))}
+              )))}
             </div>
             <div className="eh-calendar-day" aria-live="polite">
-              <h4>{dayTitle(selectedDate)}</h4>
-              {selectedDayProjects.map((project) => (
+              <h4>{localize(dayTitle(selectedDate, locale))}</h4>
+              {localize(selectedDayProjects.map((project) => (
                 <button
                   type="button"
                   className="eh-calendar-booking"
                   key={project.id}
                   onClick={() => onOpen(project.id, '')}
                 >
-                  <strong>{project.name || '未命名项目'}</strong>
-                  <span>{customerName(project.customerId)}</span>
+                  <strong>{localize(project.name || '未命名项目')}</strong>
+                  <span>{localize(customerName(project.customerId))}</span>
                 </button>
-              ))}
-              {!selectedDayProjects.length && <p>当天暂无项目安排</p>}
-              {!!selectedDay?.exceptions.length && (
+              )))}
+              {localize(!selectedDayProjects.length && <p>{localize("当天暂无项目安排")}</p>)}
+              {localize(!!selectedDay?.exceptions.length && (
                 <div className="eh-calendar-events">
-                  {selectedDay.exceptions.map((entry) => (
+                  {localize(selectedDay.exceptions.map((entry) => (
                     <button
                       type="button"
                       key={entry.id}
@@ -609,29 +605,28 @@ export function ServiceEngineerHome({
                         !canEditPersonalCalendar(entry, person.key, actor.id)
                       }
                       onClick={() => editEntry(entry)}
-                      title={entry.note || calendarLabel(entry)}
+                      title={localize(entry.note || calendarLabel(entry))}
                     >
-                      {calendarLabel(entry)}
+                      {localize(calendarLabel(entry))}
                     </button>
-                  ))}
+                  )))}
                 </div>
-              )}
-              {hasConflict(selectedDate) && (
+              ))}
+              {localize(hasConflict(selectedDate) && (
                 <output className="eh-conflict">
                   <TriangleAlert size={14} />
-                  当天休息安排与已派工单重叠，请协调调整排期。
-                </output>
-              )}
+                  {localize("当天休息安排与已派工单重叠，请协调调整排期。")}</output>
+              ))}
             </div>
           </section>
-          {!!overdue.length && (
+          {localize(!!overdue.length && (
             <section className="eh-attention">
               <div>
                 <TriangleAlert size={17} />
-                <h3>待关注</h3>
-                <span>{overdue.length}</span>
+                <h3>{localize("待关注")}</h3>
+                <span>{localize(overdue.length)}</span>
               </div>
-              {overdue.slice(0, 3).map((row) => (
+              {localize(overdue.slice(0, 3).map((row) => (
                 <article
                   className="eh-attention-item"
                   key={engineerWorkKey(row)}
@@ -640,17 +635,17 @@ export function ServiceEngineerHome({
                     type="button"
                     onClick={() => onOpen(row.project.id, '')}
                   >
-                    {row.project.name}
+                    {localize(row.project.name)}
                   </button>
                   <button
                     type="button"
                     onClick={() => onOpen(row.project.id, row.order.id)}
                   >
-                    {row.order.item.serviceName || '未命名工单'} · 计划完成{' '}
-                    {row.order.plannedCompletionDate}
+                    {localize(row.order.item.serviceName || '未命名工单')} {localize(" · 计划完成")}{localize(' ')}
+                    {localize(row.order.plannedCompletionDate)}
                   </button>
                 </article>
-              ))}
+              )))}
               <Button
                 variant="ghost"
                 size="sm"
@@ -661,14 +656,13 @@ export function ServiceEngineerHome({
                   setExpandedProjects({});
                 }}
               >
-                查看全部逾期工单
-                <ArrowUpRight size={14} />
+                {localize("查看全部逾期工单")}<ArrowUpRight size={14} />
               </Button>
             </section>
-          )}
+          ))}
         </aside>
       </div>
-      {editor && (
+      {localize(editor && (
         <PersonalCalendarDialog
           key={editor.entry?.id ?? editor.kind}
           snapshot={snapshot}
@@ -681,7 +675,7 @@ export function ServiceEngineerHome({
           }}
           onSave={save}
         />
-      )}
+      ))}
     </div>
   );
 }

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useEffect, useState } from 'react';
 import { isPartnerCreatedProject } from '@/lib/service-project-work-order-policy';
 import { ServiceProjectDailyReports } from '@/components/service-project-daily-reports';
@@ -35,6 +37,7 @@ export function ProjectConfirmationMail({
   onClose: () => void;
   beforeSubmit?: () => boolean;
 }) {
+  const { localize } = useI18n();
   const [context, setContext] = useState<ProjectReviewContext>();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -63,10 +66,10 @@ export function ProjectConfirmationMail({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>发送报告并发起确认</DialogTitle>
+            <DialogTitle>{localize("发送报告并发起确认")}</DialogTitle>
           </DialogHeader>
           <p role={error ? 'alert' : 'status'}>
-            {error || '正在读取邮件信息…'}
+            {localize(error || '正在读取邮件信息…')}
           </p>
         </DialogContent>
       </Dialog>

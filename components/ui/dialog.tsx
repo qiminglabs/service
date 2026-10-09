@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import * as React from 'react';
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
@@ -47,6 +49,7 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -58,8 +61,8 @@ function DialogContent({
         )}
         {...props}
       >
-        {children}
-        {showCloseButton && (
+        {localize(children)}
+        {localize(showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"
             render={
@@ -73,7 +76,7 @@ function DialogContent({
             <XIcon />
             <span className="sr-only">Close</span>
           </DialogPrimitive.Close>
-        )}
+        ))}
       </DialogPrimitive.Popup>
     </DialogPortal>
   );
@@ -97,6 +100,7 @@ function DialogFooter({
 }: React.ComponentProps<'div'> & {
   showCloseButton?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <div
       data-slot="dialog-footer"
@@ -106,12 +110,12 @@ function DialogFooter({
       )}
       {...props}
     >
-      {children}
-      {showCloseButton && (
+      {localize(children)}
+      {localize(showCloseButton && (
         <DialogPrimitive.Close render={<Button variant="outline" />}>
           Close
         </DialogPrimitive.Close>
-      )}
+      ))}
     </div>
   );
 }

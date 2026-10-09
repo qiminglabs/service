@@ -1,4 +1,7 @@
 'use client';
+import { useI18n, LanguageScope, LanguageSwitch } from '@/lib/i18n/context';
+import { TranslationWorkbench } from '@/components/translation-workbench';
+
 import { commitCatalogVersion, createStoredCatalogService, canManageCatalog } from '@/lib/catalog-versions';
 import { responsibleTeams } from '@/lib/customer-teams';
 import { backendSettingsSections, type BackendSettingsSection } from '@/lib/backend-settings';
@@ -474,12 +477,13 @@ type WebMcpContext = {
 };
 
 function StatusCapsule({ status }: { status: ServiceStatus }) {
+  const { localize } = useI18n();
   return (
     <span
       className="ct-status"
       data-status={status === '已启用' ? 'positive' : 'neutral'}
     >
-      {status}
+      {localize(status)}
     </span>
   );
 }
@@ -499,20 +503,21 @@ function SideNavigation({
   onSelect: (view: ViewKey) => void;
   onNavigate?: () => void;
 }) {
+  const { localize } = useI18n();
   const [settingsExpanded, setSettingsExpanded] = useState(activeView === 'field-settings');
   useEffect(() => { if (activeView === 'field-settings') setSettingsExpanded(true); }, [activeView]);
   return (
-    <aside className="app-sidebar" aria-label="主导航">
+    <aside className="app-sidebar" aria-label={localize("主导航")}>
       <div className="workspace-switcher">
         <strong
-          title={portal.organizationName.replace(/（模拟）|\(模拟\)/g, '')}
+          title={localize(portal.organizationName.replace(/（模拟）|\(模拟\)/g, ''))}
         >
-          {portal.organizationName.replace(/（模拟）|\(模拟\)/g, '')}
+          {localize(portal.organizationName.replace(/（模拟）|\(模拟\)/g, ''))}
         </strong>
       </div>
 
       <nav className="sidebar-groups">
-        {navigation
+        {localize(navigation
           .filter((item) => portal.views.includes(item.key))
           .map((item) => (
             <div className="sidebar-group" key={item.label}>
@@ -533,21 +538,21 @@ function SideNavigation({
                 }}
               >
                 <item.icon aria-hidden="true" />
-                <span>{item.label}</span>
-                {item.key === 'field-settings' && <ChevronDown className="sidebar-chevron" aria-hidden="true" style={{ transform: settingsExpanded ? undefined : 'rotate(-90deg)' }} />}
+                <span>{localize(item.label)}</span>
+                {localize(item.key === 'field-settings' && <ChevronDown className="sidebar-chevron" aria-hidden="true" style={{ transform: settingsExpanded ? undefined : 'rotate(-90deg)' }} />)}
               </button>
-              {item.key === 'field-settings' && settingsExpanded && <div className="sidebar-children" aria-label="后台配置子导航">
-                {backendSettingsSections.map(section => <button
+              {localize(item.key === 'field-settings' && settingsExpanded && <div className="sidebar-children" aria-label={localize("后台配置子导航")}>
+                {localize(backendSettingsSections.map(section => <button
                   type="button"
                   key={section.key}
                   className="sidebar-item"
                   data-active={activeView === 'field-settings' && settingsSection === section.key || undefined}
                   aria-current={activeView === 'field-settings' && settingsSection === section.key ? 'page' : undefined}
                   onClick={() => { onSelectSettings(section.key); onNavigate?.(); }}
-                >{section.label}</button>)}
-              </div>}
+                >{section.label}</button>))}
+              </div>)}
             </div>
-          ))}
+          )))}
       </nav>
     </aside>
   );
@@ -572,32 +577,33 @@ function Header({
   onInitialize: () => Promise<void>;
   initializationDisabled: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <header className="topbar">
-      <div className="topbar-brand" aria-label={`SmartX ${portal.title}`}>
+      <div className="topbar-brand" aria-label={localize(`SmartX ${portal.title}`)}>
         {/* oxlint-disable-next-line next/no-img-element -- using the exact SmartX CDN wordmark from the reference console */}
         <img
           src="https://cdn.smartx.com/partner-connect/navigation/smartx-badge-on-light-horizontal.svg"
           alt="SmartX"
         />
         <span className="topbar-brand-divider" aria-hidden="true" />
-        <strong>{portal.title}</strong>
+        <strong>{localize(portal.title)}</strong>
       </div>
       <Button
         className="mobile-menu"
         variant="ghost"
         size="icon"
-        aria-label="打开导航"
+        aria-label={localize("打开导航")}
         onClick={onOpenMenu}
       >
         <Menu />
       </Button>
-      <nav className="primary-nav" aria-label="顶部导航">
+      <nav className="primary-nav" aria-label={localize("顶部导航")}>
         <button type="button" aria-current="page">
-          企业工作台
-        </button>
+          {localize("企业工作台")}</button>
       </nav>
       <div className="topbar-actions">
+        <LanguageSwitch />
         <InitializeDataButton disabled={initializationDisabled} onInitialize={onInitialize} />
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -606,22 +612,22 @@ function Header({
                 variant="outline"
                 className="role-switcher"
                 type="button"
-                aria-label={`当前用户：${currentActor.name || '未选择'}，切换身份`}
+                aria-label={localize(`当前用户：${currentActor.name || '未选择'}，切换身份`)}
               />
             }
           >
             <span
               title={
-                currentActor.name
+                localize(currentActor.name
                   ? `${currentActor.name} · ${currentActor.role}`
-                  : '请选择用户'
+                  : '请选择用户')
               }
             >
-              {currentActor.name
+              {localize(currentActor.name
                 ? currentActor.name === currentActor.role
                   ? currentActor.name
                   : `${currentActor.name} · ${currentActor.role}`
-                : '请选择用户'}
+                : '请选择用户')}
             </span>
             <ChevronDown aria-hidden="true" />
           </DropdownMenuTrigger>
@@ -634,8 +640,8 @@ function Header({
               value={currentActor.id}
               onValueChange={onUserChange}
             >
-              <DropdownMenuLabel>切换身份</DropdownMenuLabel>
-              {portalSwitchIdentities(
+              <DropdownMenuLabel>{localize("切换身份")}</DropdownMenuLabel>
+              {localize(portalSwitchIdentities(
                 identities,
                 currentActor.id,
                 identitySources,
@@ -645,9 +651,9 @@ function Header({
                   key={identity.id}
                   value={identity.id}
                 >
-                  {`${identity.name} · ${resolvePortalContext(identity, identitySources).organizationName.replace(/（模拟）|\(模拟\)/g, '')} · ${identity.role}`}
+                  {localize(`${identity.name} · ${resolvePortalContext(identity, identitySources).organizationName.replace(/（模拟）|\(模拟\)/g, '')} · ${identity.role}`)}
                 </DropdownMenuRadioItem>
-              ))}
+              )))}
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -657,14 +663,14 @@ function Header({
 }
 
 function EmptyResult({ reset }: { reset: () => void }) {
+  const { localize } = useI18n();
   return (
     <div className="empty-result">
       <Search aria-hidden="true" />
-      <strong>未找到匹配的服务</strong>
-      <p>请检查搜索关键词或清除当前筛选条件。</p>
+      <strong>{localize("未找到匹配的服务")}</strong>
+      <p>{localize("请检查搜索关键词或清除当前筛选条件。")}</p>
       <Button variant="outline" onClick={reset}>
-        清除筛选
-      </Button>
+        {localize("清除筛选")}</Button>
     </div>
   );
 }
@@ -682,13 +688,14 @@ function MultiChoiceField({
   onChange: (values: string[]) => void;
   exclusiveOption?: string;
 }) {
+  const { localize } = useI18n();
   return (
     <fieldset className="choice-fieldset">
       <legend>
-        {label} <em>*</em>
+        {localize(label)} <em>*</em>
       </legend>
       <div className="choice-options">
-        {options.map((option) => (
+        {localize(options.map((option) => (
           <label key={option}>
             <input
               type="checkbox"
@@ -708,9 +715,9 @@ function MultiChoiceField({
                 )
               }
             />
-            <span>{option}</span>
+            <span>{localize(option)}</span>
           </label>
-        ))}
+        )))}
       </div>
     </fieldset>
   );
@@ -740,6 +747,7 @@ function initialDemoWorkspace() {
 }
 
 function Workspace({ onInitialized }: { onInitialized: () => void }) {
+  const { localize } = useI18n();
   const resetting = useRef(false);
   const [selectedView, setActiveView] = useState<ViewKey>('collaboration-home');
   const [initialProjectId, setInitialProjectId] = useState('');
@@ -990,6 +998,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 
   function switchIdentity(id: string) {
     if (!identities.some((identity) => identity.id === id)) return;
+    if (!window.dispatchEvent(new Event('service-before-navigation', { cancelable: true }))) return;
     clearDetailNavigation();
     setCurrentUserId(id);
     const nextActor = identities.find(identity => identity.id === id)!;
@@ -1003,11 +1012,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
   }
 
   function selectView(view: ViewKey) {
-    if (!portal.views.includes(view)) return;
+    if (!portal.views.includes(view)) return false;
+    if (!window.dispatchEvent(new Event('service-before-navigation', { cancelable: true }))) return false;
     clearDetailNavigation();
     setActiveView(view);
     setDetailServiceId(null);
     setQuery('');
+    return true;
   }
 
   function openWorkspaceDetail(
@@ -1041,8 +1052,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
 
   function selectSettingsSection(section: BackendSettingsSection) {
     if (!portal.views.includes('field-settings')) return;
-    setSettingsSection(section);
-    selectView('field-settings');
+    if (selectView('field-settings')) setSettingsSection(section);
   }
 
   function openReferenceCreation() {
@@ -1376,13 +1386,15 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         const matchesQuery =
           !normalized ||
           service.name.toLowerCase().includes(normalized) ||
+          localize(service.name).toLowerCase().includes(normalized) ||
+          localize(service.category).toLowerCase().includes(normalized) ||
           service.id.toLowerCase().includes(normalized) ||
           service.category.toLowerCase().includes(normalized);
         const matchesStatus =
           statusFilter === '全部状态' || service.status === statusFilter;
         return matchesQuery && matchesStatus;
       });
-  }, [query, serviceRecords, statusFilter]);
+  }, [query, serviceRecords, statusFilter, localize]);
 
   const detailService =
     serviceRecords.find((service) => service.id === detailServiceId) ?? null;
@@ -1456,19 +1468,19 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         onSelect={selectView}
       />
 
-      {mobileNavOpen ? (
+      {localize(mobileNavOpen ? (
         <div className="mobile-nav-layer">
           <button
             className="mobile-nav-backdrop"
             type="button"
-            aria-label="关闭导航"
+            aria-label={localize("关闭导航")}
             onClick={() => setMobileNavOpen(false)}
           />
           <div className="mobile-nav-panel">
             <Button
               variant="ghost"
               size="icon"
-              aria-label="关闭导航"
+              aria-label={localize("关闭导航")}
               className="mobile-nav-close"
               onClick={() => setMobileNavOpen(false)}
             >
@@ -1484,7 +1496,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
             />
           </div>
         </div>
-      ) : null}
+      ) : null)}
 
       <div className="app-main">
         <Header
@@ -1497,16 +1509,16 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
           onInitialize={initializeAllData}
           initializationDisabled={!referencesReady}
         />
-        <main className={`content-area content-area--workspace${['projects', 'requests', 'catalog', 'reference-data', 'field-settings'].includes(activeView) ? ' content-area--list' : ''}`} data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
-          {referenceStorageError && (
+        <LanguageScope chinese={activeView === 'field-settings'}><main lang={activeView === 'field-settings' ? 'zh-CN' : undefined} className={`content-area content-area--workspace${['projects', 'requests', 'catalog', 'reference-data', 'field-settings'].includes(activeView) ? ' content-area--list' : ''}`} data-assistant-page={activeView} data-assistant-reference-tab={activeView === 'reference-data' ? referenceTab : undefined}>
+          {localize(referenceStorageError && (
             <p role="alert" className="sr-error">
-              {referenceStorageError}
+              {localize(referenceStorageError)}
             </p>
-          )}
-          {!(activeView === 'catalog' && detailService) && <section className="page-header">
+          ))}
+          {localize(!(activeView === 'catalog' && detailService) && <section className="page-header">
             <div>
               <h1>
-                {activeView === 'collaboration-home' ? '主页' : activeView === 'manager-home'
+                {activeView === 'field-settings' ? backendSettingsSections.find(section => section.key === settingsSection)!.label : localize(activeView === 'collaboration-home' ? '主页' : activeView === 'manager-home'
                   ? '项目经理工作台'
                   : activeView === 'scheduling' ? '服务调度'
                   : activeView === 'service-calendar' ? '工程师工作台'
@@ -1516,20 +1528,16 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                     ? '服务项目'
                   : activeView === 'catalog'
                     ? '服务目录'
-                    : activeView === 'field-settings'
-                      ? backendSettingsSections.find(section => section.key === settingsSection)!.label
-                      : '引用数据'}
+                    : '引用数据')}
               </h1>
-              {activeView === 'reference-data' ? (
+              {localize(activeView === 'reference-data' ? (
                 <p>
-                  维护 Demo
-                  流程中引用的客户、联系人、服务资产、业务对象、内部用户、合作伙伴与合作伙伴用户。
-                </p>
-              ) : null}
+                  {localize("维护 Demo 流程中引用的客户、联系人、服务资产、业务对象、内部用户、合作伙伴与合作伙伴用户。")}</p>
+              ) : null)}
             </div>
-          </section>}
+          </section>)}
 
-          {activeView === 'collaboration-home' ? (
+          {localize(activeView === 'collaboration-home' ? (
             referencesReady && <CollaborationHome key={currentActor.id} actor={currentActor} customers={customers} onOpen={openWorkspaceDetail} />
           ) : activeView === 'manager-home' ? (
             referencesReady && <ProjectManagerHome key={currentActor.id} actor={currentActor} customers={customers} directory={{ contacts, users, partners, partnerUsers }} onOpen={openWorkspaceDetail} />
@@ -1571,9 +1579,9 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               </RequestFieldsContext.Provider>
             ) : (
               <p className="sr-workspace">
-                {referenceStorageError
+                {localize(referenceStorageError
                   ? '本地数据读取失败，请检查后刷新。'
-                  : '正在读取本地资料…'}
+                  : '正在读取本地资料…')}
               </p>
             )
           ) : activeView === 'projects' ? (
@@ -1594,26 +1602,25 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                   <Input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="搜索服务名称、服务编码或分类"
-                    aria-label="搜索服务目录"
+                    placeholder={localize("搜索服务名称、服务编码或分类")}
+                    aria-label={localize("搜索服务目录")}
                   />
-                  {query ? (
+                  {localize(query ? (
                     <button
                       type="button"
-                      aria-label="清除搜索"
+                      aria-label={localize("清除搜索")}
                       onClick={() => setQuery('')}
                     >
                       <X aria-hidden="true" />
                     </button>
-                  ) : null}
+                  ) : null)}
                 </search>
-                {catalogWritable && <Button
+                {localize(catalogWritable && <Button
                   className="ct-button ct-button--primary"
                   onClick={openCreation}
                 >
                   <Plus data-icon="inline-start" />
-                  新建服务目录
-                </Button>}
+                  {localize("新建服务目录")}</Button>)}
               </div>}
                   onEdit={(service) => {
                     if (!catalogWritable) return;
@@ -1667,7 +1674,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               </RequestFieldsContext.Provider>
             </BusinessObjectProductsContext.Provider>
           ) : activeView === 'field-settings' ? (
-            settingsSection === 'operation-permissions' ? <OperationPermissionSettings identities={identities} initialActorId={currentActor.id} /> : <RequestFieldSettings
+            settingsSection === 'translations' ? <TranslationWorkbench actor={currentActor} /> : settingsSection === 'operation-permissions' ? <OperationPermissionSettings identities={identities} initialActorId={currentActor.id} /> : <RequestFieldSettings
               key={settingsSection}
               section={settingsSection}
               actor={currentActor.name}
@@ -1766,27 +1773,26 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                 )
               }
             />
-          )}
-        </main>
+          ))}
+        </main></LanguageScope>
       </div>
 
       <Dialog open={createOpen && catalogWritable} onOpenChange={setCreateOpen}>
         <DialogContent className="create-dialog">
           <DialogHeader>
             <DialogTitle>
-              {editingService ? '编辑服务目录' : '新建服务目录'}
+              {localize(editingService ? '编辑服务目录' : '新建服务目录')}
             </DialogTitle>
             <DialogDescription>
-              填写服务目录全部字段，创建后将以草稿状态进入列表。
-            </DialogDescription>
+              {localize("填写服务目录全部字段，创建后将以草稿状态进入列表。")}</DialogDescription>
           </DialogHeader>
           <div className="dialog-form catalog-form">
             <section className="form-section">
-              <h3>基本信息</h3>
+              <h3>{localize("基本信息")}</h3>
               <div className="dialog-grid">
                 <label htmlFor="service-category">
                   <span>
-                    服务类别 <em>*</em>
+                    {localize("服务类别")}<em>*</em>
                   </span>
                   <select
                     id="service-category"
@@ -1799,13 +1805,13 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                       }))
                     }
                   >
-                    {serviceCategories.map((category) => (
-                      <option key={category}>{category}</option>
-                    ))}
+                    {localize(serviceCategories.map((category) => (
+                      <option value={category} key={category}>{localize(category)}</option>
+                    )))}
                   </select>
                 </label>
                 <label htmlFor="service-code">
-                  <span>服务编码</span>
+                  <span>{localize("服务编码")}</span>
                   <Input
                     id="service-code"
                     value={editingService?.id ?? generatedCode}
@@ -1816,7 +1822,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               </div>
               <label htmlFor="service-name">
                 <span>
-                  服务名称 <em>*</em>
+                  {localize("服务名称")}<em>*</em>
                 </span>
                 <Input
                   id="service-name"
@@ -1828,12 +1834,12 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                     }))
                   }
                   maxLength={80}
-                  placeholder="例如：数据库迁移实施服务"
+                  placeholder={localize("例如：数据库迁移实施服务")}
                 />
               </label>
               <label htmlFor="service-description">
                 <span>
-                  服务说明 <em>*</em>
+                  {localize("服务说明")}<em>*</em>
                 </span>
                 <textarea
                   id="service-description"
@@ -1845,17 +1851,17 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                     }))
                   }
                   maxLength={255}
-                  placeholder="说明服务范围、交付边界与成功标准"
+                  placeholder={localize("说明服务范围、交付边界与成功标准")}
                   rows={3}
                 />
               </label>
             </section>
             <section className="form-section">
-              <h3>计价规则</h3>
+              <h3>{localize("计价规则")}</h3>
               <div className="dialog-grid dialog-grid--three">
                 <label htmlFor="service-unit">
                   <span>
-                    计价单位 <em>*</em>
+                    {localize("计价单位")}<em>*</em>
                   </span>
                   <select
                     id="service-unit"
@@ -1868,14 +1874,14 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                       }))
                     }
                   >
-                    <option>服务人天</option>
-                    <option>巡检权益</option>
-                    <option>升级权益</option>
+                    <option value={"服务人天"}>{localize("服务人天")}</option>
+                    <option value={"巡检权益"}>{localize("巡检权益")}</option>
+                    <option value={"升级权益"}>{localize("升级权益")}</option>
                   </select>
                 </label>
-                {!isEntitlementService(catalogForm) && <><label htmlFor="price-coefficient">
+                {localize(!isEntitlementService(catalogForm) && <><label htmlFor="price-coefficient">
                   <span>
-                    计价系数 <em>*</em>
+                    {localize("计价系数")}<em>*</em>
                   </span>
                   <Input
                     id="price-coefficient"
@@ -1887,12 +1893,12 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                         priceCoefficient: event.target.value,
                       }))
                     }
-                    placeholder="例如：1.25"
+                    placeholder={localize("例如：1.25")}
                   />
                 </label>
                 <label htmlFor="default-quantity">
                   <span>
-                    最小人天数量 <em>*</em>
+                    {localize("最小人天数量")}<em>*</em>
                   </span>
                   <Input
                     id="default-quantity"
@@ -1904,16 +1910,16 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                         defaultQuantity: event.target.value,
                       }))
                     }
-                    placeholder="例如：0.5，最多一位小数"
+                    placeholder={localize("例如：0.5，最多一位小数")}
                   />
                 </label>
-                </>}
+                </>)}
               </div>
             </section>
             <section className="form-section">
-              <h3>服务约束</h3>
+              <h3>{localize("服务约束")}</h3>
               <MultiChoiceField
-                label="支持服务方式"
+                label={localize("支持服务方式")}
                 options={['远程', '现场']}
                 values={catalogForm.deliveryMethods}
                 onChange={(deliveryMethods) =>
@@ -1921,7 +1927,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                 }
               />
               <MultiChoiceField
-                label="认证要求"
+                label={localize("认证要求")}
                 exclusiveOption="无认证要求"
                 options={catalogCertificationOptions}
                 values={catalogForm.certifications}
@@ -1930,7 +1936,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                 }
               />
               <MultiChoiceField
-                label="支持服务方"
+                label={localize("支持服务方")}
                 options={['原厂', '代理商', '服务商']}
                 values={catalogForm.providers}
                 onChange={(providers) =>
@@ -1938,7 +1944,7 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                 }
               />
               <MultiChoiceField
-                label="可发起站点"
+                label={localize("可发起站点")}
                 options={['内部系统', '客户中心', '合作伙伴中心']}
                 values={catalogForm.allowedInitiatorSites}
                 onChange={(allowedInitiatorSites) =>
@@ -1947,10 +1953,10 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
               />
             </section>
             <section className="form-section">
-              <h3>内部信息</h3>
+              <h3>{localize("内部信息")}</h3>
               <label htmlFor="internal-note">
                 <span>
-                  内部备注 <em>*</em>
+                  {localize("内部备注")}<em>*</em>
                 </span>
                 <textarea
                   id="internal-note"
@@ -1962,16 +1968,16 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                     }))
                   }
                   maxLength={255}
-                  placeholder="填写适用范围、特殊核算规则或内部注意事项"
+                  placeholder={localize("填写适用范围、特殊核算规则或内部注意事项")}
                   rows={2}
                 />
               </label>
             </section>
-            {formError ? (
+            {localize(formError ? (
               <p className="form-error" role="alert">
-                {formError}
+                {localize(formError)}
               </p>
-            ) : null}
+            ) : null)}
           </div>
           <DialogFooter className="dialog-footer">
             <DialogClose
@@ -1982,13 +1988,12 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
                 />
               }
             >
-              取消
-            </DialogClose>
+              {localize("取消")}</DialogClose>
             <Button
               className="ct-button ct-button--primary"
               onClick={saveDraft}
             >
-              {editingService ? '保存修改' : '创建服务目录'}
+              {localize(editingService ? '保存修改' : '创建服务目录')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2008,17 +2013,17 @@ function Workspace({ onInitialized }: { onInitialized: () => void }) {
         onSave={saveReferenceRecord}
       />
 
-      {saved ? (
+      {localize(saved ? (
         <output className="toast-message">
           <span>
             <Check aria-hidden="true" />
           </span>
           <span className="toast-copy">
-            <strong>记录已保存</strong>
-            <small>新记录已加入当前列表。</small>
+            <strong>{localize("记录已保存")}</strong>
+            <small>{localize("新记录已加入当前列表。")}</small>
           </span>
         </output>
-      ) : null}
+      ) : null)}
     </div>
   );
 }
@@ -2040,6 +2045,7 @@ type CatalogViewProps = {
 };
 
 function CatalogView(props: CatalogViewProps) {
+  const { localize } = useI18n();
   if (props.detailService)
     return (
       <CatalogDetail
@@ -2066,41 +2072,41 @@ function CatalogView(props: CatalogViewProps) {
           <TabsList
             variant="line"
             className="reference-tabs"
-            aria-label="服务目录状态"
+            aria-label={localize("服务目录状态")}
           >
             <TabsTrigger value="已启用" className="reference-tab">
-              启用<span>{props.counts.enabled}</span>
+              {localize("启用")}<span>{localize(props.counts.enabled)}</span>
             </TabsTrigger>
             <TabsTrigger value="已停用" className="reference-tab">
-              停用<span>{props.counts.disabled}</span>
+              {localize("停用")}<span>{localize(props.counts.disabled)}</span>
             </TabsTrigger>
             <TabsTrigger value="全部状态" className="reference-tab">
-              全部<span>{props.counts.all}</span>
+              {localize("全部")}<span>{localize(props.counts.all)}</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
-        {props.toolbarActions}
+        {localize(props.toolbarActions)}
       </div>
-      <section className="table-panel" aria-label="服务目录列表">
-        {props.services.length ? (
+      <section className="table-panel" aria-label={localize("服务目录列表")}>
+        {localize(props.services.length ? (
           <div className="table-scroll">
             <table className="service-table app-list-table">
               <thead>
                 <tr>
-                  <th>服务名称</th>
-                  <th>服务类别</th>
-                  <th>计价系数</th>
-                  <th>服务方式</th>
-                  <th>支持服务方</th>
-                  <th>可发起站点</th>
-                  <th>版本</th>
-                  <th>状态</th>
-                  <th>最近更新</th>
-                  <th className="actions-column">操作</th>
+                  <th>{localize("服务名称")}</th>
+                  <th>{localize("服务类别")}</th>
+                  <th>{localize("计价系数")}</th>
+                  <th>{localize("服务方式")}</th>
+                  <th>{localize("支持服务方")}</th>
+                  <th>{localize("可发起站点")}</th>
+                  <th>{localize("版本")}</th>
+                  <th>{localize("状态")}</th>
+                  <th>{localize("最近更新")}</th>
+                  <th className="actions-column">{localize("操作")}</th>
                 </tr>
               </thead>
               <tbody>
-                {props.services.map((service) => (
+                {localize(props.services.map((service) => (
                   <tr key={service.id}>
                     <td>
                       <div className="service-identity">
@@ -2108,35 +2114,35 @@ function CatalogView(props: CatalogViewProps) {
                           type="button"
                           className="app-list-link"
                           onClick={() => props.onView(service.id)}
-                          aria-label={`查看服务 ${service.name}`}
+                          aria-label={localize(`查看服务 ${service.name}`)}
                         >
-                          {service.name}
+                          {localize(service.name)}
                         </button>
-                        <code>{service.id}</code>
+                        <code>{localize(service.id)}</code>
                       </div>
                     </td>
-                    <td>{service.category}</td>
+                    <td>{localize(service.category)}</td>
                     <td>
-                      {!isEntitlementService(service) && <strong className="price-coefficient">
-                        {service.priceCoefficient?.toFixed(2) ?? '—'}
-                      </strong>}
+                      {localize(!isEntitlementService(service) && <strong className="price-coefficient">
+                        {localize(service.priceCoefficient?.toFixed(2) ?? '—')}
+                      </strong>)}
                       <small className="cell-note">
-                        {' '}
-                        {!isEntitlementService(service) && '/ '}{service.priceUnit}
+                        {localize(' ')}
+                        {localize(!isEntitlementService(service) && '/ ')}{localize(service.priceUnit)}
                       </small>
                     </td>
-                    <td>{service.deliveryMethods.join(' / ')}</td>
-                    <td>{service.providers.join('、')}</td>
-                    <td>{service.allowedInitiatorSites.join('、')}</td>
-                    <td>v{service.version ?? 1}</td>
+                    <td>{localize(service.deliveryMethods.join(' / '))}</td>
+                    <td>{localize(service.providers.join('、'))}</td>
+                    <td>{localize(service.allowedInitiatorSites.join('、'))}</td>
+                    <td>v{localize(service.version ?? 1)}</td>
                     <td>
                       <StatusCapsule status={service.status} />
                     </td>
                     {/* oxlint-disable-next-line jsx-a11y/control-has-associated-label -- this cell is read-only metadata and contains no control */}
                     <td>
                       <div className="updated-cell">
-                        <span>{service.updatedAt.split(/[T ]/)[0]}</span>
-                        <small>{service.owner}</small>
+                        <span>{localize(service.updatedAt.split(/[T ]/)[0])}</span>
+                        <small>{localize(service.owner)}</small>
                       </div>
                     </td>
                     <td>
@@ -2145,26 +2151,25 @@ function CatalogView(props: CatalogViewProps) {
                           type="button"
                           className="app-list-link"
                           onClick={() => props.onView(service.id)}
-                          aria-label={`查看 ${service.name}`}
+                          aria-label={localize(`查看 ${service.name}`)}
                         >
-                          查看
-                        </button>
+                          {localize("查看")}</button>
                         <button
                           type="button"
-                          aria-label={`更多 ${service.name} 操作`}
+                          aria-label={localize(`更多 ${service.name} 操作`)}
                         >
                           <MoreHorizontal />
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
         ) : (
           <EmptyResult reset={props.resetFilters} />
-        )}
+        ))}
       </section>
     </div>
   );
@@ -2185,131 +2190,129 @@ function CatalogDetail({
   onEdit: (service: Service) => void;
   onToggle: (service: Service) => void;
 }) {
+  const { localize } = useI18n();
   return (
-    <article className="catalog-detail" aria-label={`${service.name}详情`}>
+    <article className="catalog-detail" aria-label={localize(`${service.name}详情`)}>
       <header className="detail-heading">
         <div>
           <button type="button" className="detail-back" onClick={onBack}>
             <ArrowLeft aria-hidden="true" />
-            返回服务目录列表
-          </button>
+            {localize("返回服务目录列表")}</button>
           <div className="detail-title-row">
-            <h2>{service.name}</h2>
+            <h2>{localize(service.name)}</h2>
             <StatusCapsule status={service.status} />
           </div>
           <p>
-            {service.id} · {service.category} · v{service.version ?? 1}
+            {localize(service.id)} · {localize(service.category)} · v{localize(service.version ?? 1)}
           </p>
         </div>
         <div className="detail-actions">
           <CatalogHistory serviceId={service.id} />
-          {writable && <><Button
+          {localize(writable && <><Button
             variant="outline"
             className="ct-button ct-button--ordinary"
             onClick={() => onEdit(service)}
           >
-            编辑
-          </Button>
+            {localize("编辑")}</Button>
           <Button
             className="ct-button ct-button--primary"
             onClick={() => onToggle(service)}
           >
-            {service.status === '已启用' ? '停用' : '启用'}
-          </Button></>}
+            {localize(service.status === '已启用' ? '停用' : '启用')}
+          </Button></>)}
         </div>
       </header>
 
       <div className="catalog-detail-columns">
         <div className="detail-grid">
           <section className="detail-card detail-card--wide">
-            <h3>基本信息</h3>
+            <h3>{localize("基本信息")}</h3>
             <dl>
               <div>
-                <dt>服务编码</dt>
-                <dd>{service.id}</dd>
+                <dt>{localize("服务编码")}</dt>
+                <dd>{localize(service.id)}</dd>
               </div>
               <div>
-                <dt>服务类别</dt>
-                <dd>{service.category}</dd>
+                <dt>{localize("服务类别")}</dt>
+                <dd>{localize(service.category)}</dd>
               </div>
               <div className="detail-span">
-                <dt>服务说明</dt>
-                <dd>{service.description}</dd>
+                <dt>{localize("服务说明")}</dt>
+                <dd>{localize(service.description)}</dd>
               </div>
               <div className="detail-span">
-                <dt>内部备注</dt>
-                <dd>{service.internalNote}</dd>
+                <dt>{localize("内部备注")}</dt>
+                <dd>{localize(service.internalNote)}</dd>
               </div>
             </dl>
           </section>
           <section className="detail-card">
-            <h3>计价规则</h3>
+            <h3>{localize("计价规则")}</h3>
             <dl>
               <div>
-                <dt>计价单位</dt>
-                <dd>{service.priceUnit}</dd>
+                <dt>{localize("计价单位")}</dt>
+                <dd>{localize(service.priceUnit)}</dd>
               </div>
-              {!isEntitlementService(service) && <><div>
-                <dt>计价系数</dt>
-                <dd>{service.priceCoefficient?.toFixed(2) ?? '—'}</dd>
-              </div>
-              <div>
-                <dt>最小人天数量</dt>
-                <dd>{service.defaultQuantity === undefined ? '—' : formatDays(service.defaultQuantity)} 人天</dd>
+              {localize(!isEntitlementService(service) && <><div>
+                <dt>{localize("计价系数")}</dt>
+                <dd>{localize(service.priceCoefficient?.toFixed(2) ?? '—')}</dd>
               </div>
               <div>
-                <dt>最小计价人天</dt>
+                <dt>{localize("最小人天数量")}</dt>
+                <dd>{localize(service.defaultQuantity === undefined ? '—' : formatDays(service.defaultQuantity))} {localize(" 人天")}</dd>
+              </div>
+              <div>
+                <dt>{localize("最小计价人天")}</dt>
                 <dd>
-                  {calculateBillableDays(service.defaultQuantity ?? 0, service.priceCoefficient ?? 0)} 人天
-                </dd>
+                  {localize(calculateBillableDays(service.defaultQuantity ?? 0, service.priceCoefficient ?? 0))} {localize(" 人天")}</dd>
               </div>
-              </>}
+              </>)}
             </dl>
           </section>
           <section className="detail-card">
-            <h3>服务约束</h3>
+            <h3>{localize("服务约束")}</h3>
             <dl>
               <div className="detail-span">
-                <dt>支持服务方式</dt>
-                <dd>{service.deliveryMethods.join('、')}</dd>
+                <dt>{localize("支持服务方式")}</dt>
+                <dd>{localize(service.deliveryMethods.join('、'))}</dd>
               </div>
               <div className="detail-span">
-                <dt>认证要求</dt>
-                <dd>{service.certifications.join('、')}</dd>
+                <dt>{localize("认证要求")}</dt>
+                <dd>{localize(service.certifications.join('、'))}</dd>
               </div>
               <div className="detail-span">
-                <dt>支持服务方</dt>
-                <dd>{service.providers.join('、')}</dd>
+                <dt>{localize("支持服务方")}</dt>
+                <dd>{localize(service.providers.join('、'))}</dd>
               </div>
               <div className="detail-span">
-                <dt>可发起站点</dt>
-                <dd>{service.allowedInitiatorSites.join('、')}</dd>
+                <dt>{localize("可发起站点")}</dt>
+                <dd>{localize(service.allowedInitiatorSites.join('、'))}</dd>
               </div>
             </dl>
           </section>
           <section className="detail-card detail-card--wide">
-            <h3>记录信息</h3>
+            <h3>{localize("记录信息")}</h3>
             <dl>
               <div>
-                <dt>创建人</dt>
-                <dd>{service.owner}</dd>
+                <dt>{localize("创建人")}</dt>
+                <dd>{localize(service.owner)}</dd>
               </div>
               <div>
-                <dt>创建时间</dt>
-                <dd>{service.updatedAt}</dd>
+                <dt>{localize("创建时间")}</dt>
+                <dd>{localize(service.updatedAt)}</dd>
               </div>
               <div>
-                <dt>上次修改人</dt>
-                <dd>{service.owner}</dd>
+                <dt>{localize("上次修改人")}</dt>
+                <dd>{localize(service.owner)}</dd>
               </div>
               <div>
-                <dt>上次修改时间</dt>
-                <dd>{service.updatedAt}</dd>
+                <dt>{localize("上次修改时间")}</dt>
+                <dd>{localize(service.updatedAt)}</dd>
               </div>
             </dl>
           </section>
         </div>
-        <aside className="catalog-config-column" aria-label="申请配置">
+        <aside className="catalog-config-column" aria-label={localize("申请配置")}>
           <RequestCatalogSettings key={service.id} service={service} actor={actor} readonly={!writable} />
           <RequestCatalogSettings
             key={`${service.id}-customer`}
@@ -2367,21 +2370,22 @@ function DisableRecordAction({
   label: string;
   onDisable: () => void;
 }) {
+  const { localize } = useI18n();
   return isDisabled ? (
-    <span className="disabled-record-label">已停用</span>
+    <span className="disabled-record-label">{localize("已停用")}</span>
   ) : (
     <button
       className="disable-record"
       type="button"
-      aria-label={`停用${label}`}
+      aria-label={localize(`停用${label}`)}
       onClick={onDisable}
     >
-      停用
-    </button>
+      {localize("停用")}</button>
   );
 }
 
 function ReferenceDataView(props: ReferenceDataViewProps) {
+  const { localize } = useI18n();
   const partnerNames = new Map(
     props.partners.map((partner) => [partner.id, partner.name]),
   );
@@ -2402,7 +2406,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
   };
 
   return (
-    <section className="reference-panel" aria-label="引用数据维护">
+    <section className="reference-panel" aria-label={localize("引用数据维护")}>
       <div className="reference-toolbar app-list-toolbar">
         <Tabs
           value={props.activeTab}
@@ -2411,19 +2415,19 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
           <TabsList
             variant="line"
             className="reference-tabs"
-            aria-label="引用数据分类"
+            aria-label={localize("引用数据分类")}
           >
-            {referenceTabs.map((tab) => (
+            {localize(referenceTabs.map((tab) => (
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
                 className="reference-tab"
               >
                 <tab.icon aria-hidden="true" />
-                {tab.label}
-                <span>{counts[tab.value]}</span>
+                {localize(tab.label)}
+                <span>{localize(counts[tab.value])}</span>
               </TabsTrigger>
-            ))}
+            )))}
           </TabsList>
         </Tabs>
         <Button
@@ -2431,35 +2435,35 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
           onClick={props.onCreate}
         >
           <Plus data-icon="inline-start" />
-          新建{activeLabel}
+          {localize("新建")}{localize(activeLabel)}
         </Button>
       </div>
 
       <div className="table-scroll">
-        {props.activeTab === 'customers' ? (
+        {localize(props.activeTab === 'customers' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>客户名</th>
-                <th>负责团队</th>
-                <th>客户所有人</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("客户名")}</th>
+                <th>{localize("负责团队")}</th>
+                <th>{localize("客户所有人")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.customers.map((record) => (
+              {localize(props.customers.map((record) => (
                 <tr key={record.id}>
                   <td>
-                    <strong>{record.name}</strong>
+                    <strong>{localize(record.name)}</strong>
                   </td>
-                  <td>{record.team}</td>
+                  <td>{localize(record.team)}</td>
                   <td>
-                    <select aria-label={`${record.name}的客户所有人`} value={record.ownerUserId ?? ''} onChange={event => props.onCustomerOwnerChange(record.id, event.target.value)}>
-                      <option value="">未设置</option>
-                      {props.users.filter(user => user.status === '启用' || user.id === record.ownerUserId).map(user => <option key={user.id} value={user.id} disabled={user.status !== '启用'}>{user.name}{user.status !== '启用' ? '（已停用）' : ''}</option>)}
-                      {record.ownerUserId && !props.users.some(user => user.id === record.ownerUserId) && <option value={record.ownerUserId} disabled>原用户不可用</option>}
+                    <select aria-label={localize(`${record.name}的客户所有人`)} value={record.ownerUserId ?? ''} onChange={event => props.onCustomerOwnerChange(record.id, event.target.value)}>
+                      <option value="">{localize("未设置")}</option>
+                      {localize(props.users.filter(user => user.status === '启用' || user.id === record.ownerUserId).map(user => <option key={user.id} value={user.id} disabled={user.status !== '启用'}>{localize(user.name)}{localize(user.status !== '启用' ? '（已停用）' : '')}</option>))}
+                      {localize(record.ownerUserId && !props.users.some(user => user.id === record.ownerUserId) && <option value={record.ownerUserId} disabled>{localize("原用户不可用")}</option>)}
                     </select>
                   </td>
                   <td>
@@ -2467,91 +2471,91 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                       className="reference-status"
                       data-status={record.status}
                     >
-                      {record.status}
+                      {localize(record.status)}
                     </span>
                   </td>
                   <td>
-                    <code>{record.id}</code>
+                    <code>{localize(record.id)}</code>
                   </td>
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={`客户 ${record.name}`}
+                      label={localize(`客户 ${record.name}`)}
                       onDisable={() => props.onDisableCustomer(record.id)}
                     />
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
 
-        {props.activeTab === 'contacts' ? (
+        {localize(props.activeTab === 'contacts' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>姓名</th>
-                <th>所属客户</th>
-                <th>手机号</th>
-                <th>邮箱</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("姓名")}</th>
+                <th>{localize("所属客户")}</th>
+                <th>{localize("手机号")}</th>
+                <th>{localize("邮箱")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.contacts.map((record) => (
+              {localize(props.contacts.map((record) => (
                 <tr key={record.id}>
                   <td>
-                    <strong>{record.name}</strong>
+                    <strong>{localize(record.name)}</strong>
                   </td>
-                  <td>{customerNames.get(record.customerId)}</td>
-                  <td className="numeric-cell">{record.phone}</td>
-                  <td>{record.email}</td>
+                  <td>{localize(customerNames.get(record.customerId))}</td>
+                  <td className="numeric-cell">{localize(record.phone)}</td>
+                  <td>{localize(record.email)}</td>
                   <td>
                     <span
                       className="reference-status"
                       data-status={record.status}
                     >
-                      {record.status}
+                      {localize(record.status)}
                     </span>
                   </td>
                   <td>
-                    <code>{record.id}</code>
+                    <code>{localize(record.id)}</code>
                   </td>
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={`联系人 ${record.name}`}
+                      label={localize(`联系人 ${record.name}`)}
                       onDisable={() => props.onDisableContact(record.id)}
                     />
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
 
-        {props.activeTab === 'assets' ? (
+        {localize(props.activeTab === 'assets' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>所属客户</th>
-                <th>资产名称</th>
-                <th>余额人天（含已冻结）</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("所属客户")}</th>
+                <th>{localize("资产名称")}</th>
+                <th>{localize("余额人天（含已冻结）")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.assets.map((record) => (
+              {localize(props.assets.map((record) => (
                 <tr key={record.id}>
                   <td>
-                    <strong>{customerNames.get(record.customerId)}</strong>
+                    <strong>{localize(customerNames.get(record.customerId))}</strong>
                   </td>
-                  <td>{record.name}</td>
-                  <td><Input key={`${record.id}:${record.balanceDays}`} aria-label={`${record.id} 余额人天`} type="number" min="0" step="0.1" placeholder="待维护" defaultValue={record.balanceDays ?? ''} onChange={event => event.target.setCustomValidity('')} onBlur={event => {
+                  <td>{localize(record.name)}</td>
+                  <td><Input key={`${record.id}:${record.balanceDays}`} aria-label={localize(`${record.id} 余额人天`)} type="number" min="0" step="0.1" placeholder={localize("待维护")} defaultValue={record.balanceDays ?? ''} onChange={event => event.target.setCustomValidity('')} onBlur={event => {
                     const value = parseDayQuantity(event.target.value);
                     if (value !== null) props.onAssetBalanceChange(record.id, value);
                     else { event.target.setCustomValidity('余额人天须为非负数，最多一位小数。'); event.target.reportValidity(); event.target.value = record.balanceDays === undefined ? '' : String(record.balanceDays); }
@@ -2561,66 +2565,66 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                       className="reference-status"
                       data-status={record.status}
                     >
-                      {record.status}
+                      {localize(record.status)}
                     </span>
                   </td>
                   <td>
-                    <code>{record.id}</code>
+                    <code>{localize(record.id)}</code>
                   </td>
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={`服务资产 ${record.id}`}
+                      label={localize(`服务资产 ${record.id}`)}
                       onDisable={() => props.onDisableAsset(record.id)}
                     />
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
 
-        {props.activeTab === 'business-objects' ? (
+        {localize(props.activeTab === 'business-objects' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>对象名称</th>
-                <th>所属客户</th>
+                <th>{localize("对象名称")}</th>
+                <th>{localize("所属客户")}</th>
                 <th>SN</th>
-                <th>产品</th>
-                <th>节点数</th>
-                <th>升级权益（含已冻结）</th>
-                <th>巡检权益（含已冻结）</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("产品")}</th>
+                <th>{localize("节点数")}</th>
+                <th>{localize("升级权益（含已冻结）")}</th>
+                <th>{localize("巡检权益（含已冻结）")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.businessObjects.map((record) => (
+              {localize(props.businessObjects.map((record) => (
                 <tr key={record.id}>
                   <td>
-                    <strong>{record.name}</strong>
+                    <strong>{localize(record.name)}</strong>
                   </td>
-                  <td>{customerNames.get(record.customerId)}</td>
+                  <td>{localize(customerNames.get(record.customerId))}</td>
                   <td>
-                    <code>{record.sn}</code>
+                    <code>{localize(record.sn)}</code>
                   </td>
                   <td>
-                    <span className="product-tag">{record.product}</span>
+                    <span className="product-tag">{localize(record.product)}</span>
                   </td>
-                  <td className="numeric-cell">{record.nodeCount}</td>
-                  {(['upgradeEntitlement', 'inspectionEntitlement'] as const).map((field) => (
+                  <td className="numeric-cell">{localize(record.nodeCount)}</td>
+                  {localize((['upgradeEntitlement', 'inspectionEntitlement'] as const).map((field) => (
                     <td className="numeric-cell" key={field}>
                       <Input
                         key={`${record.id}:${field}:${record[field]}`}
-                        aria-label={`${record.id} ${field === 'upgradeEntitlement' ? '升级权益' : '巡检权益'}（含已冻结）`}
+                        aria-label={localize(`${record.id} ${field === 'upgradeEntitlement' ? '升级权益' : '巡检权益'}（含已冻结）`)}
                         type="number"
                         min="0"
                         max={record.nodeCount}
                         step="1"
                         defaultValue={record[field]}
-                        title={`请输入 0 至 ${record.nodeCount} 的整数，离开输入框后保存`}
+                        title={localize(`请输入 0 至 ${record.nodeCount} 的整数，离开输入框后保存`)}
                         onBlur={(event) => {
                           const quantity = parseEntitlementQuantity(event.target.value, record.nodeCount);
                           if (quantity !== null) props.onEntitlementChange(record.id, field, quantity);
@@ -2628,150 +2632,149 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                         }}
                       />
                     </td>
-                  ))}
+                  )))}
                   <td>
                     <span
                       className="reference-status"
                       data-status={record.status}
                     >
-                      {record.status}
+                      {localize(record.status)}
                     </span>
                   </td>
                   <td>
-                    <code>{record.id}</code>
+                    <code>{localize(record.id)}</code>
                   </td>
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={`业务对象 ${record.name}`}
+                      label={localize(`业务对象 ${record.name}`)}
                       onDisable={() => props.onDisableBusinessObject(record.id)}
                     />
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
 
-        {props.activeTab === 'partners' ? (
+        {localize(props.activeTab === 'partners' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>合作伙伴名称</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("合作伙伴名称")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.partners.length === 0 ? (
+              {localize(props.partners.length === 0 ? (
                 <tr>
-                  <td colSpan={4}>暂无合作伙伴，点击“新建合作伙伴”添加。</td>
+                  <td colSpan={4}>{localize("暂无合作伙伴，点击“新建合作伙伴”添加。")}</td>
                 </tr>
               ) : (
                 props.partners.map((record) => (
                   <tr key={record.id}>
                     <td>
-                      <strong>{record.name}</strong>
+                      <strong>{localize(record.name)}</strong>
                     </td>
                     <td>
                       <span
                         className="reference-status"
                         data-status={record.status}
                       >
-                        {record.status}
+                        {localize(record.status)}
                       </span>
                     </td>
                     <td>
-                      <code>{record.id}</code>
+                      <code>{localize(record.id)}</code>
                     </td>
                     <td>
                       <DisableRecordAction
                         isDisabled={record.status === '停用'}
-                        label={`合作伙伴 ${record.name}`}
+                        label={localize(`合作伙伴 ${record.name}`)}
                         onDisable={() => props.onDisablePartner(record.id)}
                       />
                     </td>
                   </tr>
                 ))
-              )}
+              ))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
 
-        {props.activeTab === 'partner-users' ? (
+        {localize(props.activeTab === 'partner-users' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>姓名</th>
-                <th>所属合作伙伴</th>
-                <th>手机号</th>
-                <th>邮箱</th>
-                <th>合作伙伴角色</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("姓名")}</th>
+                <th>{localize("所属合作伙伴")}</th>
+                <th>{localize("手机号")}</th>
+                <th>{localize("邮箱")}</th>
+                <th>{localize("合作伙伴角色")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.partnerUsers.length === 0 ? (
+              {localize(props.partnerUsers.length === 0 ? (
                 <tr>
                   <td colSpan={8}>
-                    暂无合作伙伴用户，请先维护合作伙伴，再添加用户。
-                  </td>
+                    {localize("暂无合作伙伴用户，请先维护合作伙伴，再添加用户。")}</td>
                 </tr>
               ) : (
                 props.partnerUsers.map((record) => (
                   <tr key={record.id}>
                     <td>
-                      <strong>{record.name}</strong>
+                      <strong>{localize(record.name)}</strong>
                     </td>
-                    <td>{partnerNames.get(record.partnerId) ?? '—'}</td>
-                    <td>{record.phone}</td>
-                    <td>{record.email}</td>
-                    <td>{partnerUserRole}</td>
+                    <td>{localize(partnerNames.get(record.partnerId) ?? '—')}</td>
+                    <td>{localize(record.phone)}</td>
+                    <td>{localize(record.email)}</td>
+                    <td>{localize(partnerUserRole)}</td>
                     <td>
                       <span
                         className="reference-status"
                         data-status={record.status}
                       >
-                        {record.status}
+                        {localize(record.status)}
                       </span>
                     </td>
                     <td>
-                      <code>{record.id}</code>
+                      <code>{localize(record.id)}</code>
                     </td>
                     <td>
                       <DisableRecordAction
                         isDisabled={record.status === '停用'}
-                        label={`合作伙伴用户 ${record.name}`}
+                        label={localize(`合作伙伴用户 ${record.name}`)}
                         onDisable={() => props.onDisablePartnerUser(record.id)}
                       />
                     </td>
                   </tr>
                 ))
-              )}
+              ))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
 
-        {props.activeTab === 'service-certifications' ? (
+        {localize(props.activeTab === 'service-certifications' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>认证内容</th>
-                <th>用户类型</th>
-                <th>认证用户</th>
-                <th>到期日</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("认证内容")}</th>
+                <th>{localize("用户类型")}</th>
+                <th>{localize("认证用户")}</th>
+                <th>{localize("到期日")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.serviceCertifications.length === 0 ? (
+              {localize(props.serviceCertifications.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>暂无服务认证，点击“新建服务认证”添加。</td>
+                  <td colSpan={7}>{localize("暂无服务认证，点击“新建服务认证”添加。")}</td>
                 </tr>
               ) : (
                 props.serviceCertifications.map((record) => {
@@ -2785,30 +2788,30 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   return (
                     <tr key={record.id}>
                       <td>
-                        <strong>{record.certification}</strong>
+                        <strong>{localize(record.certification)}</strong>
                       </td>
                       <td>
-                        {record.holderType === 'internal'
+                        {localize(record.holderType === 'internal'
                           ? '内部用户'
-                          : '合作伙伴用户'}
+                          : '合作伙伴用户')}
                       </td>
-                      <td>{userName}</td>
-                      <td>{record.expiresOn}</td>
+                      <td>{localize(userName)}</td>
+                      <td>{localize(record.expiresOn)}</td>
                       <td>
                         <span
                           className="reference-status"
                           data-status={record.status}
                         >
-                          {record.status}
+                          {localize(record.status)}
                         </span>
                       </td>
                       <td>
-                        <code>{record.id}</code>
+                        <code>{localize(record.id)}</code>
                       </td>
                       <td>
                         <DisableRecordAction
                           isDisabled={record.status === '停用'}
-                          label={`服务认证 ${userName} ${record.certification}`}
+                          label={localize(`服务认证 ${userName} ${record.certification}`)}
                           onDisable={() =>
                             props.onDisableCertification(record.id)
                           }
@@ -2817,66 +2820,66 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     </tr>
                   );
                 })
-              )}
+              ))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
 
-        {props.activeTab === 'users' ? (
+        {localize(props.activeTab === 'users' ? (
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>姓名</th>
-                <th>电话</th>
-                <th>邮箱</th>
-                <th>部门</th>
-                <th>汇报人</th>
-                <th>角色</th>
-                <th>状态</th>
-                <th>记录编号</th>
-                <th className="actions-column">操作</th>
+                <th>{localize("姓名")}</th>
+                <th>{localize("电话")}</th>
+                <th>{localize("邮箱")}</th>
+                <th>{localize("部门")}</th>
+                <th>{localize("汇报人")}</th>
+                <th>{localize("角色")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("记录编号")}</th>
+                <th className="actions-column">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {props.users.map((record) => (
+              {localize(props.users.map((record) => (
                 <tr key={record.id}>
                   <td>
-                    <strong>{record.name}</strong>
+                    <strong>{localize(record.name)}</strong>
                   </td>
-                  <td>{record.phone || '—'}</td>
-                  <td>{record.email}</td>
-                  <td>{record.department}</td>
+                  <td>{localize(record.phone || '—')}</td>
+                  <td>{localize(record.email)}</td>
+                  <td>{localize(record.department)}</td>
                   <td>
-                    {props.canEditReporting ? <select className="reference-reporting-select" aria-label={`${record.name}的汇报人`} value={record.reportsToUserId ?? ''} onChange={event => props.onReportingChange(record.id, event.target.value)}>
-                      <option value="">未设置</option>
-                      {record.reportsToUserId && !props.users.some(user => user.id === record.reportsToUserId) && <option value={record.reportsToUserId} disabled>原汇报人已不存在</option>}
-                      {props.users.filter(user => user.id !== record.id && (user.status === '启用' || user.id === record.reportsToUserId)).map(user => <option key={user.id} value={user.id} disabled={!!reportingRelationshipIssue(props.users, record.id, user.id)}>{user.name}{user.status !== '启用' ? '（已停用）' : ''}</option>)}
-                    </select> : props.users.find(user => user.id === record.reportsToUserId)?.name || '—'}
+                    {localize(props.canEditReporting ? <select className="reference-reporting-select" aria-label={localize(`${record.name}的汇报人`)} value={record.reportsToUserId ?? ''} onChange={event => props.onReportingChange(record.id, event.target.value)}>
+                      <option value="">{localize("未设置")}</option>
+                      {localize(record.reportsToUserId && !props.users.some(user => user.id === record.reportsToUserId) && <option value={record.reportsToUserId} disabled>{localize("原汇报人已不存在")}</option>)}
+                      {localize(props.users.filter(user => user.id !== record.id && (user.status === '启用' || user.id === record.reportsToUserId)).map(user => <option key={user.id} value={user.id} disabled={!!reportingRelationshipIssue(props.users, record.id, user.id)}>{localize(user.name)}{localize(user.status !== '启用' ? '（已停用）' : '')}</option>))}
+                    </select> : props.users.find(user => user.id === record.reportsToUserId)?.name || '—')}
                   </td>
-                  <td>{fixedIdentityRoles[record.id] ?? '—'}</td>
+                  <td>{localize(fixedIdentityRoles[record.id] ?? '—')}</td>
                   <td>
                     <span
                       className="reference-status"
                       data-status={record.status}
                     >
-                      {record.status}
+                      {localize(record.status)}
                     </span>
                   </td>
                   <td>
-                    <code>{record.id}</code>
+                    <code>{localize(record.id)}</code>
                   </td>
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={`内部用户 ${record.name}`}
+                      label={localize(`内部用户 ${record.name}`)}
                       onDisable={() => props.onDisableUser(record.id)}
                     />
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
-        ) : null}
+        ) : null)}
       </div>
     </section>
   );
@@ -2897,6 +2900,7 @@ type ReferenceCreateDialogProps = {
 };
 
 function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
+  const { localize } = useI18n();
   const activeLabel =
     referenceTabs.find((tab) => tab.value === props.activeTab)?.label ?? '记录';
   const update = (key: string, value: string) =>
@@ -2904,21 +2908,21 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
   const customerSelect = (
     <label htmlFor="reference-customer">
       <span>
-        所属客户 <em>*</em>
+        {localize("所属客户")}<em>*</em>
       </span>
       <select
         id="reference-customer"
         value={props.form.customerId ?? ''}
         onChange={(event) => update('customerId', event.target.value)}
       >
-        <option value="">请选择客户</option>
-        {props.customers
+        <option value="">{localize("请选择客户")}</option>
+        {localize(props.customers
           .filter((customer) => customer.status === '启用')
           .map((customer) => (
             <option key={customer.id} value={customer.id}>
-              {customer.name}
+              {localize(customer.name)}
             </option>
-          ))}
+          )))}
       </select>
     </label>
   );
@@ -2927,136 +2931,135 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent className="create-dialog reference-create-dialog">
         <DialogHeader>
-          <DialogTitle>新建{activeLabel}</DialogTitle>
+          <DialogTitle>{localize("新建")}{localize(activeLabel)}</DialogTitle>
           <DialogDescription>
-            添加一条可供 Demo 业务流程选择和引用的主数据。
-          </DialogDescription>
+            {localize("添加一条可供 Demo 业务流程选择和引用的主数据。")}</DialogDescription>
         </DialogHeader>
         <div className="dialog-form">
-          {props.activeTab === 'customers' ? (
+          {localize(props.activeTab === 'customers' ? (
             <>
               <label htmlFor="customer-name">
                 <span>
-                  客户名 <em>*</em>
+                  {localize("客户名")}<em>*</em>
                 </span>
                 <Input
                   id="customer-name"
                   value={props.form.name ?? ''}
                   onChange={(event) => update('name', event.target.value)}
-                  placeholder="例如：北京星海科技有限公司"
+                  placeholder={localize("例如：北京星海科技有限公司")}
                 />
               </label>
               <label htmlFor="customer-owner">
-                <span>客户所有人</span>
+                <span>{localize("客户所有人")}</span>
                 <select id="customer-owner" value={props.form.ownerUserId ?? ''} onChange={event => update('ownerUserId', event.target.value)}>
-                  <option value="">请选择内部用户</option>
-                  {props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                  <option value="">{localize("请选择内部用户")}</option>
+                  {localize(props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{localize(user.name)}</option>))}
                 </select>
               </label>
               <label htmlFor="customer-team">
                 <span>
-                  负责团队 <em>*</em>
+                  {localize("负责团队")}<em>*</em>
                 </span>
                 <select
                   id="customer-team"
                   value={props.form.team ?? ''}
                   onChange={(event) => update('team', event.target.value)}
                 >
-                  <option value="">请选择负责团队</option>
-                  {responsibleTeams.map((team) => (
+                  <option value="">{localize("请选择负责团队")}</option>
+                  {localize(responsibleTeams.map((team) => (
                     <option key={team} value={team}>
-                      {team}
+                      {localize(team)}
                     </option>
-                  ))}
+                  )))}
                 </select>
               </label>
             </>
-          ) : null}
-          {props.activeTab === 'contacts' ? (
+          ) : null)}
+          {localize(props.activeTab === 'contacts' ? (
             <>
-              {customerSelect}
+              {localize(customerSelect)}
               <label htmlFor="contact-name">
                 <span>
-                  姓名 <em>*</em>
+                  {localize("姓名")}<em>*</em>
                 </span>
                 <Input
                   id="contact-name"
                   value={props.form.name ?? ''}
                   onChange={(event) => update('name', event.target.value)}
-                  placeholder="请输入联系人姓名"
+                  placeholder={localize("请输入联系人姓名")}
                 />
               </label>
               <label htmlFor="contact-phone">
                 <span>
-                  手机号 <em>*</em>
+                  {localize("手机号")}<em>*</em>
                 </span>
                 <Input
                   id="contact-phone"
                   inputMode="tel"
                   value={props.form.phone ?? ''}
                   onChange={(event) => update('phone', event.target.value)}
-                  placeholder="请输入 11 位手机号"
+                  placeholder={localize("请输入 11 位手机号")}
                 />
               </label>
               <label htmlFor="contact-email">
                 <span>
-                  邮箱 <em>*</em>
+                  {localize("邮箱")}<em>*</em>
                 </span>
                 <Input
                   id="contact-email"
                   type="email"
                   value={props.form.email ?? ''}
                   onChange={(event) => update('email', event.target.value)}
-                  placeholder="例如：name@example.com"
+                  placeholder={localize("例如：name@example.com")}
                 />
               </label>
             </>
-          ) : null}
-          {props.activeTab === 'assets' ? (
+          ) : null)}
+          {localize(props.activeTab === 'assets' ? (
             <>
-              {customerSelect}
+              {localize(customerSelect)}
               <label htmlFor="asset-name">
                 <span>
-                  资产名称 <em>*</em>
+                  {localize("资产名称")}<em>*</em>
                 </span>
                 <select
                   id="asset-name"
                   value={props.form.assetName ?? '远程人天'}
                   onChange={(event) => update('assetName', event.target.value)}
                 >
-                  <option>远程人天</option>
-                  <option>现场人天</option>
+                  <option value={"远程人天"}>{localize("远程人天")}</option>
+                  <option value={"现场人天"}>{localize("现场人天")}</option>
                 </select>
               </label>
-              <label htmlFor="asset-balance"><span>余额人天 <em>*</em></span><Input id="asset-balance" type="number" min="0" step="0.1" value={props.form.balanceDays ?? ''} onChange={event => update('balanceDays', event.target.value)} placeholder="请输入实际余额人天，最多一位小数" /></label>
+              <label htmlFor="asset-balance"><span>{localize("余额人天")}<em>*</em></span><Input id="asset-balance" type="number" min="0" step="0.1" value={props.form.balanceDays ?? ''} onChange={event => update('balanceDays', event.target.value)} placeholder={localize("请输入实际余额人天，最多一位小数")} /></label>
               <label htmlFor="asset-status">
                 <span>
-                  状态 <em>*</em>
+                  {localize("状态")}<em>*</em>
                 </span>
                 <select
                   id="asset-status"
                   value={props.form.status ?? '启用'}
                   onChange={(event) => update('status', event.target.value)}
                 >
-                  {['启用', '停用', '使用中', '已使用'].map((status) => (
-                    <option key={status}>{status}</option>
-                  ))}
+                  {localize(['启用', '停用', '使用中', '已使用'].map((status) => (
+                    <option value={status} key={status}>{localize(status)}</option>
+                  )))}
                 </select>
               </label>
             </>
-          ) : null}
-          {props.activeTab === 'business-objects' ? (
+          ) : null)}
+          {localize(props.activeTab === 'business-objects' ? (
             <>
-              {customerSelect}
+              {localize(customerSelect)}
               <label htmlFor="object-name">
                 <span>
-                  对象名称 <em>*</em>
+                  {localize("对象名称")}<em>*</em>
                 </span>
                 <Input
                   id="object-name"
                   value={props.form.name ?? ''}
                   onChange={(event) => update('name', event.target.value)}
-                  placeholder="例如：生产超融合集群"
+                  placeholder={localize("例如：生产超融合集群")}
                 />
               </label>
               <label htmlFor="object-sn">
@@ -3067,30 +3070,30 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   id="object-sn"
                   value={props.form.sn ?? ''}
                   onChange={(event) => update('sn', event.target.value)}
-                  placeholder="例如：c280dee4-df3a-4a44-b198-ea7fa4c9178b"
+                  placeholder={localize("例如：c280dee4-df3a-4a44-b198-ea7fa4c9178b")}
                   autoComplete="off"
                 />
               </label>
               <label htmlFor="object-product">
                 <span>
-                  产品 <em>*</em>
+                  {localize("产品")}<em>*</em>
                 </span>
                 <select
                   id="object-product"
                   value={props.form.product ?? ''}
                   onChange={(event) => update('product', event.target.value)}
                 >
-                  {businessObjectProducts.map((productOption) => (
+                  {localize(businessObjectProducts.map((productOption) => (
                     <option key={productOption} value={productOption}>
-                      {productOption}
+                      {localize(productOption)}
                     </option>
-                  ))}
+                  )))}
                 </select>
               </label>
               <div className="dialog-grid dialog-grid--three">
                 <label htmlFor="node-count">
                   <span>
-                    节点数 <em>*</em>
+                    {localize("节点数")}<em>*</em>
                   </span>
                   <Input
                     id="node-count"
@@ -3101,12 +3104,12 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                     onChange={(event) =>
                       update('nodeCount', event.target.value)
                     }
-                    placeholder="例如：8"
+                    placeholder={localize("例如：8")}
                   />
                 </label>
                 <label htmlFor="upgrade-entitlement">
                   <span>
-                    升级权益（含已冻结） <em>*</em>
+                    {localize("升级权益（含已冻结）")}<em>*</em>
                   </span>
                   <Input
                     id="upgrade-entitlement"
@@ -3118,12 +3121,12 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                     onChange={(event) =>
                       update('upgradeEntitlement', event.target.value)
                     }
-                    placeholder="不超过节点数"
+                    placeholder={localize("不超过节点数")}
                   />
                 </label>
                 <label htmlFor="inspection-entitlement">
                   <span>
-                    巡检权益（含已冻结） <em>*</em>
+                    {localize("巡检权益（含已冻结）")}<em>*</em>
                   </span>
                   <Input
                     id="inspection-entitlement"
@@ -3135,86 +3138,85 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                     onChange={(event) =>
                       update('inspectionEntitlement', event.target.value)
                     }
-                    placeholder="不超过节点数"
+                    placeholder={localize("不超过节点数")}
                   />
                 </label>
               </div>
               <p className="field-hint">
-                升级权益和巡检权益均须小于或等于节点数。
-              </p>
+                {localize("升级权益和巡检权益均须小于或等于节点数。")}</p>
             </>
-          ) : null}
-          {props.activeTab === 'partners' ? (
+          ) : null)}
+          {localize(props.activeTab === 'partners' ? (
             <label htmlFor="partner-name">
               <span>
-                合作伙伴名称 <em>*</em>
+                {localize("合作伙伴名称")}<em>*</em>
               </span>
               <Input
                 id="partner-name"
                 maxLength={120}
                 value={props.form.name ?? ''}
                 onChange={(event) => update('name', event.target.value)}
-                placeholder="请输入合作伙伴名称"
+                placeholder={localize("请输入合作伙伴名称")}
               />
             </label>
-          ) : null}
-          {props.activeTab === 'partner-users' ? (
+          ) : null)}
+          {localize(props.activeTab === 'partner-users' ? (
             <>
               <label htmlFor="partner-user-name">
                 <span>
-                  姓名 <em>*</em>
+                  {localize("姓名")}<em>*</em>
                 </span>
                 <Input
                   id="partner-user-name"
                   maxLength={80}
                   value={props.form.name ?? ''}
                   onChange={(event) => update('name', event.target.value)}
-                  placeholder="请输入合作伙伴用户姓名"
+                  placeholder={localize("请输入合作伙伴用户姓名")}
                 />
               </label>
               <label htmlFor="partner-user-partner">
                 <span>
-                  所属合作伙伴 <em>*</em>
+                  {localize("所属合作伙伴")}<em>*</em>
                 </span>
                 <select
                   id="partner-user-partner"
                   value={props.form.partnerId ?? ''}
                   onChange={(event) => update('partnerId', event.target.value)}
                 >
-                  <option value="">请选择合作伙伴</option>
-                  {props.partners
+                  <option value="">{localize("请选择合作伙伴")}</option>
+                  {localize(props.partners
                     .filter((partner) => partner.status === '启用')
                     .map((partner) => (
                       <option key={partner.id} value={partner.id}>
-                        {partner.name}
+                        {localize(partner.name)}
                       </option>
-                    ))}
+                    )))}
                 </select>
-                {!props.partners.some(
+                {localize(!props.partners.some(
                   (partner) => partner.status === '启用',
                 ) ? (
-                  <span>暂无已启用的合作伙伴，请先在“合作伙伴”中创建。</span>
-                ) : null}
+                  <span>{localize("暂无已启用的合作伙伴，请先在“合作伙伴”中创建。")}</span>
+                ) : null)}
               </label>
               <label htmlFor="partner-user-role">
-                <span>合作伙伴角色</span>
+                <span>{localize("合作伙伴角色")}</span>
                 <Input id="partner-user-role" value={partnerUserRole} readOnly />
               </label>
               <label htmlFor="partner-user-phone">
                 <span>
-                  手机号 <em>*</em>
+                  {localize("手机号")}<em>*</em>
                 </span>
                 <Input
                   id="partner-user-phone"
                   type="tel"
                   value={props.form.phone ?? ''}
                   onChange={(event) => update('phone', event.target.value)}
-                  placeholder="请输入 11 位手机号"
+                  placeholder={localize("请输入 11 位手机号")}
                 />
               </label>
               <label htmlFor="partner-user-email">
                 <span>
-                  邮箱 <em>*</em>
+                  {localize("邮箱")}<em>*</em>
                 </span>
                 <Input
                   id="partner-user-email"
@@ -3222,66 +3224,66 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   maxLength={254}
                   value={props.form.email ?? ''}
                   onChange={(event) => update('email', event.target.value)}
-                  placeholder="例如：name@example.com"
+                  placeholder={localize("例如：name@example.com")}
                 />
               </label>
             </>
-          ) : null}
-          {props.activeTab === 'users' ? (
+          ) : null)}
+          {localize(props.activeTab === 'users' ? (
             <>
               <label htmlFor="user-name">
                 <span>
-                  姓名 <em>*</em>
+                  {localize("姓名")}<em>*</em>
                 </span>
                 <Input
                   id="user-name"
                   value={props.form.name ?? ''}
                   onChange={(event) => update('name', event.target.value)}
-                  placeholder="请输入内部用户姓名"
+                  placeholder={localize("请输入内部用户姓名")}
                 />
               </label>
               <label htmlFor="user-phone">
-                <span>电话</span>
-                <Input id="user-phone" type="tel" value={props.form.phone ?? ''} onChange={(event) => update('phone', event.target.value)} placeholder="请输入联系电话" />
+                <span>{localize("电话")}</span>
+                <Input id="user-phone" type="tel" value={props.form.phone ?? ''} onChange={(event) => update('phone', event.target.value)} placeholder={localize("请输入联系电话")} />
               </label>
               <label htmlFor="user-email">
                 <span>
-                  邮箱 <em>*</em>
+                  {localize("邮箱")}<em>*</em>
                 </span>
                 <Input
                   id="user-email"
                   type="email"
                   value={props.form.email ?? ''}
                   onChange={(event) => update('email', event.target.value)}
-                  placeholder="例如：name@example.com"
+                  placeholder={localize("例如：name@example.com")}
                 />
               </label>
               <label htmlFor="user-department">
                 <span>
-                  部门 <em>*</em>
+                  {localize("部门")}<em>*</em>
                 </span>
                 <Input
                   id="user-department"
                   value={props.form.department ?? ''}
                   onChange={(event) => update('department', event.target.value)}
-                  placeholder="例如：技术服务部"
+                  placeholder={localize("例如：技术服务部")}
                 />
               </label>
               <label htmlFor="user-reports-to">
-                <span>汇报人</span>
+                <span>{localize("汇报人")}</span>
                 <select id="user-reports-to" value={props.form.reportsToUserId ?? ''} onChange={event => update('reportsToUserId', event.target.value)}>
-                  <option value="">未设置</option>
-                  {props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{user.name}</option>)}
+                  <option value="">{localize("未设置")}</option>
+                  {localize(props.users.filter(user => user.status === '启用').map(user => <option key={user.id} value={user.id}>{localize(user.name)}</option>))}
                 </select>
-                <span className="sr-help">关联其他内部用户，用于直属主管和逐级审批。</span>
+                <span className="sr-help">{localize("关联其他内部用户，用于直属主管和逐级审批。")}</span>
               </label>
             </>
-          ) : null}
-          {props.activeTab === 'service-certifications' ? (
+          ) : null)}
+          {localize(props.activeTab === 'service-certifications' ? (
             <>
               <label htmlFor="certification-content">
                 <span>
-                  认证内容 <em>*</em>
+                  {localize("认证内容")}<em>*</em>
                 </span>
                 <select
                   id="certification-content"
@@ -3290,17 +3292,17 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                     update('certification', event.target.value)
                   }
                 >
-                  <option value="">请选择认证内容</option>
-                  {serviceCertificationOptions.map((option) => (
+                  <option value="">{localize("请选择认证内容")}</option>
+                  {localize(serviceCertificationOptions.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {localize(option)}
                     </option>
-                  ))}
+                  )))}
                 </select>
               </label>
               <label htmlFor="certification-holder-type">
                 <span>
-                  用户类型 <em>*</em>
+                  {localize("用户类型")}<em>*</em>
                 </span>
                 <select
                   id="certification-holder-type"
@@ -3313,14 +3315,14 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                     }))
                   }
                 >
-                  <option value="">请选择用户类型</option>
-                  <option value="internal">内部用户</option>
-                  <option value="partner">合作伙伴用户</option>
+                  <option value="">{localize("请选择用户类型")}</option>
+                  <option value="internal">{localize("内部用户")}</option>
+                  <option value="partner">{localize("合作伙伴用户")}</option>
                 </select>
               </label>
               <label htmlFor="certification-user">
                 <span>
-                  认证用户 <em>*</em>
+                  {localize("认证用户")}<em>*</em>
                 </span>
                 <select
                   id="certification-user"
@@ -3328,33 +3330,33 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
                   value={props.form.userId ?? ''}
                   onChange={(event) => update('userId', event.target.value)}
                 >
-                  <option value="">请选择已启用用户</option>
-                  {certificationUsers(
+                  <option value="">{localize("请选择已启用用户")}</option>
+                  {localize(certificationUsers(
                     props.form.holderType,
                     props.users,
                     props.partnerUsers,
                     props.partners,
                   ).map((person) => (
                     <option key={person.id} value={person.id}>
-                      {person.name} · {person.email}
+                      {localize(person.name)} · {localize(person.email)}
                     </option>
-                  ))}
+                  )))}
                 </select>
               </label>
               <DateField
                 id="certification-expires-on"
-                label="到期日"
+                label={localize("到期日")}
                 required
                 value={props.form.expiresOn ?? ''}
                 onChange={(date) => update('expiresOn', date)}
               />
             </>
-          ) : null}
-          {props.error ? (
+          ) : null)}
+          {localize(props.error ? (
             <p className="form-error" role="alert">
-              {props.error}
+              {localize(props.error)}
             </p>
-          ) : null}
+          ) : null)}
         </div>
         <DialogFooter className="dialog-footer">
           <DialogClose
@@ -3365,13 +3367,12 @@ function ReferenceCreateDialog(props: ReferenceCreateDialogProps) {
               />
             }
           >
-            取消
-          </DialogClose>
+            {localize("取消")}</DialogClose>
           <Button
             className="ct-button ct-button--primary"
             onClick={props.onSave}
           >
-            创建{activeLabel}
+            {localize("创建")}{localize(activeLabel)}
           </Button>
         </DialogFooter>
       </DialogContent>

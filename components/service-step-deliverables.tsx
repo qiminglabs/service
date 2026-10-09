@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 import { StepReportTemplateSelect } from '@/components/step-report-template-select';
@@ -43,6 +45,7 @@ export function ServiceStepDeliverables({
   reportTemplates: ReportTemplate[];
   onManageTemplates: () => void;
 }) {
+  const { localize } = useI18n();
   const [error, setError] = useState('');
   const [previewId, setPreviewId] = useState<string>();
   const document = step.type === 'document';
@@ -64,20 +67,20 @@ export function ServiceStepDeliverables({
   }
   return (
     <div className="service-step-deliverables">
-      {items.map((item, index) => (
+      {localize(items.map((item, index) => (
         <section
           className="service-step-deliverable"
           key={item.id}
-          aria-label={`${label} ${index + 1} 配置`}
+          aria-label={localize(`${label} ${index + 1} 配置`)}
         >
           <div className="service-flow-step-heading">
             <strong>
-              {label} {index + 1}
+              {localize(label)} {localize(index + 1)}
             </strong>
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`删除${label} ${index + 1}`}
+              aria-label={localize(`删除${label} ${index + 1}`)}
               disabled={!editable || items.length === 1}
               onClick={() => replace(items.filter((row) => row.id !== item.id))}
             >
@@ -85,7 +88,7 @@ export function ServiceStepDeliverables({
             </Button>
           </div>
           <label className="approval-field">
-            <span>{label}名称 <RequiredMark /></span>
+            <span>{localize(label)}{localize("名称")}<RequiredMark /></span>
             <Input
               required
               maxLength={120}
@@ -98,7 +101,7 @@ export function ServiceStepDeliverables({
             className="approval-field"
             htmlFor={`delivery-${item.id}-instructions`}
           >
-            <span>填写说明</span>
+            <span>{localize("填写说明")}</span>
             <Textarea
               id={`delivery-${item.id}-instructions`}
               rows={3}
@@ -115,7 +118,7 @@ export function ServiceStepDeliverables({
               className="approval-field"
               htmlFor={`delivery-${item.id}-required`}
             >
-              <span>填写要求</span>
+              <span>{localize("填写要求")}</span>
               <NativeSelect
                 id={`delivery-${item.id}-required`}
                 value={String(item.required)}
@@ -124,15 +127,15 @@ export function ServiceStepDeliverables({
                   patch(item.id, { required: event.target.value === 'true' })
                 }
               >
-                <option value="true">必填</option>
-                <option value="false">选填</option>
+                <option value="true">{localize("必填")}</option>
+                <option value="false">{localize("选填")}</option>
               </NativeSelect>
             </label>
             <label
               className="approval-field"
               htmlFor={`delivery-${item.id}-visibility`}
             >
-              <span>是否交付客户</span>
+              <span>{localize("是否交付客户")}</span>
               <NativeSelect
                 id={`delivery-${item.id}-visibility`}
                 value={String(item.deliverToCustomer)}
@@ -143,12 +146,12 @@ export function ServiceStepDeliverables({
                   })
                 }
               >
-                <option value="false">否（内部使用）</option>
-                <option value="true">是（交付客户）</option>
+                <option value="false">{localize("否（内部使用）")}</option>
+                <option value="true">{localize("是（交付客户）")}</option>
               </NativeSelect>
             </label>
           </div>
-          {document ? (
+          {localize(document ? (
             <>
               <StepReportTemplateSelect
                 value={(item as StepDocument).reportTemplate}
@@ -164,7 +167,7 @@ export function ServiceStepDeliverables({
                 className="approval-field"
                 htmlFor={`delivery-${item.id}-url`}
               >
-                <span>在线文档模板链接</span>
+                <span>{localize("在线文档模板链接")}</span>
                 <Input
                   id={`delivery-${item.id}-url`}
                   type="url"
@@ -179,15 +182,15 @@ export function ServiceStepDeliverables({
               </label>
               <label className="approval-field">
                 <span>
-                  {(item as StepDocument).template
+                  {localize((item as StepDocument).template
                     ? '替换文件模板'
-                    : '上载文件模板'}
+                    : '上载文件模板')}
                 </span>
                 <input
                   type="file"
                   accept={fileAccept}
                   disabled={!editable}
-                  aria-label={`上载 ${item.name} 模板`}
+                  aria-label={localize(`上载 ${item.name} 模板`)}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     event.target.value = '';
@@ -203,9 +206,8 @@ export function ServiceStepDeliverables({
                 />
               </label>
               <p className="sr-help">
-                模板单个不超过 20 MB；DOCX、TXT、MD 可从模板开始在线填写。
-              </p>
-              {(item as StepDocument).template && (
+                {localize("模板单个不超过 20 MB；DOCX、TXT、MD 可从模板开始在线填写。")}</p>
+              {localize((item as StepDocument).template && (
                 <div className="service-step-template-actions">
                   <Button
                     variant="link"
@@ -213,18 +215,16 @@ export function ServiceStepDeliverables({
                       downloadFile((item as StepDocument).template!)
                     }
                   >
-                    {(item as StepDocument).template!.name} · 下载模板
-                  </Button>
+                    {localize((item as StepDocument).template!.name)} {localize(" · 下载模板")}</Button>
                   <Button
                     variant="ghost"
                     disabled={!editable}
                     onClick={() => patch(item.id, { template: undefined })}
                   >
-                    移除模板
-                  </Button>
+                    {localize("移除模板")}</Button>
                 </div>
-              )}
-              {validOnlineTemplateUrl(
+              ))}
+              {localize(validOnlineTemplateUrl(
                 (item as StepDocument).onlineTemplateUrl.trim(),
               ) && (
                 <a
@@ -232,15 +232,13 @@ export function ServiceStepDeliverables({
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  打开在线文档模板 ↗
-                </a>
-              )}
-              {!!(item as StepDocument).initialContent &&
+                  {localize("打开在线文档模板 ↗")}</a>
+              ))}
+              {localize(!!(item as StepDocument).initialContent &&
                 !(item as StepDocument).template && (
                   <p className="sr-help">
-                    已保留原文本模板，可在操作预览中从模板开始。
-                  </p>
-                )}
+                    {localize("已保留原文本模板，可在操作预览中从模板开始。")}</p>
+                ))}
             </>
           ) : (
             <div className="service-step-two-fields">
@@ -248,7 +246,7 @@ export function ServiceStepDeliverables({
                 className="approval-field"
                 htmlFor={`delivery-${item.id}-min-files`}
               >
-                <span>最少文件数量</span>
+                <span>{localize("最少文件数量")}</span>
                 <Input
                   id={`delivery-${item.id}-min-files`}
                   type="number"
@@ -275,12 +273,12 @@ export function ServiceStepDeliverables({
                 className="approval-field"
                 htmlFor={`delivery-${item.id}-formats`}
               >
-                <span>允许文件格式</span>
+                <span>{localize("允许文件格式")}</span>
                 <Input
                   id={`delivery-${item.id}-formats`}
                   maxLength={200}
                   disabled={!editable}
-                  placeholder="留空不限，如 .pdf,.docx"
+                  placeholder={localize("留空不限，如 .pdf,.docx")}
                   value={(item as StepFile).formats}
                   onChange={(event) =>
                     patch(item.id, { formats: event.target.value })
@@ -288,12 +286,11 @@ export function ServiceStepDeliverables({
                 />
               </label>
             </div>
-          )}
+          ))}
           <Button variant="outline" onClick={() => setPreviewId(item.id)}>
-            预览{label}操作
-          </Button>
+            {localize("预览")}{localize(label)}{localize("操作")}</Button>
         </section>
-      ))}
+      )))}
       <Button
         variant="outline"
         disabled={!editable || items.length >= 50}
@@ -307,21 +304,21 @@ export function ServiceStepDeliverables({
         }
       >
         <Plus size={14} />
-        添加{label}
+        {localize("添加")}{localize(label)}
       </Button>
-      {error && (
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {preview && (
+      ))}
+      {localize(preview && (
         <ServiceStepMaterialPreview
           key={preview.id}
           item={preview}
           kind={document ? 'document' : 'upload'}
           onClose={() => setPreviewId(undefined)}
         />
-      )}
+      ))}
     </div>
   );
 }

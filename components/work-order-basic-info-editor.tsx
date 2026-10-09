@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -46,6 +48,7 @@ export function WorkOrderBasicInfoEditor({
   onBusy: (busy: boolean) => void;
   onSaved: (project: ServiceProjectRecord) => void;
 }) {
+  const { localize } = useI18n();
   const [draft, setDraft] = useState<WorkOrderBasicInfoInput | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -97,7 +100,7 @@ export function WorkOrderBasicInfoEditor({
   }
   return (
     <div className="wo-basic-actions">
-      {notice && <output>{notice}</output>}
+      {localize(notice && <output>{localize(notice)}</output>)}
       <Button
         variant="outline"
         size="sm"
@@ -116,8 +119,7 @@ export function WorkOrderBasicInfoEditor({
           setNotice('');
         }}
       >
-        编辑基本信息
-      </Button>
+        {localize("编辑基本信息")}</Button>
       <Dialog
         open={!!draft}
         onOpenChange={(open) => {
@@ -129,17 +131,17 @@ export function WorkOrderBasicInfoEditor({
           showCloseButton={!saving}
         >
           <DialogHeader>
-            <DialogTitle>编辑基本信息</DialogTitle>
+            <DialogTitle>{localize("编辑基本信息")}</DialogTitle>
             <DialogDescription>
-              {order.item.serviceName} · {order.id}
+              {localize(order.item.serviceName)} · {localize(order.id)}
             </DialogDescription>
           </DialogHeader>
-          {draft && (
+          {localize(draft && (
             <div className="sr-item-dialog-body wo-basic-edit-form">
               <div className="wo-basic-edit-dates">
                 <DateField
                   id="wo-basic-start"
-                  label="计划执行日期"
+                  label={localize("计划执行日期")}
                   required
                   value={draft.expectedServiceDate}
                   disabled={saving}
@@ -149,7 +151,7 @@ export function WorkOrderBasicInfoEditor({
                 />
                 <DateField
                   id="wo-basic-end"
-                  label="计划完成日期"
+                  label={localize("计划完成日期")}
                   required
                   value={draft.plannedCompletionDate}
                   disabled={saving}
@@ -165,7 +167,7 @@ export function WorkOrderBasicInfoEditor({
               />
               <div className="wo-basic-edit-dates">
                 <div className="wo-basic-contact-select">
-                  <label htmlFor="wo-basic-contact">现场联系人</label>
+                  <label htmlFor="wo-basic-contact">{localize("现场联系人")}</label>
                   <Select
                     value={selection}
                     disabled={saving}
@@ -182,73 +184,69 @@ export function WorkOrderBasicInfoEditor({
                     }}
                   >
                     <SelectTrigger id="wo-basic-contact">
-                      {selectedContact?.name ??
+                      {localize(selectedContact?.name ??
                         (selection === 'stored'
                           ? `${order.contactName}（原记录）`
                           : draft.contact
                             ? `${order.contactName || '原联系人'}（不可用）`
-                            : '请选择协作人')}
+                            : '请选择协作人'))}
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">不指定</SelectItem>
-                      {selection === 'stored' && (
+                      <SelectItem value="none">{localize("不指定")}</SelectItem>
+                      {localize(selection === 'stored' && (
                         <SelectItem value="stored" disabled>
-                          {order.contactName}（原记录）
-                        </SelectItem>
-                      )}
-                      {draft.contact && !selectedContact && (
+                          {localize(order.contactName)}{localize("（原记录）")}</SelectItem>
+                      ))}
+                      {localize(draft.contact && !selectedContact && (
                         <SelectItem value={selection} disabled>
-                          {order.contactName || '原联系人'}（不可用）
-                        </SelectItem>
-                      )}
-                      {contacts.map((person) => (
+                          {localize(order.contactName || '原联系人')}{localize("（不可用）")}</SelectItem>
+                      ))}
+                      {localize(contacts.map((person) => (
                         <SelectItem
                           key={contactKey(person)}
                           value={contactKey(person)}
                         >
-                          {person.name} ·{' '}
+                          {localize(person.name)} ·{localize(' ')}
                           {
-                            {
+                            localize({
                               customer: '客户协作人',
                               internal: '内部协作人',
                               partner: '合作伙伴协作人',
-                            }[person.group]
+                            }[person.group])
                           }
                         </SelectItem>
-                      ))}
+                      )))}
                     </SelectContent>
                   </Select>
-                  {!contacts.length && (
-                    <p className="sr-help">暂无可选协作人</p>
-                  )}
+                  {localize(!contacts.length && (
+                    <p className="sr-help">{localize("暂无可选协作人")}</p>
+                  ))}
                 </div>
                 <label htmlFor="wo-basic-phone">
-                  联系电话
-                  <Input
+                  {localize("联系电话")}<Input
                     id="wo-basic-phone"
                     value={phone}
                     readOnly
-                    placeholder="未填写"
+                    placeholder={localize("未填写")}
                   />
                 </label>
               </div>
             </div>
-          )}
-          {error && (
+          ))}
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={saving}
               onClick={() => setDraft(null)}
             >
-              取消
-            </Button>
+              {localize("取消")}</Button>
             <Button disabled={saving} onClick={() => void save()}>
-              {saving ? '保存中…' : '保存'}
+              {localize(saving ? '保存中…' : '保存')}
             </Button>
           </DialogFooter>
         </DialogContent>

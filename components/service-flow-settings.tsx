@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -52,10 +54,11 @@ import {
 const message = (error: unknown) =>
   error instanceof Error ? error.message : '操作失败，请重试。';
 function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
+  const { localize } = useI18n();
   return (
     <label className="submission-rule-field">
-      <span>{label}</span>
-      {children}
+      <span>{localize(label)}</span>
+      {localize(children)}
     </label>
   );
 }
@@ -74,25 +77,27 @@ function FlowSelect({
   label?: string;
   allowNew?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <NativeSelect
-      aria-label={label}
+      aria-label={localize(label)}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
     >
-      <option value="">请选择服务流程</option>
-      {allowNew && <option value="__new__">新建并配置服务流程</option>}
-      {config.flows.map((flow) => (
+      <option value="">{localize("请选择服务流程")}</option>
+      {localize(allowNew && <option value="__new__">{localize("新建并配置服务流程")}</option>)}
+      {localize(config.flows.map((flow) => (
         <option key={flow.id} value={flow.id} disabled={!flow.enabled}>
-          {flow.name}
-          {!flow.enabled && '（已停用）'}
+          {localize(flow.name)}
+          {localize(!flow.enabled && '（已停用）')}
         </option>
-      ))}
+      )))}
     </NativeSelect>
   );
 }
 export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
+  const { localize } = useI18n();
   const [data, setData] =
     useState<Awaited<ReturnType<typeof readServiceFlowData>>>();
   const [busy, setBusy] = useState(false),
@@ -486,26 +491,26 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
     );
   return (
     <div className="request-flow-settings service-flow-settings">
-      {error && (
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && (
+      ))}
+      {localize(notice && (
         <p className="sr-success" role="status">
-          {notice}
+          {localize(notice)}
         </p>
-      )}
-      {!data && !error && <p role="status">正在加载服务流程…</p>}
+      ))}
+      {localize(!data && !error && <p role="status">{localize("正在加载服务流程…")}</p>)}
       <section className="routing-default">
         <div>
-          <strong>默认服务流程</strong>
+          <strong>{localize("默认服务流程")}</strong>
         </div>
         <div className="routing-inline service-flow-default">
           <span className="sr-help">
-            {config.flows.find(
+            {localize(config.flows.find(
               (flow) => flow.id === config.assignment.defaultFlowId,
-            )?.name || '尚未配置'}
+            )?.name || '尚未配置')}
           </span>
           <Button
             variant="outline"
@@ -519,55 +524,53 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
               )
             }
           >
-            配置流程
-          </Button>
+            {localize("配置流程")}</Button>
         </div>
       </section>
-      <section className="routing-rules" aria-label="条件分配规则">
+      <section className="routing-rules" aria-label={localize("条件分配规则")}>
         <div className="submission-rules-toolbar">
           <div>
-            <strong>条件分配规则</strong>
+            <strong>{localize("条件分配规则")}</strong>
           </div>
           <div className="routing-inline">
             <Button disabled={disabled} onClick={() => editRule()}>
               <Plus size={16} />
-              新增规则
-            </Button>
+              {localize("新增规则")}</Button>
           </div>
         </div>
         <div className="table-scroll">
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>优先级</th>
-                <th>规则名称</th>
-                <th>适用服务目录</th>
-                <th>自然语言描述</th>
-                <th>分配流程</th>
-                <th>状态</th>
-                <th data-list-actions>操作</th>
+                <th>{localize("优先级")}</th>
+                <th>{localize("规则名称")}</th>
+                <th>{localize("适用服务目录")}</th>
+                <th>{localize("自然语言描述")}</th>
+                <th>{localize("分配流程")}</th>
+                <th>{localize("状态")}</th>
+                <th data-list-actions>{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {sortedFlowRules(activeRules).map((rule) => (
+              {localize(sortedFlowRules(activeRules).map((rule) => (
                 <tr key={rule.id}>
-                  <td>{rule.priority}</td>
-                  <td>{rule.name}</td>
-                  <td>{serviceFlowScopeLabel(rule, dictionary)}</td>
+                  <td>{localize(rule.priority)}</td>
+                  <td>{localize(rule.name)}</td>
+                  <td>{localize(serviceFlowScopeLabel(rule, dictionary))}</td>
                   <td>
                     <p>
-                      {rule.naturalLanguage?.requirement ?? describeRule(rule)}
+                      {localize(rule.naturalLanguage?.requirement ?? describeRule(rule))}
                     </p>
                     <details>
-                      <summary>查看执行条件</summary>
-                      <p>{describeRule(rule)}</p>
+                      <summary>{localize("查看执行条件")}</summary>
+                      <p>{localize(describeRule(rule))}</p>
                     </details>
                   </td>
                   <td>
-                    {config.flows.find((flow) => flow.id === rule.flowId)
-                      ?.name ?? '流程不存在'}
+                    {localize(config.flows.find((flow) => flow.id === rule.flowId)
+                      ?.name ?? '流程不存在')}
                   </td>
-                  <td>{rule.enabled ? '启用' : '停用'}</td>
+                  <td>{localize(rule.enabled ? '启用' : '停用')}</td>
                   <td>
                     <div className="rule-table-actions">
                       <Button
@@ -575,8 +578,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                         disabled={disabled}
                         onClick={() => editRule(rule)}
                       >
-                        编辑条件
-                      </Button>
+                        {localize("编辑条件")}</Button>
                       <Button
                         variant="ghost"
                         disabled={disabled}
@@ -588,8 +590,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                           )
                         }
                       >
-                        配置服务流程
-                      </Button>
+                        {localize("配置服务流程")}</Button>
                       <Button
                         variant="ghost"
                         disabled={disabled}
@@ -610,92 +611,89 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                           )
                         }
                       >
-                        停用
-                      </Button>
+                        {localize("停用")}</Button>
                     </div>
                   </td>
                 </tr>
-              ))}
-              {!activeRules.length && (
+              )))}
+              {localize(!activeRules.length && (
                 <tr>
                   <td colSpan={7} className="routing-empty">
-                    暂无条件分配规则，将使用已保存的默认服务流程。
-                  </td>
+                    {localize("暂无条件分配规则，将使用已保存的默认服务流程。")}</td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
       </section>
       <details
         className="routing-rules disabled-rule-versions"
-        aria-label="条件分配规则（已停用）"
+        aria-label={localize("条件分配规则（已停用）")}
       >
         <summary className="submission-rules-toolbar">
-          <strong>条件分配规则（已停用）</strong>
+          <strong>{localize("条件分配规则（已停用）")}</strong>
         </summary>
         <div className="table-scroll">
           <table className="reference-table app-list-table">
             <thead>
               <tr>
-                <th>类型 / 规则名称</th>
-                <th>适用服务目录</th>
-                <th>分配条件</th>
-                <th>历史服务流程</th>
-                <th>停用原因</th>
-                <th>停用时间 / 操作人</th>
-                <th data-list-actions>操作</th>
+                <th>{localize("类型 / 规则名称")}</th>
+                <th>{localize("适用服务目录")}</th>
+                <th>{localize("分配条件")}</th>
+                <th>{localize("历史服务流程")}</th>
+                <th>{localize("停用原因")}</th>
+                <th>{localize("停用时间 / 操作人")}</th>
+                <th data-list-actions>{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {archivedRecords.map((entry) => (
+              {localize(archivedRecords.map((entry) => (
                 <tr key={entry.id}>
                   <td>
                     <span className="rule-version-status">
-                      {entry.kind === 'default' ? '历史默认规则' : '条件规则'}
+                      {localize(entry.kind === 'default' ? '历史默认规则' : '条件规则')}
                     </span>
-                    {entry.rule && (
+                    {localize(entry.rule && (
                       <p>
-                        {entry.name} · 优先级 {entry.rule.priority}
+                        {localize(entry.name)} {localize(" · 优先级")}{localize(entry.rule.priority)}
                       </p>
-                    )}
+                    ))}
                   </td>
                   <td>
-                    {entry.rule
+                    {localize(entry.rule
                       ? serviceFlowScopeLabel(entry.rule, dictionary)
-                      : '全部服务目录'}
+                      : '全部服务目录')}
                   </td>
                   <td>
-                    {entry.rule ? (
+                    {localize(entry.rule ? (
                       <>
                         <p>
-                          {entry.rule.naturalLanguage?.requirement ??
-                            describeRule(entry.rule)}
+                          {localize(entry.rule.naturalLanguage?.requirement ??
+                            describeRule(entry.rule))}
                         </p>
                         <details>
-                          <summary>查看执行条件</summary>
-                          <p>{describeRule(entry.rule)}</p>
+                          <summary>{localize("查看执行条件")}</summary>
+                          <p>{localize(describeRule(entry.rule))}</p>
                         </details>
                       </>
                     ) : (
                       '未命中任何启用的条件规则时使用'
-                    )}
+                    ))}
                   </td>
                   <td>
-                    <strong>{entry.flow.name}</strong>
+                    <strong>{localize(entry.flow.name)}</strong>
                     <p className="sr-help">
-                      {entry.flow.steps.length} 个步骤 · 历史快照
-                    </p>
+                      {localize(entry.flow.steps.length)} {localize(" 个步骤 · 历史快照")}</p>
                   </td>
-                  <td>{entry.reason}</td>
+                  <td>{localize(entry.reason)}</td>
                   <td>
-                    {entry.disabledAt
+                    {localize(entry.disabledAt
                       ? new Date(entry.disabledAt).toLocaleString('zh-CN', {
                           hour12: false,
                         })
-                      : '时间未记录'}
+                      : '时间未记录')}
                     <p className="sr-help">
-                      {entry.disabledBy ?? '操作人未记录'}
+                      {localize(entry.disabledBy ?? '操作人未记录')}
                     </p>
                   </td>
                   <td>
@@ -703,96 +701,94 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                       variant="ghost"
                       onClick={() => setHistoryTarget(entry)}
                     >
-                      查看流程
-                    </Button>
+                      {localize("查看流程")}</Button>
+                  </td>
+                </tr>
+              )))}
+              {localize(!archivedRecords.length && (
+                <tr>
+                  <td colSpan={7} className="routing-empty">
+                    {localize(data
+                      ? '暂无已停用规则。更换默认流程后，原默认规则也会保留在这里。'
+                      : '正在读取配置…')}
                   </td>
                 </tr>
               ))}
-              {!archivedRecords.length && (
-                <tr>
-                  <td colSpan={7} className="routing-empty">
-                    {data
-                      ? '暂无已停用规则。更换默认流程后，原默认规则也会保留在这里。'
-                      : '正在读取配置…'}
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </details>
 
-      <section className="routing-preview" aria-label="分配预览">
-        <strong>分配预览</strong>
+      <section className="routing-preview" aria-label={localize("分配预览")}>
+        <strong>{localize("分配预览")}</strong>
         <NativeSelect
-          aria-label="预览项目服务项"
+          aria-label={localize("预览项目服务项")}
           value={sampleId}
           onChange={(event) => setSampleId(event.target.value)}
           disabled={!data || busy}
         >
           <option value="">
-            {samples.length ? '选择项目服务项' : '暂无可预览的项目服务项'}
+            {localize(samples.length ? '选择项目服务项' : '暂无可预览的项目服务项')}
           </option>
-          {samples.map((sample) => (
+          {localize(samples.map((sample) => (
             <option key={sample.id} value={sample.id}>
-              {sample.label}
+              {localize(sample.label)}
             </option>
-          ))}
+          )))}
         </NativeSelect>
-        {sample && result && (
+        {localize(sample && result && (
           <div className="routing-preview-result">
             <p className="sr-help">
-              根据已保存的配置预览，不修改项目、工单或执行记录。
-            </p>
+              {localize("根据已保存的配置预览，不修改项目、工单或执行记录。")}</p>
             <section className="service-flow-result" aria-live="polite">
               <strong>
-                {result.flow
+                {localize(result.flow
                   ? `分配流程：${result.flow.name}`
-                  : '未分配服务流程'}
+                  : '未分配服务流程')}
               </strong>
               <p>
-                {result.rule
+                {localize(result.rule
                   ? `命中规则「${result.rule.name}」，优先级 ${result.rule.priority}。`
                   : result.flow
                     ? '未命中启用的条件规则，使用默认服务流程。'
-                    : '未命中启用的条件规则，且尚未设置默认服务流程。'}
+                    : '未命中启用的条件规则，且尚未设置默认服务流程。')}
               </p>
-              {result.flow && (
+              {localize(result.flow && (
                 <ol className="service-flow-step-summary">
-                  {result.steps.map((step) => (
+                  {localize(result.steps.map((step) => (
                     <li key={step.id}>
-                      <strong>{step.name}</strong>
-                      {` · ${serviceStepTypes[step.type]} · ${step.required ? '必须完成' : '可选完成'}${stepDeliverySummary(step) ? ` · ${stepDeliverySummary(step)}` : ''}`}
-                      {(step.type === 'document' || step.type === 'upload') && (
+                      <strong>{localize(step.name)}</strong>
+                      {localize(` · ${serviceStepTypes[step.type]} · ${step.required ? '必须完成' : '可选完成'}${stepDeliverySummary(step) ? ` · ${stepDeliverySummary(step)}` : ''}`)}
+                      {localize((step.type === 'document' || step.type === 'upload') && (
                         <ul>
-                          {(step.type === 'document'
+                          {localize((step.type === 'document'
                             ? stepDocuments(step)
                             : stepFiles(step)
                           ).map((item) => (
                             <li key={item.id}>
-                              {item.name} · {item.required ? '必填' : '选填'} ·{' '}
-                              {item.deliverToCustomer ? '交付客户' : '内部使用'}
+                              {localize(item.name)} · {localize(item.required ? '必填' : '选填')} ·{localize(' ')}
+                              {localize(item.deliverToCustomer ? '交付客户' : '内部使用')}
                             </li>
-                          ))}
+                          )))}
                         </ul>
-                      )}
-                      {step.subtitle && <p>{step.subtitle}</p>}
+                      ))}
+                      {localize(step.subtitle && <p>{localize(step.subtitle)}</p>)}
                     </li>
-                  ))}
+                  )))}
                 </ol>
-              )}
+              ))}
             </section>
             <section>
-              <strong>规则匹配明细</strong>
-              {!result.trace.length && (
-                <p className="sr-help">暂无条件规则。</p>
-              )}
-              {result.trace.map((row) => (
+              <strong>{localize("规则匹配明细")}</strong>
+              {localize(!result.trace.length && (
+                <p className="sr-help">{localize("暂无条件规则。")}</p>
+              ))}
+              {localize(result.trace.map((row) => (
                 <details className="service-flow-trace" key={row.rule.id}>
                   <summary>
-                    {row.rule.priority} · {row.rule.name}
+                    {localize(row.rule.priority)} · {localize(row.rule.name)}
                     <span>
-                      {!row.rule.enabled
+                      {localize(!row.rule.enabled
                         ? '已停用'
                         : !row.available
                           ? '流程不可用'
@@ -802,38 +798,36 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                               ? '已选中'
                               : row.matched
                                 ? '命中，优先级较低'
-                                : '未命中'}
+                                : '未命中')}
                     </span>
                   </summary>
                   <p className="sr-help">
-                    适用服务目录：
-                    {serviceFlowScopeLabel(row.rule, dictionary)} ·{' '}
-                    {row.scopeMatched ? '目录范围符合' : '目录范围不符合'}
+                    {localize("适用服务目录：")}{localize(serviceFlowScopeLabel(row.rule, dictionary))} ·{localize(' ')}
+                    {localize(row.scopeMatched ? '目录范围符合' : '目录范围不符合')}
                   </p>
                   <p className="sr-help">
-                    满足任一条件组；组内需满足全部条件。
-                  </p>
-                  {row.groups.map((group, groupIndex) => (
+                    {localize("满足任一条件组；组内需满足全部条件。")}</p>
+                  {localize(row.groups.map((group, groupIndex) => (
                     <div key={groupIndex}>
-                      <strong>条件组 {groupIndex + 1}</strong>
-                      {group.map((condition, index) => (
+                      <strong>{localize("条件组")}{localize(groupIndex + 1)}</strong>
+                      {localize(group.map((condition, index) => (
                         <p key={index}>
-                          {condition.matched ? '✓' : '—'}{' '}
-                          {flowConditionLabel(condition, dictionary)} ·{' '}
-                          {condition.actual
+                          {localize(condition.matched ? '✓' : '—')}{localize(' ')}
+                          {localize(flowConditionLabel(condition, dictionary))} ·{localize(' ')}
+                          {localize(condition.actual
                             ? condition.matched
                               ? '符合'
                               : '不符合'
-                            : '未填写'}
+                            : '未填写')}
                         </p>
-                      ))}
+                      )))}
                     </div>
-                  ))}
+                  )))}
                 </details>
-              ))}
+              )))}
             </section>
           </div>
-        )}
+        ))}
       </section>
 
       <Dialog
@@ -848,15 +842,14 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
         >
           <DialogHeader>
             <DialogTitle>
-              {config.assignment.rules.some((rule) => rule.id === ruleDraft?.id)
+              {localize(config.assignment.rules.some((rule) => rule.id === ruleDraft?.id)
                 ? '编辑条件分配规则'
-                : '新增条件分配规则'}
+                : '新增条件分配规则')}
             </DialogTitle>
             <DialogDescription>
-              每次针对一个服务项匹配条件，分配一个服务流程。
-            </DialogDescription>
+              {localize("每次针对一个服务项匹配条件，分配一个服务流程。")}</DialogDescription>
           </DialogHeader>
-          {ruleDraft && (
+          {localize(ruleDraft && (
             <form
               className="submission-rule-form"
               onSubmit={(event) => {
@@ -870,7 +863,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                   className="service-flow-rule-fields"
                 >
                   <div className="routing-form-row">
-                    <Field label={<>规则名称 <RequiredMark /></>}>
+                    <Field label={localize(<>{localize("规则名称")}<RequiredMark /></>)}>
                       <Input
                         required
                         maxLength={120}
@@ -883,7 +876,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                         }
                       />
                     </Field>
-                    <Field label={<>优先级 <RequiredMark /></>}>
+                    <Field label={localize(<>{localize("优先级")}<RequiredMark /></>)}>
                       <Input
                         required
                         type="number"
@@ -907,7 +900,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                       />
                     </Field>
                   </div>
-                  <Field label={<>分配服务流程 <RequiredMark /></>}>
+                  <Field label={localize(<>{localize("分配服务流程")}<RequiredMark /></>)}>
                     <FlowSelect
                       allowNew
                       config={config}
@@ -927,7 +920,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                       setFormError('');
                     }}
                   />
-                  <Field label={<>自然语言描述 <RequiredMark /></>}>
+                  <Field label={localize(<>{localize("自然语言描述")}<RequiredMark /></>)}>
                     <Textarea
                       required
                       rows={4}
@@ -941,13 +934,11 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                         setTestResult(undefined);
                         setFormError('');
                       }}
-                      placeholder="例如：客户负责团队为金融，且服务方式为现场"
+                      placeholder={localize("例如：客户负责团队为金融，且服务方式为现场")}
                     />
                   </Field>
                   <p className="sr-help">
-                    支持客户、客户负责团队、服务项、服务方式，以及“且 / 或 /
-                    不等于”。每次只匹配当前服务项；客户和服务请填写完整名称。
-                  </p>
+                    {localize("支持客户、客户负责团队、服务项、服务方式，以及“且 / 或 / 不等于”。每次只匹配当前服务项；客户和服务请填写完整名称。")}</p>
                   <Button
                     type="button"
                     variant="outline"
@@ -956,25 +947,22 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                     }
                     onClick={() => void translate()}
                   >
-                    {busy ? '正在转译并测试…' : 'AI 转译并测试'}
+                    {localize(busy ? '正在转译并测试…' : 'AI 转译并测试')}
                   </Button>
-                  {testResult && testResult.key === testKey(ruleDraft) && (
+                  {localize(testResult && testResult.key === testKey(ruleDraft) && (
                     <div className="submission-rule-test-result">
-                      <strong>实际执行条件</strong>
-                      <p>{testResult.summary}</p>
+                      <strong>{localize("实际执行条件")}</strong>
+                      <p>{localize(testResult.summary)}</p>
                       <p>
-                        当前 {testResult.total} 个项目服务项样本中，
-                        {testResult.matched} 个符合条件；按优先级实际选中{' '}
-                        {testResult.selected} 个。
-                      </p>
-                      {!testResult.total && (
-                        <p>暂无项目服务项样本，请核对执行条件后保存。</p>
-                      )}
+                        {localize("当前")}{localize(testResult.total)} {localize(" 个项目服务项样本中，")}{localize(testResult.matched)} {localize(" 个符合条件；按优先级实际选中")}{localize(' ')}
+                        {localize(testResult.selected)} {localize(" 个。")}</p>
+                      {localize(!testResult.total && (
+                        <p>{localize("暂无项目服务项样本，请核对执行条件后保存。")}</p>
+                      ))}
                       <p>
-                        多条规则命中时，采用数字最小的优先级；未命中使用默认服务流程。
-                      </p>
+                        {localize("多条规则命中时，采用数字最小的优先级；未命中使用默认服务流程。")}</p>
                     </div>
-                  )}
+                  ))}
                   <label className="service-flow-checkbox">
                     <input
                       type="checkbox"
@@ -986,13 +974,12 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                         })
                       }
                     />
-                    启用规则
-                  </label>
-                  {formError && (
+                    {localize("启用规则")}</label>
+                  {localize(formError && (
                     <p className="sr-error" role="alert">
-                      {formError}
+                      {localize(formError)}
                     </p>
-                  )}
+                  ))}
                 </fieldset>
               </div>
               <DialogFooter>
@@ -1002,8 +989,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                   disabled={busy}
                   onClick={() => setRuleDraft(undefined)}
                 >
-                  取消
-                </Button>
+                  {localize("取消")}</Button>
                 <Button
                   type="submit"
                   variant="outline"
@@ -1014,8 +1000,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                     testResult.key !== testKey(ruleDraft)
                   }
                 >
-                  保存规则
-                </Button>
+                  {localize("保存规则")}</Button>
                 <Button
                   type="button"
                   disabled={
@@ -1028,11 +1013,10 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                       void saveRule(true);
                   }}
                 >
-                  保存并配置服务流程
-                </Button>
+                  {localize("保存并配置服务流程")}</Button>
               </DialogFooter>
             </form>
-          )}
+          ))}
         </DialogContent>
       </Dialog>
     </div>

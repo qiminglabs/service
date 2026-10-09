@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { materialRequirementLabel } from '@/lib/material-requirements';
 import { fieldRequirementLabels } from '@/lib/request-field-requirements';
 import { useState } from 'react';
@@ -47,71 +49,68 @@ function ConfigSnapshot({
   config: RequestConfig;
   title: string;
 }) {
+  const { localize } = useI18n();
   return (
     <section className="detail-card">
-      <h3>{title}</h3>
+      <h3>{localize(title)}</h3>
       <p>
-        需求说明：
-        {config.basicFields?.description?.enabled === false
+        {localize("需求说明：")}{localize(config.basicFields?.description?.enabled === false
           ? '不显示'
           : config.basicFields?.description?.required === false
             ? '选填'
-            : '必填'}
+            : '必填')}
       </p>
       <p>
-        业务对象：
-        {config.basicFields?.businessObjects?.enabled === false
+        {localize("业务对象：")}{localize(config.basicFields?.businessObjects?.enabled === false
           ? '不显示'
           : config.basicFields?.businessObjects?.required
             ? '必填'
-            : '选填'}
-        ；可搜索产品：
-        {config.basicFields?.businessObjects?.products?.join('、') ?? '不限'}
+            : '选填')}
+        {localize("；可搜索产品：")}{localize(config.basicFields?.businessObjects?.products?.join('、') ?? '不限')}
       </p>
-      {config.fields.map((id) => (
+      {localize(config.fields.map((id) => (
         <p key={id}>
-          {(config.fieldNames?.[id] ?? id)}：
-          {config.fieldRequiredWhen?.[id] ? fieldRequirementLabels[config.fieldRequiredWhen[id]] : config.fieldRequired?.[id] === false ? '选填' : '必填'}
-          {config.fieldOptions?.[id]
+          {localize((config.fieldNames?.[id] ?? id))}：
+          {localize(config.fieldRequiredWhen?.[id] ? fieldRequirementLabels[config.fieldRequiredWhen[id]] : config.fieldRequired?.[id] === false ? '选填' : '必填')}
+          {localize(config.fieldOptions?.[id]
             ? `；可用选项：${config.fieldOptions[id].join('、')}`
-            : ''}
+            : '')}
         </p>
-      ))}
-      <h4>材料要求</h4>
-      {config.materials.map((material) => (
+      )))}
+      <h4>{localize("材料要求")}</h4>
+      {localize(config.materials.map((material) => (
         <div key={material.id}>
           <strong>
-            {material.name}（{materialRequirementLabel(material)}）
+            {localize(material.name)}（{localize(materialRequirementLabel(material))}）
           </strong>
-          <p>{material.instructions}</p>
-          {material.template ? (
+          <p>{localize(material.instructions)}</p>
+          {localize(material.template ? (
             <Button
               variant="link"
               onClick={() => downloadFile(material.template!)}
             >
-              下载历史模板：{material.template.name}
+              {localize("下载历史模板：")}{localize(material.template.name)}
             </Button>
           ) : material.templateUrl ? (
             <a href={material.templateUrl} download>
-              下载模板
-            </a>
-          ) : null}
-          {/^https?:\/\//i.test(material.onlineTemplateUrl ?? '') && (
+              {localize("下载模板")}</a>
+          ) : null)}
+          {localize(/^https?:\/\//i.test(material.onlineTemplateUrl ?? '') && (
             <a
               href={material.onlineTemplateUrl}
               target="_blank"
               rel="noopener noreferrer"
             >
-              {' '}
-              打开在线模板
-            </a>
-          )}
+              {localize(' ')}
+              {localize("打开在线模板")}</a>
+          ))}
         </div>
-      ))}
+      )))}
     </section>
   );
 }
 export function CatalogHistory({ serviceId }: { serviceId: string }) {
+  const { localize } = useI18n();
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<CatalogVersion['payload'][]>([]);
   const [index, setIndex] = useState(0);
@@ -166,63 +165,61 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
           }
         }}
       >
-        历史版本
-      </Button>
+        {localize("历史版本")}</Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="catalog-history-dialog">
           <DialogHeader>
-            <DialogTitle>服务目录历史版本</DialogTitle>
+            <DialogTitle>{localize("服务目录历史版本")}</DialogTitle>
             <DialogDescription>
-              在线链接保留历史地址，外部文档内容由文档平台管理。
-            </DialogDescription>
+              {localize("在线链接保留历史地址，外部文档内容由文档平台管理。")}</DialogDescription>
           </DialogHeader>
           <div className="catalog-history-toolbar">
-            <span id="catalog-history-version-label">查看版本</span>
+            <span id="catalog-history-version-label">{localize("查看版本")}</span>
             <Select value={String(index)} onValueChange={value => { if (value !== null) setIndex(Number(value)); }} disabled={!entries.length}>
               <SelectTrigger aria-labelledby="catalog-history-version-label" className="catalog-history-select">
-                <SelectValue>{selected ? `v${selected.service.version ?? 1} · ${historyTime(selected.savedAt)}` : '读取版本中…'}</SelectValue>
+                <SelectValue>{localize(selected ? `v${selected.service.version ?? 1} · ${historyTime(selected.savedAt)}` : '读取版本中…')}</SelectValue>
               </SelectTrigger>
               <SelectContent className="catalog-history-select-popup" align="start" alignItemWithTrigger={false}>
-                {entries.map((entry, i) => <SelectItem key={i} value={String(i)}>
-                  <span className="catalog-history-option"><strong>v{entry.service.version ?? 1} · {historyTime(entry.savedAt)}</strong></span>
-                </SelectItem>).reverse()}
+                {localize(entries.map((entry, i) => <SelectItem key={i} value={String(i)}>
+                  <span className="catalog-history-option"><strong>v{localize(entry.service.version ?? 1)} · {localize(historyTime(entry.savedAt))}</strong></span>
+                </SelectItem>).reverse())}
               </SelectContent>
             </Select>
           </div>
           <div className="catalog-history-body">
-          {error && <p role="alert" className="sr-error">{error}</p>}
-          {!selected && !error && <output>正在读取历史版本…</output>}
-          {selected && (
+          {localize(error && <p role="alert" className="sr-error">{localize(error)}</p>)}
+          {localize(!selected && !error && <output>{localize("正在读取历史版本…")}</output>)}
+          {localize(selected && (
             <>
-              <p className="catalog-history-meta">保存时间：{historyTime(selected.savedAt)}（北京时间）</p>
+              <p className="catalog-history-meta">{localize("保存时间：")}{localize(historyTime(selected.savedAt))}{localize("（北京时间）")}</p>
               <section className="detail-card">
-                <h3>目录信息</h3>
+                <h3>{localize("目录信息")}</h3>
                 <dl>
-                  {Object.entries(selected.service).map(([key, value]) => (
+                  {localize(Object.entries(selected.service).map(([key, value]) => (
                     <div key={key}>
-                      <dt>{labels[key] ?? key}</dt>
+                      <dt>{localize(labels[key] ?? key)}</dt>
                       <dd>
-                        {key === 'updatedAt' && typeof value === 'string' ? historyTime(value) : key === 'version' ? `v${String(value)}` : Array.isArray(value)
+                        {localize(key === 'updatedAt' && typeof value === 'string' ? historyTime(value) : key === 'version' ? `v${String(value)}` : Array.isArray(value)
                           ? value.join('、')
                           : typeof value === 'string' ||
                               typeof value === 'number'
                             ? value
-                            : JSON.stringify(value)}
+                            : JSON.stringify(value))}
                       </dd>
                     </div>
-                  ))}
+                  )))}
                 </dl>
               </section>
-              <ConfigSnapshot title="内部申请表单" config={selected.internal} />
+              <ConfigSnapshot title={localize("内部申请表单")} config={selected.internal} />
               <ConfigSnapshot
-                title="客户中心申请表单"
+                title={localize("客户中心申请表单")}
                 config={selected.customer}
               />
-              {selected.partner ? <ConfigSnapshot title="合作伙伴中心申请表单" config={selected.partner} /> : <section className="detail-card"><h3>合作伙伴中心申请表单</h3><p>该历史版本未记录合作伙伴中心申请表单。</p></section>}
+              {localize(selected.partner ? <ConfigSnapshot title={localize("合作伙伴中心申请表单")} config={selected.partner} /> : <section className="detail-card"><h3>{localize("合作伙伴中心申请表单")}</h3><p>{localize("该历史版本未记录合作伙伴中心申请表单。")}</p></section>)}
             </>
-          )}
+          ))}
           </div>
-          <DialogFooter className="catalog-history-footer"><Button variant="outline" className="ct-button ct-button--ordinary" onClick={() => setOpen(false)}>关闭</Button></DialogFooter>
+          <DialogFooter className="catalog-history-footer"><Button variant="outline" className="ct-button ct-button--ordinary" onClick={() => setOpen(false)}>{localize("关闭")}</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </>

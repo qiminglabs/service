@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useRef, useState } from 'react';
 import { HardwareAssessmentTriggerSettings } from '@/components/hardware-assessment-trigger-settings';
@@ -51,6 +53,7 @@ export function RequestFlowSettings({
   role: RoutingRole;
   actor: OperationActor;
 }) {
+  const { localize } = useI18n();
   const [data, setData] = useState<Data>({
     config: emptyRoutingConfig(),
     workspace: { users: [], customers: [], services: [] },
@@ -277,7 +280,7 @@ export function RequestFlowSettings({
   ) => (
     <UserSearchSelect
       id={`${role}-${optional ? 'default' : 'assignee'}`}
-      label={label}
+      label={localize(label)}
       required={!optional}
       users={data.workspace.users}
       eligibleIds={eligible.map(user => user.id)}
@@ -289,13 +292,13 @@ export function RequestFlowSettings({
   );
   return (
     <div className="request-flow-settings">
-      {error && (
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && <output className="submission-rule-notice">{notice}</output>}
-      {role === 'hardware' && (
+      ))}
+      {localize(notice && <output className="submission-rule-notice">{localize(notice)}</output>)}
+      {localize(role === 'hardware' && (
         <HardwareAssessmentTriggerSettings
           actor={actor}
           config={data.config}
@@ -308,14 +311,14 @@ export function RequestFlowSettings({
             );
           }}
         />
-      )}
-      <section className="routing-default" aria-label="默认负责人">
+      ))}
+      <section className="routing-default" aria-label={localize("默认负责人")}>
         <div>
-          <strong>默认负责人</strong>
+          <strong>{localize("默认负责人")}</strong>
         </div>
         <div className="routing-inline routing-default-controls">
-          {selector(defaultUserId, setDefaultUserId, '默认负责人', true)}
-          {canManage && (
+          {localize(selector(defaultUserId, setDefaultUserId, '默认负责人', true))}
+          {localize(canManage && (
             <Button
               variant="outline"
               disabled={
@@ -325,91 +328,88 @@ export function RequestFlowSettings({
                 void run(() => persistPolicy({ ...policy, defaultUserId }))
               }
             >
-              保存
-            </Button>
-          )}
+              {localize("保存")}</Button>
+          ))}
         </div>
       </section>
-      <section className="routing-rules" aria-label="条件分配规则">
+      <section className="routing-rules" aria-label={localize("条件分配规则")}>
         <div className="submission-rules-toolbar">
           <div>
-            <strong>条件分配规则</strong>
+            <strong>{localize("条件分配规则")}</strong>
           </div>
-          {canManage && (
+          {localize(canManage && (
             <Button disabled={!ready || busy} onClick={() => edit()}>
               <Plus size={16} />
-              新建规则
-            </Button>
-          )}
+              {localize("新建规则")}</Button>
+          ))}
         </div>
         <div className="table-scroll">
           <table className="reference-table app-list-table routing-table">
             <thead>
               <tr>
-                <th>优先级</th>
-                <th>自然语言描述</th>
-                <th>分配给</th>
-                <th>版本 / 状态</th>
-                <th>修改时间</th>
-                <th>修改人</th>
-                <th data-list-actions>操作</th>
+                <th>{localize("优先级")}</th>
+                <th>{localize("自然语言描述")}</th>
+                <th>{localize("分配给")}</th>
+                <th>{localize("版本 / 状态")}</th>
+                <th>{localize("修改时间")}</th>
+                <th>{localize("修改人")}</th>
+                <th data-list-actions>{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {activeRules.map((rule) => (
+              {localize(activeRules.map((rule) => (
                 <tr key={rule.id}>
-                  <td>{rule.priority}</td>
+                  <td>{localize(rule.priority)}</td>
                   <td>
                     <div className="submission-rule-requirement">
-                      {rule.requirement}
+                      {localize(rule.requirement)}
 
                       <details>
-                        <summary>查看执行条件</summary>
-                        <p>{describeRoute(rule.compiled, data.workspace)}</p>
+                        <summary>{localize("查看执行条件")}</summary>
+                        <p>{localize(describeRoute(rule.compiled, data.workspace))}</p>
                       </details>
 
                     </div>
                   </td>
                   <td>
-                    {personName(rule.userId)}
-                    {!eligible.some((u) => u.id === rule.userId) && (
-                      <small className="sr-error">（不可用）</small>
-                    )}
+                    {localize(personName(rule.userId))}
+                    {localize(!eligible.some((u) => u.id === rule.userId) && (
+                      <small className="sr-error">{localize("（不可用）")}</small>
+                    ))}
                   </td>
-                  <td><span className="rule-version-status" data-enabled={rule.enabled}>v{rule.revision ?? 1} · {rule.enabled ? '已启用' : '已停用'}</span></td>
-                  <td>{rule.updatedAt ? new Date(rule.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td>
-                  <td>{rule.updatedBy ?? '—'}</td>
+                  <td><span className="rule-version-status" data-enabled={rule.enabled}>v{localize(rule.revision ?? 1)} · {localize(rule.enabled ? '已启用' : '已停用')}</span></td>
+                  <td>{localize(rule.updatedAt ? new Date(rule.updatedAt).toLocaleString('zh-CN', { hour12: false }) : '—')}</td>
+                  <td>{localize(rule.updatedBy ?? '—')}</td>
                   <td>
-                    {canManage ? (
+                    {localize(canManage ? (
                       <div className="rule-table-actions">
-                        {rule.enabled && <Button
+                        {localize(rule.enabled && <Button
                           variant="ghost"
                           disabled={busy}
                           onClick={() => edit(rule)}
                         >
-                          编辑
-                        </Button>}
-                        {rule.enabled && <Button variant="ghost" disabled={busy} onClick={() => {
+                          {localize("编辑")}</Button>)}
+                        {localize(rule.enabled && <Button variant="ghost" disabled={busy} onClick={() => {
                           setFormError('');
                           setDisableTarget({ rule, revision: data.config.revision });
                           dialogActive.current = true;
-                        }}>停用</Button>}
+                        }}>{localize("停用")}</Button>)}
                       </div>
                     ) : (
                       '—'
-                    )}
+                    ))}
+                  </td>
+                </tr>
+              )))}
+              {localize(!activeRules.length && (
+                <tr>
+                  <td colSpan={7} className="routing-empty">
+                    {localize(ready
+                      ? '暂无启用的条件规则，将使用默认负责人。'
+                      : '正在读取配置…')}
                   </td>
                 </tr>
               ))}
-              {!activeRules.length && (
-                <tr>
-                  <td colSpan={7} className="routing-empty">
-                    {ready
-                      ? '暂无启用的条件规则，将使用默认负责人。'
-                      : '正在读取配置…'}
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -424,76 +424,73 @@ export function RequestFlowSettings({
         disabledAt: version.archivedAt,
         disabledBy: version.archivedBy,
       }))} />
-      <section className="routing-preview" aria-label="分配预览">
-        <strong>分配预览</strong>
+      <section className="routing-preview" aria-label={localize("分配预览")}>
+        <strong>{localize("分配预览")}</strong>
         <NativeSelect
-          aria-label="预览服务请求"
+          aria-label={localize("预览服务请求")}
           value={sampleId}
           onChange={(e) => setSampleId(e.target.value)}
           disabled={!ready || busy}
         >
           <option value="">
-            {samples.length ? '选择服务请求' : '暂无可预览的请求'}
+            {localize(samples.length ? '选择服务请求' : '暂无可预览的请求')}
           </option>
-          {samples.map((r) => (
+          {localize(samples.map((r) => (
             <option key={r.id} value={r.id}>
-              {r.id} ·{' '}
-              {data.workspace.customers.find((c) => c.id === r.customerId)
-                ?.name ?? r.customerId}{' '}
-              · {r.status}
+              {localize(r.id)} ·{localize(' ')}
+              {localize(data.workspace.customers.find((c) => c.id === r.customerId)
+                ?.name ?? r.customerId)}{localize(' ')}
+              · {localize(r.status)}
             </option>
-          ))}
+          )))}
         </NativeSelect>
-        {sample && (preview || role === 'hardware') && (
+        {localize(sample && (preview || role === 'hardware') && (
           <div className="routing-preview-result">
-            {preview?.matchedBy === 'default' ? <>
-              <p>未命中分配规则。{preview.userId ? <>默认负责人：<strong>{preview.userName}</strong></> : !policy.defaultUserId && '未设置默认负责人，待分配。'}</p>
-              {!preview.userId && policy.defaultUserId && <p className="sr-error">默认负责人不存在、已停用或角色不符，待分配。</p>}
+            {localize(preview?.matchedBy === 'default' ? <>
+              <p>{localize("未命中分配规则。")}{localize(preview.userId ? <>{localize("默认负责人：")}<strong>{localize(preview.userName)}</strong></> : !policy.defaultUserId && '未设置默认负责人，待分配。')}</p>
+              {localize(!preview.userId && policy.defaultUserId && <p className="sr-error">{localize("默认负责人不存在、已停用或角色不符，待分配。")}</p>)}
             </> : <p>
-              按当前规则：
-              <strong>
-                {preview
+              {localize("按当前规则：")}<strong>
+                {localize(preview
                   ? preview.userName || '待分配'
-                  : '无需硬件产品经理评估'}
-              </strong>{' '}
-              · {preview?.reason ?? '未命中当前硬件评估触发条件。'}
-            </p>}
+                  : '无需硬件产品经理评估')}
+              </strong>{localize(' ')}
+              · {localize(preview?.reason ?? '未命中当前硬件评估触发条件。')}
+            </p>)}
             <p className="sr-help">
-              当前负责人：
-              {current
+              {localize("当前负责人：")}{localize(current
                 ? current.userName || '待分配'
                 : role === 'manager'
                   ? sample.operations?.assessment?.manager || '未记录分配'
                   : sample.operations?.assessment?.hardware?.reviewer ||
-                    '未记录分配'}
-              {current &&
-                ` · 分配于 ${new Date(current.at).toLocaleString('zh-CN', { hour12: false })}`}
+                    '未记录分配')}
+              {localize(current &&
+                ` · 分配于 ${new Date(current.at).toLocaleString('zh-CN', { hour12: false })}`)}
             </p>
-            {!!sample.operations?.assessment?.routing?.history?.filter(
+            {localize(!!sample.operations?.assessment?.routing?.history?.filter(
               (h) => h.role === role,
             ).length && (
               <details>
-                <summary>查看分配历史</summary>
-                {sample.operations.assessment.routing.history
+                <summary>{localize("查看分配历史")}</summary>
+                {localize(sample.operations.assessment.routing.history
                   .filter((h) => h.role === role)
                   .map((h) => (
                     <p key={h.allocation.id} className="sr-help">
-                      {h.allocation.userName || '待分配'} · {h.by}于
-                      {new Date(h.replacedAt).toLocaleString('zh-CN', {
+                      {localize(h.allocation.userName || '待分配')} · {localize(h.by)}{localize("于")}{localize(new Date(h.replacedAt).toLocaleString('zh-CN', {
                         hour12: false,
-                      })}
-                      调整 · {h.reason}
+                      }))}
+                      {localize("调整 ·")}{localize(h.reason)}
                     </p>
-                  ))}
+                  )))}
               </details>
-            )}
+            ))}
           </div>
-        )}
+        ))}
       </section>
       <RuleDisableDialog
         open={!!disableTarget}
         requirement={disableTarget ? `v${disableTarget.rule.revision ?? 1} · ${disableTarget.rule.requirement}` : ''}
-        description="停用后，新请求将不再匹配此规则，已有请求的负责人保持不变。"
+        description={localize("停用后，新请求将不再匹配此规则，已有请求的负责人保持不变。")}
         busy={busy}
         error={formError}
         onCancel={() => { setDisableTarget(undefined); setFormError(''); dialogActive.current = false; }}
@@ -516,7 +513,7 @@ export function RequestFlowSettings({
         <DialogContent className="submission-rule-dialog">
           <DialogHeader>
             <DialogTitle>
-              {target ? '编辑分配规则' : '新建分配规则'}
+              {localize(target ? '编辑分配规则' : '新建分配规则')}
             </DialogTitle>
           </DialogHeader>
           <form
@@ -554,7 +551,7 @@ export function RequestFlowSettings({
                 className="submission-rule-field"
               >
                 <span className="routing-field-heading">
-                  <span>自然语言描述</span>
+                  <span>{localize("自然语言描述")}</span>
                   <em aria-hidden="true">*</em>
                 </span>
                 <Textarea
@@ -567,13 +564,10 @@ export function RequestFlowSettings({
                     setRequirement(e.target.value);
                     invalidate();
                   }}
-                  placeholder="例如：客户所属团队为金融，且包含硬件兼容性测试"
+                  placeholder={localize("例如：客户所属团队为金融，且包含硬件兼容性测试")}
                 />
                 <small className="sr-help">
-                  支持客户、客户负责团队（金融 / 商业 / 港澳 /
-                  其他）、申请来源、服务项、服务方式，以及“且 / 或 /
-                  不包含”。客户和服务项请使用完整名称。
-                </small>
+                  {localize("支持客户、客户负责团队（金融 / 商业 / 港澳 / 其他）、申请来源、服务项、服务方式，以及“且 / 或 / 不包含”。客户和服务项请使用完整名称。")}</small>
               </label>
               <div className="routing-form-row">
                 <label
@@ -581,12 +575,12 @@ export function RequestFlowSettings({
                   className="submission-rule-field"
                 >
                   <span className="routing-field-heading">
-                    <span>优先级</span>
+                    <span>{localize("优先级")}</span>
                     <em aria-hidden="true">*</em>
                   </span>
                   <Input
                     id={`${role}-priority`}
-                    aria-label="优先级"
+                    aria-label={localize("优先级")}
                     aria-required="true"
                     type="number"
                     min={1}
@@ -605,10 +599,10 @@ export function RequestFlowSettings({
                   className="submission-rule-field"
                 >
                   <span className="routing-field-heading">
-                    <span>分配给</span>
+                    <span>{localize("分配给")}</span>
                     <em aria-hidden="true">*</em>
                   </span>
-                  {selector(
+                  {localize(selector(
                     userId,
                     (id) => {
                       setUserId(id);
@@ -616,7 +610,7 @@ export function RequestFlowSettings({
                     },
                     '规则负责人',
                     false,
-                  )}
+                  ))}
                 </label>
               </div>
               <div className="submission-rule-test-actions">
@@ -626,45 +620,44 @@ export function RequestFlowSettings({
                   disabled={busy || !requirement.trim() || !userId}
                   onClick={() => void translate()}
                 >
-                  {busy ? '处理中…' : 'AI 转译并测试'}
+                  {localize(busy ? '处理中…' : 'AI 转译并测试')}
                 </Button>
               </div>
-              {formError && (
+              {localize(formError && (
                 <p className="sr-error" role="alert">
-                  {formError}
+                  {localize(formError)}
                 </p>
-              )}
-              {tested && testCurrent && (
+              ))}
+              {localize(tested && testCurrent && (
                 <div className="submission-rule-test-result">
-                  <strong>实际执行条件</strong>
-                  <p>{describeRoute(tested.compiled, data.workspace)}</p>
-                  {contradiction ? (
-                    <p className="sr-error">匹配条件互相矛盾，请修改后重试。</p>
+                  <strong>{localize("实际执行条件")}</strong>
+                  <p>{localize(describeRoute(tested.compiled, data.workspace))}</p>
+                  {localize(contradiction ? (
+                    <p className="sr-error">{localize("匹配条件互相矛盾，请修改后重试。")}</p>
                   ) : (
                     <p>
-                      条件检查通过。当前 {samples.length} 个请求样本中有{' '}
-                      {sampleMatches.length} 个符合条件。
-                      {!samples.length &&
-                        '尚无实际请求样本，保存前请核对上述条件。'}
-                    </p>
-                  )}
-                  {duplicate && (
-                    <p className="sr-error">优先级重复，请修改。</p>
-                  )}
-                  {overlaps.map((r) => (
-                    <p key={r.id}>
-                      可能与优先级 {r.priority} 的规则同时命中，将先执行优先级{' '}
-                      {Math.min(r.priority, Number(priority))}。
-                      {JSON.stringify(r.compiled) ===
-                      JSON.stringify(tested.compiled)
-                        ? '两条规则条件相同，后执行的规则不会获得分配。'
-                        : ''}
+                      {localize("条件检查通过。当前")}{localize(samples.length)} {localize(" 个请求样本中有")}{localize(' ')}
+                      {localize(sampleMatches.length)} {localize(" 个符合条件。")}{localize(!samples.length &&
+                        '尚无实际请求样本，保存前请核对上述条件。')}
                     </p>
                   ))}
-                  {!!sampleMatches.length && (
+                  {localize(duplicate && (
+                    <p className="sr-error">{localize("优先级重复，请修改。")}</p>
+                  ))}
+                  {localize(overlaps.map((r) => (
+                    <p key={r.id}>
+                      {localize("可能与优先级")}{localize(r.priority)} {localize(" 的规则同时命中，将先执行优先级")}{localize(' ')}
+                      {localize(Math.min(r.priority, Number(priority)))}。
+                      {localize(JSON.stringify(r.compiled) ===
+                      JSON.stringify(tested.compiled)
+                        ? '两条规则条件相同，后执行的规则不会获得分配。'
+                        : '')}
+                    </p>
+                  )))}
+                  {localize(!!sampleMatches.length && (
                     <details>
-                      <summary>查看命中样本与分配结果</summary>
-                      {sampleMatches.slice(0, 10).map((sample) => {
+                      <summary>{localize("查看命中样本与分配结果")}</summary>
+                      {localize(sampleMatches.slice(0, 10).map((sample) => {
                         const rule = {
                           ...definition,
                           id: target?.id ?? '__preview__',
@@ -693,16 +686,16 @@ export function RequestFlowSettings({
                         );
                         return (
                           <p key={sample.id}>
-                            {sample.id} → {result?.userName || '待分配'} ·{' '}
-                            {result?.reason}
+                            {localize(sample.id)} → {localize(result?.userName || '待分配')} ·{localize(' ')}
+                            {localize(result?.reason)}
                           </p>
                         );
-                      })}
-                      {sampleMatches.length > 10 && <p>仅展示前 10 个样本。</p>}
+                      }))}
+                      {localize(sampleMatches.length > 10 && <p>{localize("仅展示前 10 个样本。")}</p>)}
                     </details>
-                  )}
+                  ))}
                 </div>
-              )}
+              ))}
             </div>
             <DialogFooter>
               <Button
@@ -714,14 +707,12 @@ export function RequestFlowSettings({
                   dialogActive.current = false;
                 }}
               >
-                取消
-              </Button>
+                {localize("取消")}</Button>
               <Button
                 type="submit"
                 disabled={busy || !testCurrent || duplicate || !!contradiction}
               >
-                保存规则
-              </Button>
+                {localize("保存规则")}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import * as React from 'react';
 import { Select as SelectPrimitive } from '@base-ui/react/select';
@@ -36,6 +38,7 @@ function SelectTrigger({
 }: SelectPrimitive.Trigger.Props & {
   size?: 'sm' | 'default';
 }) {
+  const { localize } = useI18n();
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
@@ -46,7 +49,7 @@ function SelectTrigger({
       )}
       {...props}
     >
-      {children}
+      {localize(children)}
       <SelectPrimitive.Icon
         render={
           <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
@@ -70,6 +73,7 @@ function SelectContent({
     SelectPrimitive.Positioner.Props,
     'align' | 'alignOffset' | 'side' | 'sideOffset' | 'alignItemWithTrigger'
   >) {
+  const { localize } = useI18n();
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Positioner
@@ -90,7 +94,7 @@ function SelectContent({
           {...props}
         >
           <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          <SelectPrimitive.List>{localize(children)}</SelectPrimitive.List>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>
@@ -116,6 +120,7 @@ function SelectItem({
   children,
   ...props
 }: SelectPrimitive.Item.Props) {
+  const { localize } = useI18n();
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -126,7 +131,7 @@ function SelectItem({
       {...props}
     >
       <SelectPrimitive.ItemText className="flex flex-1 shrink-0 gap-2 whitespace-nowrap">
-        {children}
+        {localize(children)}
       </SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator
         render={

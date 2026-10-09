@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import type { ReactNode } from 'react';
 import type { RequestConfig } from '@/lib/service-requests';
@@ -28,13 +30,14 @@ export function FormFieldsLayout({
   fields: { id: string; gridColumn: string }[];
   renderField: (id: string) => ReactNode;
 }) {
+  const { localize } = useI18n();
   return (
     <div className="rf-auto-layout">
-      {fields.map(({ id, gridColumn }) => (
+      {localize(fields.map(({ id, gridColumn }) => (
         <div key={id} className="rf-layout-field" style={{ gridColumn }}>
-          {renderField(id)}
+          {localize(renderField(id))}
         </div>
-      ))}
+      )))}
     </div>
   );
 }

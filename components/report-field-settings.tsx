@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
 import {
@@ -19,6 +21,7 @@ export function ReportFieldSettings({
   disabled: boolean;
   onChange: (template: ReportTemplate) => void;
 }) {
+  const { localize } = useI18n();
   const fields = reportFields(template.body);
   function update(id: string, patch: Partial<ReportField>) {
     onChange({
@@ -31,14 +34,14 @@ export function ReportFieldSettings({
       <table className="reference-table app-list-table">
         <thead>
           <tr>
-            <th>引用字段</th>
-            <th>字段来源</th>
-            <th>没有值时</th>
-            <th>默认文本</th>
+            <th>{localize("引用字段")}</th>
+            <th>{localize("字段来源")}</th>
+            <th>{localize("没有值时")}</th>
+            <th>{localize("默认文本")}</th>
           </tr>
         </thead>
         <tbody>
-          {fields.map((field) => {
+          {localize(fields.map((field) => {
             const source = options.find(
               (o) =>
                 o.scope === field.scope &&
@@ -47,10 +50,10 @@ export function ReportFieldSettings({
             );
             return (
               <tr key={field.id}>
-                <td>{field.label}</td>
+                <td>{localize(field.label)}</td>
                 <td>
                   <NativeSelect
-                    aria-label={`${field.label} 字段来源`}
+                    aria-label={localize(`${field.label} 字段来源`)}
                     disabled={disabled}
                     value={source?.id ?? ''}
                     onChange={(event) => {
@@ -68,24 +71,23 @@ export function ReportFieldSettings({
                     }}
                   >
                     <option value="" disabled>
-                      来源不匹配，请重新选择
-                    </option>
-                    {[...new Set(options.map((o) => o.group))].map((group) => (
-                      <optgroup key={group} label={group}>
-                        {options
+                      {localize("来源不匹配，请重新选择")}</option>
+                    {localize([...new Set(options.map((o) => o.group))].map((group) => (
+                      <optgroup key={group} label={localize(group)}>
+                        {localize(options
                           .filter((o) => o.group === group)
                           .map((o) => (
                             <option value={o.id} key={o.id}>
-                              {o.label}
+                              {localize(o.label)}
                             </option>
-                          ))}
+                          )))}
                       </optgroup>
-                    ))}
+                    )))}
                   </NativeSelect>
                 </td>
                 <td>
                   <NativeSelect
-                    aria-label={`${field.label} 空值处理`}
+                    aria-label={localize(`${field.label} 空值处理`)}
                     disabled={disabled}
                     value={field.emptyPolicy ?? 'block'}
                     onChange={(event) =>
@@ -95,15 +97,15 @@ export function ReportFieldSettings({
                       })
                     }
                   >
-                    <option value="block">阻止生成</option>
-                    <option value="blank">留空</option>
-                    <option value="default">显示默认文本</option>
+                    <option value="block">{localize("阻止生成")}</option>
+                    <option value="blank">{localize("留空")}</option>
+                    <option value="default">{localize("显示默认文本")}</option>
                   </NativeSelect>
                 </td>
                 <td>
-                  {field.emptyPolicy === 'default' ? (
+                  {localize(field.emptyPolicy === 'default' ? (
                     <Input
-                      aria-label={`${field.label} 默认文本`}
+                      aria-label={localize(`${field.label} 默认文本`)}
                       required
                       maxLength={1000}
                       disabled={disabled}
@@ -114,18 +116,17 @@ export function ReportFieldSettings({
                     />
                   ) : (
                     '—'
-                  )}
+                  ))}
                 </td>
               </tr>
             );
-          })}
-          {!fields.length && (
+          }))}
+          {localize(!fields.length && (
             <tr>
               <td colSpan={4} className="routing-empty">
-                暂无引用字段
-              </td>
+                {localize("暂无引用字段")}</td>
             </tr>
-          )}
+          ))}
         </tbody>
       </table>
     </div>

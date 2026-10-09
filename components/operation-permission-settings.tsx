@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, ShieldCheck } from 'lucide-react';
@@ -38,6 +40,7 @@ export function OperationPermissionSettings({
   identities: OperationActor[];
   initialActorId: string;
 }) {
+  const { localize } = useI18n();
   const [userId, setUserId] = useState(initialActorId);
   const [site, setSite] = useState('');
   const [object, setObject] = useState('');
@@ -82,24 +85,23 @@ export function OperationPermissionSettings({
   return (
     <section
       className="reference-panel permission-settings"
-      aria-label="操作权限清单"
+      aria-label={localize("操作权限清单")}
     >
       <div className="permission-heading">
         <div className="permission-heading-title">
           <ShieldCheck size={22} />
-          <h2>操作权限清单</h2>
-          <span className="permission-readonly">只读</span>
+          <h2>{localize("操作权限清单")}</h2>
+          <span className="permission-readonly">{localize("只读")}</span>
         </div>
         <span className="permission-selected-user">
-          {selectedUser
+          {localize(selectedUser
             ? `${selectedUser.name} · ${permissionRoles[role!]}`
-            : '全部角色'}
+            : '全部角色')}
         </span>
       </div>
       <div className="permission-filters">
         <label htmlFor="permission-site">
-          发起站点
-          <NativeSelect
+          {localize("发起站点")}<NativeSelect
             id="permission-site"
             value={site}
             onChange={(event) => {
@@ -107,38 +109,36 @@ export function OperationPermissionSettings({
               setStage('');
             }}
           >
-            <option value="">全部发起站点</option>
-            {['内部系统', '客户中心', '合作伙伴中心'].map((value) => (
+            <option value="">{localize("全部发起站点")}</option>
+            {localize(['内部系统', '客户中心', '合作伙伴中心'].map((value) => (
               <option key={value} value={value}>
-                {value}
+                {localize(value)}
               </option>
-            ))}
+            )))}
           </NativeSelect>
         </label>
         <label htmlFor="permission-user">
-          查看用户
-          <NativeSelect
+          {localize("查看用户")}<NativeSelect
             id="permission-user"
             value={selectedUser?.id ?? ''}
             onChange={(event) => change(setUserId, event.target.value)}
           >
-            <option value="">全部角色</option>
-            {Object.entries(permissionRoles).map(([key, label]) => (
-              <optgroup key={key} label={label}>
-                {users
+            <option value="">{localize("全部角色")}</option>
+            {localize(Object.entries(permissionRoles).map(([key, label]) => (
+              <optgroup key={key} label={localize(label)}>
+                {localize(users
                   .filter((actor) => permissionRoleForActor(actor) === key)
                   .map((actor) => (
                     <option key={actor.id} value={actor.id}>
-                      {actor.name} · {actor.id}
+                      {localize(actor.name)} · {localize(actor.id)}
                     </option>
-                  ))}
+                  )))}
               </optgroup>
-            ))}
+            )))}
           </NativeSelect>
         </label>
         <label htmlFor="permission-object">
-          业务对象
-          <NativeSelect
+          {localize("业务对象")}<NativeSelect
             id="permission-object"
             value={object}
             onChange={(event) => {
@@ -146,52 +146,49 @@ export function OperationPermissionSettings({
               setStage('');
             }}
           >
-            <option value="">全部业务对象</option>
-            {['服务申请', '服务项目', '目录与系统'].map((value) => (
+            <option value="">{localize("全部业务对象")}</option>
+            {localize(['服务申请', '服务项目', '目录与系统'].map((value) => (
               <option key={value} value={value}>
-                {value}
+                {localize(value)}
               </option>
-            ))}
+            )))}
           </NativeSelect>
         </label>
         <label htmlFor="permission-stage">
-          业务阶段
-          <NativeSelect
+          {localize("业务阶段")}<NativeSelect
             id="permission-stage"
             value={stage}
             onChange={(event) => change(setStage, event.target.value)}
           >
-            <option value="">全部阶段</option>
-            {stages.map((value) => (
+            <option value="">{localize("全部阶段")}</option>
+            {localize(stages.map((value) => (
               <option key={value} value={value}>
-                {value}
+                {localize(value)}
               </option>
-            ))}
+            )))}
           </NativeSelect>
         </label>
         <label htmlFor="permission-result">
-          权限结果
-          <NativeSelect
+          {localize("权限结果")}<NativeSelect
             id="permission-result"
             value={result}
             onChange={(event) => change(setResult, event.target.value)}
           >
-            <option value="">全部权限</option>
-            {results.map((value) => (
+            <option value="">{localize("全部权限")}</option>
+            {localize(results.map((value) => (
               <option key={value} value={value}>
-                {value}
+                {localize(value)}
               </option>
-            ))}
+            )))}
           </NativeSelect>
         </label>
         <label htmlFor="permission-query">
-          搜索操作或条件
-          <div className="permission-search">
+          {localize("搜索操作或条件")}<div className="permission-search">
             <Search size={16} />
             <Input
               id="permission-query"
               value={query}
-              placeholder="搜索工时、客户确认、负责范围…"
+              placeholder={localize("搜索工时、客户确认、负责范围…")}
               onChange={(event) => change(setQuery, event.target.value)}
             />
           </div>
@@ -199,13 +196,12 @@ export function OperationPermissionSettings({
       </div>
       <div className="permission-summary" aria-live="polite">
         <span>
-          共 <strong>{rows.length}</strong> 条
+          {localize("共")}<strong>{localize(rows.length)}</strong> {localize(" 条")}</span>
+        <span>
+          {localize("允许")}<strong>{localize(counts.allowed)}</strong>
         </span>
         <span>
-          允许 <strong>{counts.allowed}</strong>
-        </span>
-        <span>
-          有条件允许 <strong>{counts.conditional}</strong>
+          {localize("有条件允许")}<strong>{localize(counts.conditional)}</strong>
         </span>
         <Button
           variant="ghost"
@@ -219,17 +215,15 @@ export function OperationPermissionSettings({
             setPage(1);
           }}
         >
-          重置筛选
-        </Button>
+          {localize("重置筛选")}</Button>
       </div>
       <div className="table-scroll permission-table-scroll">
         <table className="reference-table app-list-table permission-table">
           <caption className="sr-only">
-            按发起站点、用户、业务对象和阶段查询的只读操作权限；有条件允许需同时满足人员范围和前置条件。
-          </caption>
+            {localize("按发起站点、用户、业务对象和阶段查询的只读操作权限；有条件允许需同时满足人员范围和前置条件。")}</caption>
           <thead>
             <tr>
-              {[
+              {localize([
                 '发起站点',
                 '用户 / 角色',
                 '业务对象',
@@ -241,86 +235,82 @@ export function OperationPermissionSettings({
                 '操作所在站点',
               ].map((label) => (
                 <th key={label} scope="col">
-                  {label}
+                  {localize(label)}
                 </th>
-              ))}
+              )))}
             </tr>
           </thead>
           <tbody>
-            {visible.length ? (
+            {localize(visible.length ? (
               visible.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.site === '通用' ? '不限定站点' : row.site}</td>
+                  <td>{localize(row.site === '通用' ? '不限定站点' : row.site)}</td>
                   <td>
-                    {selectedUser && <strong>{selectedUser.name}</strong>}
-                    <span>{permissionRoles[row.role]}</span>
+                    {localize(selectedUser && <strong>{localize(selectedUser.name)}</strong>)}
+                    <span>{localize(permissionRoles[row.role])}</span>
                   </td>
-                  <td>{row.object}</td>
+                  <td>{localize(row.object)}</td>
                   <td>
                     <div className="permission-stages">
-                      {(stage && row.stages.includes(stage)
+                      {localize((stage && row.stages.includes(stage)
                         ? [stage]
                         : row.stages
                       ).map((value) => (
-                        <span key={value}>{value}</span>
-                      ))}
+                        <span key={value}>{localize(value)}</span>
+                      )))}
                     </div>
                   </td>
                   <td>
-                    <strong>{row.action}</strong>
+                    <strong>{localize(row.action)}</strong>
                   </td>
                   <td>
                     <span
                       className="permission-result"
                       data-tone={resultTone(row.result)}
                     >
-                      {row.result}
+                      {localize(row.result)}
                     </span>
                   </td>
-                  <td>{row.scope}</td>
-                  <td>{row.condition}</td>
-                  <td>{row.portal}</td>
+                  <td>{localize(row.scope)}</td>
+                  <td>{localize(row.condition)}</td>
+                  <td>{localize(row.portal)}</td>
                 </tr>
               ))
             ) : (
               <tr>
                 <td colSpan={9} className="permission-empty">
-                  没有符合当前筛选条件的权限条目
-                </td>
+                  {localize("没有符合当前筛选条件的权限条目")}</td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>
       <div className="permission-pagination">
         <span>
-          第 {rows.length ? (currentPage - 1) * pageSize + 1 : 0}–
-          {Math.min(currentPage * pageSize, rows.length)} 条，共 {rows.length}{' '}
-          条
-        </span>
+          {localize("第")}{localize(rows.length ? (currentPage - 1) * pageSize + 1 : 0)}–
+          {localize(Math.min(currentPage * pageSize, rows.length))} {localize(" 条，共")}{localize(rows.length)}{localize(' ')}
+          {localize("条")}</span>
         <div>
           <Button
             variant="outline"
             size="sm"
-            aria-label="上一页权限"
+            aria-label={localize("上一页权限")}
             disabled={currentPage === 1}
             onClick={() => setPage(currentPage - 1)}
           >
             <ChevronLeft size={15} />
-            上一页
-          </Button>
+            {localize("上一页")}</Button>
           <span>
-            {currentPage} / {pages}
+            {localize(currentPage)} / {localize(pages)}
           </span>
           <Button
             variant="outline"
             size="sm"
-            aria-label="下一页权限"
+            aria-label={localize("下一页权限")}
             disabled={currentPage === pages}
             onClick={() => setPage(currentPage + 1)}
           >
-            下一页
-            <ChevronRight size={15} />
+            {localize("下一页")}<ChevronRight size={15} />
           </Button>
         </div>
       </div>

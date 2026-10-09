@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -28,6 +30,7 @@ export function ExecutionFormBuilder({
   disabled: boolean;
   onChange: (form: ExecutionForm) => void;
 }) {
+  const { localize } = useI18n();
   const [selected, select] = useState(form.fields[0]?.id ?? '');
   const root = useRef<HTMLDivElement>(null),
     cancelDrag = useRef<(() => void) | null>(null),
@@ -119,21 +122,20 @@ export function ExecutionFormBuilder({
     >
       <main className="rf-center">
         <div className="rf-preview-heading">
-          <strong>服务步骤表单预览</strong>
+          <strong>{localize("服务步骤表单预览")}</strong>
           <div className="execution-form-preview-actions">
-            <span>拖动字段可调整顺序</span>
+            <span>{localize("拖动字段可调整顺序")}</span>
             <Button
               disabled={disabled || form.fields.length >= 100}
               onClick={createField}
             >
               <Plus size={14} />
-              添加字段
-            </Button>
+              {localize("添加字段")}</Button>
           </div>
         </div>
         <div className="rf-paper">
-          <h3>{form.name || '未命名表单'}</h3>
-          {form.description && <p className="sr-help">{form.description}</p>}
+          <h3>{localize(form.name || '未命名表单')}</h3>
+          {localize(form.description && <p className="sr-help">{localize(form.description)}</p>)}
           <div className="rf-canvas">
             <FormFieldsLayout
               fields={executionFormLayout(form)}
@@ -150,12 +152,12 @@ export function ExecutionFormBuilder({
                       type="button"
                       className="rf-select-field"
                       disabled={disabled}
-                      aria-label={`配置${row.name}`}
+                      aria-label={localize(`配置${row.name}`)}
                       onPointerDown={(event) => beginDrag(event, id)}
                       onClick={() => select(id)}
                     >
                       <span>
-                        {row.name} {row.required && <em>*</em>}
+                        {localize(row.name)} {localize(row.required && <em>*</em>)}
                       </span>
                       <GripVertical size={15} />
                     </button>
@@ -180,11 +182,11 @@ export function ExecutionFormBuilder({
         </div>
       </main>
       <aside className="rf-properties">
-        <h3>字段属性</h3>
-        {field ? (
+        <h3>{localize("字段属性")}</h3>
+        {localize(field ? (
           <>
             <label className="rf-property-input">
-              <span>字段名称 <RequiredMark /></span>
+              <span>{localize("字段名称")}<RequiredMark /></span>
               <Input
                 disabled={disabled}
                 required
@@ -194,7 +196,7 @@ export function ExecutionFormBuilder({
               />
             </label>
             <label className="rf-property-input">
-              <span>字段类型</span>
+              <span>{localize("字段类型")}</span>
               <NativeSelect
                 disabled={disabled}
                 value={field.type}
@@ -208,16 +210,16 @@ export function ExecutionFormBuilder({
                   })
                 }
               >
-                {Object.entries(executionFieldTypes).map(([value, label]) => (
+                {localize(Object.entries(executionFieldTypes).map(([value, label]) => (
                   <option key={value} value={value}>
-                    {label}
+                    {localize(label)}
                   </option>
-                ))}
+                )))}
               </NativeSelect>
             </label>
-            {['single', 'multiple'].includes(field.type) && (
+            {localize(['single', 'multiple'].includes(field.type) && (
               <label className="rf-property-input">
-                <span>选项（每行一项）</span>
+                <span>{localize("选项（每行一项）")}</span>
                 <Textarea
                   rows={5}
                   disabled={disabled}
@@ -227,7 +229,7 @@ export function ExecutionFormBuilder({
                   }
                 />
               </label>
-            )}
+            ))}
             <label className="sr-check-line">
               <input
                 type="checkbox"
@@ -235,12 +237,11 @@ export function ExecutionFormBuilder({
                 checked={field.required}
                 onChange={(event) => patch({ required: event.target.checked })}
               />
-              必填
-            </label>
+              {localize("必填")}</label>
             <fieldset disabled={disabled}>
-              <legend>字段宽度</legend>
+              <legend>{localize("字段宽度")}</legend>
               <div className="rf-width-options">
-                {(['half', 'full'] as const).map((width) => (
+                {localize((['half', 'full'] as const).map((width) => (
                   <label key={width}>
                     <input
                       type="radio"
@@ -261,9 +262,9 @@ export function ExecutionFormBuilder({
                         })
                       }
                     />
-                    {width === 'full' ? '整行' : '半行'}
+                    {localize(width === 'full' ? '整行' : '半行')}
                   </label>
-                ))}
+                )))}
               </div>
             </fieldset>
             <label className="sr-check-line">
@@ -283,8 +284,7 @@ export function ExecutionFormBuilder({
                   })
                 }
               />
-              另起一行
-            </label>
+              {localize("另起一行")}</label>
             <div className="rf-move service-phase-actions">
               <Button
                 variant="outline"
@@ -292,16 +292,14 @@ export function ExecutionFormBuilder({
                 onClick={() => add(selected, order[index - 1])}
               >
                 <ArrowUp size={14} />
-                上移
-              </Button>
+                {localize("上移")}</Button>
               <Button
                 variant="outline"
                 disabled={disabled || index < 0 || index === order.length - 1}
                 onClick={() => add(selected, order[index + 1])}
               >
                 <ArrowDown size={14} />
-                下移
-              </Button>
+                {localize("下移")}</Button>
             </div>
             <Button
               variant="outline"
@@ -324,12 +322,11 @@ export function ExecutionFormBuilder({
               }}
             >
               <Trash2 size={14} />
-              删除字段
-            </Button>
+              {localize("删除字段")}</Button>
           </>
         ) : (
-          <p className="sr-help">添加字段或选择字段后配置属性。</p>
-        )}
+          <p className="sr-help">{localize("添加字段或选择字段后配置属性。")}</p>
+        ))}
       </aside>
     </div>
   );

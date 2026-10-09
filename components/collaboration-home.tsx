@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -30,6 +32,7 @@ const sections = [
 type Section = (typeof sections)[number]['key'];
 
 export function CollaborationHome({ actor, customers, onOpen }: Props) {
+  const { localize } = useI18n();
   const [data, setData] = useState<{
     projects: ServiceProjectRecord[];
     requests: ServiceRequest[];
@@ -84,12 +87,12 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
     return (
       <div className="pm-home">
         <p role="alert" className="sr-error">
-          {error}
+          {localize(error)}
         </p>
       </div>
     );
   if (!dashboard || !data)
-    return <output className="pm-home">正在读取主页…</output>;
+    return <output className="pm-home">{localize("正在读取主页…")}</output>;
   const customerName = (customerId: string) =>
     customers.find((customer) => customer.id === customerId)?.name ??
     '未关联客户';
@@ -123,13 +126,13 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
           aria-labelledby="collaboration-records-title"
         >
           <div className="pm-panel-heading">
-            <h2 id="collaboration-records-title">未完成项目与申请</h2>
+            <h2 id="collaboration-records-title">{localize("未完成项目与申请")}</h2>
           </div>
           <div
             className="collaboration-record-tabs pm-filters"
-            aria-label="未完成记录分类"
+            aria-label={localize("未完成记录分类")}
           >
-            {sections.map((item) => (
+            {localize(sections.map((item) => (
               <button
                 type="button"
                 key={item.key}
@@ -138,29 +141,29 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
                   setSection(item.key);
                 }}
               >
-                {item.label}
-                <span>{dashboard[item.key].length}</span>
+                {localize(item.label)}
+                <span>{localize(dashboard[item.key].length)}</span>
               </button>
-            ))}
+            )))}
           </div>
           <div
             className="collaboration-record-list"
-            aria-label={`${sections.find((item) => item.key === section)?.label}列表`}
+            aria-label={localize(`${sections.find((item) => item.key === section)?.label}列表`)}
           >
-            {records.length > 0 && (
+            {localize(records.length > 0 && (
               <table className="collaboration-record-table">
                 <thead>
                   <tr>
-                    <th>名称</th>
-                    <th>客户</th>
-                    <th>状态</th>
-                    <th>申请人</th>
-                    <th>申请日期</th>
-                    <th>操作</th>
+                    <th>{localize("名称")}</th>
+                    <th>{localize("客户")}</th>
+                    <th>{localize("状态")}</th>
+                    <th>{localize("申请人")}</th>
+                    <th>{localize("申请日期")}</th>
+                    <th>{localize("操作")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {records.map((record) => {
+                  {localize(records.map((record) => {
                     const project = 'name' in record ? record : undefined;
                     const request = 'title' in record ? record : undefined;
                     const title = project?.name ?? request?.title ?? record.id;
@@ -189,44 +192,43 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
                             className="pm-project-name"
                             onClick={() => onOpen(view, record.id)}
                           >
-                            {title}
+                            {localize(title)}
                           </button>
                         </td>
                         <td className="collaboration-record-customer">
-                          {customerName(record.customerId)}
+                          {localize(customerName(record.customerId))}
                         </td>
                         <td>
                           <span className="pm-tag" data-status={record.status}>
-                            {record.status}
+                            {localize(record.status)}
                           </span>
                         </td>
                         <td className="collaboration-record-applicant">
-                          {applicant}
+                          {localize(applicant)}
                         </td>
                         <td className="collaboration-record-date">
-                          {applicationDate}
+                          {localize(applicationDate)}
                         </td>
                         <td>
                           <button
                             type="button"
                             className="pm-link"
-                            aria-label={`查看${title}详情`}
+                            aria-label={localize(`查看${title}详情`)}
                             onClick={() => onOpen(view, record.id)}
                           >
-                            查看详情
-                          </button>
+                            {localize("查看详情")}</button>
                         </td>
                       </tr>
                     );
-                  })}
+                  }))}
                 </tbody>
               </table>
-            )}
-            {!records.length && (
+            ))}
+            {localize(!records.length && (
               <Empty
                 text={`暂无未完成的${sections.find((item) => item.key === section)?.label}`}
               />
-            )}
+            ))}
           </div>
         </section>
       </div>
@@ -235,9 +237,10 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
 }
 
 function Empty({ text }: { text: string }) {
+  const { localize } = useI18n();
   return (
     <div className="pm-empty">
-      <span>{text}</span>
+      <span>{localize(text)}</span>
     </div>
   );
 }

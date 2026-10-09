@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { ServiceExecutionFormSettings } from '@/components/service-execution-form-settings';
 import { ServiceProviderSettings } from '@/components/service-provider-settings';
@@ -185,6 +187,7 @@ export function RequestFieldSettings({
   onProjectFieldsChange?: (fields: RequestField[]) => void;
   ready: boolean;
 }) {
+  const { localize } = useI18n();
   const currentSection = backendSettingsSections.find(item => item.key === section)!;
   const [activeTab, setActiveTab] = useState<string>(currentSection.tabs[0]?.key ?? '');
   const settingsTabsId = useId();
@@ -293,47 +296,47 @@ export function RequestFieldSettings({
   return (
     <section
       className="reference-panel backend-settings-panel"
-      aria-label={currentSection.label}
+      aria-label={localize(currentSection.label)}
     >
-      {section === 'execution-flow' && <ExecutionFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={setActiveTab} />}
-      {section === 'request-flow' && <RequestFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={selectFlowTab} />}
+      {localize(section === 'execution-flow' && <ExecutionFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={setActiveTab} />)}
+      {localize(section === 'request-flow' && <RequestFlowDiagram activeTab={activeTab} tabId={tabId} onTabSelect={selectFlowTab} />)}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="reference-toolbar request-field-toolbar">
           <TabsList
             variant="line"
             className="reference-tabs"
-            aria-label={currentSection.label}
+            aria-label={localize(currentSection.label)}
           >
-            {currentSection.tabs.map(tab => <TabsTrigger key={tab.key} id={tabId(tab.key)} value={tab.key} className="reference-tab">
-              {tab.label}{tab.key === 'request-items' && <span>{serviceFields.length}</span>}{tab.key === 'application-fields' && <span>{applicationFields.length}</span>}{tab.key === 'project-fields' && <span>{visibleProjectFields.length}</span>}
-            </TabsTrigger>)}
+            {localize(currentSection.tabs.map(tab => <TabsTrigger key={tab.key} id={tabId(tab.key)} value={tab.key} className="reference-tab">
+              {localize(tab.label)}{localize(tab.key === 'request-items' && <span>{localize(serviceFields.length)}</span>)}{localize(tab.key === 'application-fields' && <span>{localize(applicationFields.length)}</span>)}{localize(tab.key === 'project-fields' && <span>{localize(visibleProjectFields.length)}</span>)}
+            </TabsTrigger>))}
           </TabsList>
-          {(section === 'forms' || projectTab) && <Button disabled={!ready} onClick={() => open('new')}><Plus size={16} />创建字段</Button>}
+          {localize((section === 'forms' || projectTab) && <Button disabled={!ready} onClick={() => open('new')}><Plus size={16} />{localize("创建字段")}</Button>)}
         </div>
-        {(section === 'forms' || projectTab) && <TabsContent value={activeTab}>
+        {localize((section === 'forms' || projectTab) && <TabsContent value={activeTab}>
           <div className="table-scroll">
             <table className="reference-table app-list-table">
               <thead>
                 <tr>
-                  <th>字段名称</th>
-                  <th>字段类型</th>
-                  <th>选项</th>
-                  {projectTab && <th>填写规则</th>}
-                  <th>修改时间</th>
-                  <th>修改人</th>
-                  <th data-list-actions>操作</th>
+                  <th>{localize("字段名称")}</th>
+                  <th>{localize("字段类型")}</th>
+                  <th>{localize("选项")}</th>
+                  {localize(projectTab && <th>{localize("填写规则")}</th>)}
+                  <th>{localize("修改时间")}</th>
+                  <th>{localize("修改人")}</th>
+                  <th data-list-actions>{localize("操作")}</th>
                 </tr>
               </thead>
               <tbody>
-                {(projectTab ? visibleProjectFields : applicationTab ? normalizeApplicationFields(fields) : normalizeRequestFields(fields)).map((field) => (
+                {localize((projectTab ? visibleProjectFields : applicationTab ? normalizeApplicationFields(fields) : normalizeRequestFields(fields)).map((field) => (
                   <tr key={field.id}>
                     <td>
-                      <strong>{field.name}</strong>
-                      {systemField(field.id) && <span className="request-system-field">系统预置</span>}
+                      <strong>{localize(field.name)}</strong>
+                      {localize(systemField(field.id) && <span className="request-system-field">{localize("系统预置")}</span>)}
                     </td>
-                    <td>{projectTab && field.id === 'createdAt' ? '日期时间' : fieldTypes[field.type]}</td>
+                    <td>{localize(projectTab && field.id === 'createdAt' ? '日期时间' : fieldTypes[field.type])}</td>
                     <td>
-                      {projectTab && field.id === 'serviceProviderId' ? '合作伙伴创建时固定为所属企业，内部创建时可选择服务方' : field.referenceTarget === 'users' ? '关联内部用户，自动记录' : field.referenceTarget === 'customers' ? (
+                      {localize(projectTab && field.id === 'serviceProviderId' ? '合作伙伴创建时固定为所属企业，内部创建时可选择服务方' : field.referenceTarget === 'users' ? '关联内部用户，自动记录' : field.referenceTarget === 'customers' ? (
                         '关联客户对象，单选'
                       ) : field.id === 'businessObjects' ? (
                         '关联业务对象，可多选'
@@ -342,60 +345,59 @@ export function RequestFieldSettings({
                       ) : field.type === 'single' ||
                         field.type === 'multiple' ? (
                         <div className="request-field-options">
-                          {field.options.map((option) => (
+                          {localize(field.options.map((option) => (
                             <span
                               key={option.value}
                               data-disabled={!option.enabled || undefined}
                             >
-                              {option.value}
-                              {!option.enabled && ' · 已停用'}
+                              {localize(option.value)}
+                              {localize(!option.enabled && ' · 已停用')}
                             </span>
-                          ))}
+                          )))}
                         </div>
                       ) : (
                         '—'
-                      )}
+                      ))}
                     </td>
-                    {projectTab && <td>{projectFieldRules[field.id] ?? '选填'}</td>}
+                    {localize(projectTab && <td>{localize(projectFieldRules[field.id] ?? '选填')}</td>)}
                     <td>
-                      {field.updatedAt
+                      {localize(field.updatedAt
                         ? new Date(field.updatedAt).toLocaleString('zh-CN', { hour12: false })
-                        : '—'}
+                        : '—')}
                     </td>
-                    <td>{field.updatedBy ?? '—'}</td>
+                    <td>{localize(field.updatedBy ?? '—')}</td>
                     <td>
                         <Button
                           variant="ghost"
                           disabled={!ready}
                           onClick={() => open(field.id)}
                         >
-                          编辑
-                        </Button>
+                          {localize("编辑")}</Button>
 
                     </td>
                   </tr>
-                ))}
+                )))}
               </tbody>
             </table>
           </div>
-        </TabsContent>}
-        {section === 'request-flow' && <>
+        </TabsContent>)}
+        {localize(section === 'request-flow' && <>
           <TabsContent value="assessment-manager"><RequestFlowSettings role="manager" actor={actorIdentity} /></TabsContent>
           <TabsContent value="assessment-hardware"><RequestFlowSettings role="hardware" actor={actorIdentity} /></TabsContent>
           <TabsContent value="approval-designer"><ApprovalRuleSettings actor={actorIdentity} /></TabsContent>
           <TabsContent value="collaborators"><RequestRuleSettings tab="collaborators" actor={actorIdentity} /></TabsContent>
           <TabsContent value="submission"><RequestRuleSettings tab="submission" actor={actorIdentity} /></TabsContent>
-        </>}
-        {section === 'execution-flow' && <TabsContent value="service-mail-templates">{activeTab === 'service-mail-templates' && <ServiceMailTemplateSettings actor={actorIdentity} />}</TabsContent>}
-        {section === 'execution-flow' && <TabsContent value="service-flows"><ServiceFlowSettings actor={actorIdentity} /></TabsContent>}
-        {section === 'execution-flow' && <TabsContent value="project-approval-designer"><ApprovalRuleSettings actor={actorIdentity} scope="project" /></TabsContent>}
-        {section === 'execution-flow' && <TabsContent value="service-providers">{activeTab === 'service-providers' && <ServiceProviderSettings actor={actorIdentity} />}</TabsContent>}
-        {section === 'execution-flow' && <TabsContent value="project-collaborators"><ProjectCollaboratorAssignmentSettings /></TabsContent>}
-        {section === 'execution-flow' && <TabsContent value="request-project-mapping"><RequestProjectMappingSettings actor={actorIdentity} applicationFields={applicationFields} projectFields={projectFields} /></TabsContent>}
-        {section === 'execution-flow' && <TabsContent value="execution-form-library"><ServiceExecutionFormSettings actor={actorIdentity} /></TabsContent>}
-        {section === 'pricing' && <TabsContent value="entitlement-conversions">
+        </>)}
+        {localize(section === 'execution-flow' && <TabsContent value="service-mail-templates">{localize(activeTab === 'service-mail-templates' && <ServiceMailTemplateSettings actor={actorIdentity} />)}</TabsContent>)}
+        {localize(section === 'execution-flow' && <TabsContent value="service-flows"><ServiceFlowSettings actor={actorIdentity} /></TabsContent>)}
+        {localize(section === 'execution-flow' && <TabsContent value="project-approval-designer"><ApprovalRuleSettings actor={actorIdentity} scope="project" /></TabsContent>)}
+        {localize(section === 'execution-flow' && <TabsContent value="service-providers">{localize(activeTab === 'service-providers' && <ServiceProviderSettings actor={actorIdentity} />)}</TabsContent>)}
+        {localize(section === 'execution-flow' && <TabsContent value="project-collaborators"><ProjectCollaboratorAssignmentSettings /></TabsContent>)}
+        {localize(section === 'execution-flow' && <TabsContent value="request-project-mapping"><RequestProjectMappingSettings actor={actorIdentity} applicationFields={applicationFields} projectFields={projectFields} /></TabsContent>)}
+        {localize(section === 'execution-flow' && <TabsContent value="execution-form-library"><ServiceExecutionFormSettings actor={actorIdentity} /></TabsContent>)}
+        {localize(section === 'pricing' && <TabsContent value="entitlement-conversions">
           <EntitlementConversions actor={actor} />
-        </TabsContent>}
+        </TabsContent>)}
       </Tabs>
       <Dialog
         open={target !== null}
@@ -406,14 +408,14 @@ export function RequestFieldSettings({
         <DialogContent className="request-field-dialog">
           <DialogHeader>
             <DialogTitle>
-              {creating ? '创建字段' : '编辑字段'}
+              {localize(creating ? '创建字段' : '编辑字段')}
             </DialogTitle>
             <DialogDescription>
-              {projectTab && locked ? '可修改字段名称；字段类型、填写规则、项目状态选项及系统自动记录规则固定。' : fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为技术评估和服务交付；可修改字段名称。' : locked
+              {localize(projectTab && locked ? '可修改字段名称；字段类型、填写规则、项目状态选项及系统自动记录规则固定。' : fixedTypeOptions ? '申请类型应用于所有服务申请，选项固定为技术评估和服务交付；可修改字段名称。' : locked
                 ? '系统预置字段可修改名称；选项列表支持编辑选项值、新增及启停选项。'
                 : creating
                   ? projectTab ? '创建后可在服务项目中填写，并配置请求转项目映射。' : applicationTab ? '创建后保存在服务申请字段库中。' : '创建后可在服务目录的申请表单中添加使用。'
-                  : '可修改名称和选项。'}
+                  : '可修改名称和选项。')}
             </DialogDescription>
           </DialogHeader>
           <form
@@ -424,18 +426,16 @@ export function RequestFieldSettings({
             className="sr-form-grid"
           >
             <label htmlFor="request-field-name">
-              字段名称（标签）
-              <Input
+              {localize("字段名称（标签）")}<Input
                 id="request-field-name"
                 required
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="请输入字段名称"
+                placeholder={localize("请输入字段名称")}
               />
             </label>
             <label>
-              字段类型
-              <select
+              {localize("字段类型")}<select
                 disabled={!creating}
                 value={type}
                 onChange={(event) => {
@@ -443,51 +443,49 @@ export function RequestFieldSettings({
                   setError('');
                 }}
               >
-                {Object.entries(fieldTypes)
+                {localize(Object.entries(fieldTypes)
                   .filter(([key]) => key !== 'lookup' || type === 'lookup')
                   .map(([key, label]) => (
                     <option key={key} value={key}>
-                      {label}
+                      {localize(label)}
                     </option>
-                  ))}
+                  )))}
               </select>
             </label>
-            {target && editionFieldRequirement(target) && (
+            {localize(target && editionFieldRequirement(target) && (
               <div className="sr-span">
-                <strong>特殊填写要求</strong>
-                <p className="sr-help">{fieldRequirementLabels[editionFieldRequirement(target)!]}。添加到服务表单时默认启用，可在字段属性中调整。</p>
+                <strong>{localize("特殊填写要求")}</strong>
+                <p className="sr-help">{localize(fieldRequirementLabels[editionFieldRequirement(target)!])}{localize("。添加到服务表单时默认启用，可在字段属性中调整。")}</p>
               </div>
-            )}
-            {projectTab && target && <p className="sr-help sr-span">{projectFieldRules[target]}</p>}
-            {fixedTypeOptions && <div className="sr-span"><strong>{projectTab ? '项目状态' : '可选类型'}</strong><div className="request-field-options">{options.map(option => <span key={option.value}>{option.value}</span>)}</div></div>}
-            {isChoice && !fixedTypeOptions && (
+            ))}
+            {localize(projectTab && target && <p className="sr-help sr-span">{localize(projectFieldRules[target])}</p>)}
+            {localize(fixedTypeOptions && <div className="sr-span"><strong>{localize(projectTab ? '项目状态' : '可选类型')}</strong><div className="request-field-options">{localize(options.map(option => <span key={option.value}>{localize(option.value)}</span>))}</div></div>)}
+            {localize(isChoice && !fixedTypeOptions && (
               <section
                 className="sr-span request-field-editor"
-                aria-label="选项管理"
+                aria-label={localize("选项管理")}
               >
                 <h3>
-                  选项管理{' '}
+                  {localize("选项管理")}{localize(' ')}
                   <small>
-                    共 {options.length} 项，已启用{' '}
-                    {options.filter((option) => option.enabled).length} 项
-                  </small>
+                    {localize("共")}{localize(options.length)} {localize(" 项，已启用")}{localize(' ')}
+                    {localize(options.filter((option) => option.enabled).length)} {localize(" 项")}</small>
                 </h3>
                 <p className="sr-help">
-                  修改或停用选项后，已填写的历史值会保留；服务表单的可用选项需同步检查。
-                </p>
+                  {localize("修改或停用选项后，已填写的历史值会保留；服务表单的可用选项需同步检查。")}</p>
                 <div className="request-field-option-list">
                   <table className="reference-table">
                     <thead>
                       <tr>
-                        <th>选项名称</th>
-                        <th>状态</th>
-                        <th data-list-actions>操作</th>
+                        <th>{localize("选项名称")}</th>
+                        <th>{localize("状态")}</th>
+                        <th data-list-actions>{localize("操作")}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {options.map((option, index) => (
+                      {localize(options.map((option, index) => (
                         <tr key={index}>
-                          <td><Input aria-label={`选项 ${index + 1} 名称`} value={option.value} onChange={(event) => {
+                          <td><Input aria-label={localize(`选项 ${index + 1} 名称`)} value={option.value} onChange={(event) => {
                             setOptions(items => items.map((item, i) => i === index ? { ...item, value: event.target.value } : item));
                             setError('');
                           }} /></td>
@@ -496,7 +494,7 @@ export function RequestFieldSettings({
                               className="request-field-option-status"
                               data-enabled={option.enabled}
                             >
-                              {option.enabled ? '已启用' : '已停用'}
+                              {localize(option.enabled ? '已启用' : '已停用')}
                             </span>
                           </td>
                           <td>
@@ -507,7 +505,7 @@ export function RequestFieldSettings({
                               data-action={
                                 option.enabled ? 'disable' : 'enable'
                               }
-                              aria-label={`${option.enabled ? '停用' : '启用'}${option.value}`}
+                              aria-label={localize(`${option.enabled ? '停用' : '启用'}${option.value}`)}
                               onClick={() =>
                                 setOptions((items) =>
                                   items.map((item, i) =>
@@ -518,24 +516,24 @@ export function RequestFieldSettings({
                                 )
                               }
                             >
-                              {option.enabled ? '停用' : '启用'}
+                              {localize(option.enabled ? '停用' : '启用')}
                             </Button>
                           </td>
                         </tr>
-                      ))}
+                      )))}
                     </tbody>
                   </table>
-                  {!options.length && (
-                    <p className="sr-help">暂无选项，请新建。</p>
-                  )}
+                  {localize(!options.length && (
+                    <p className="sr-help">{localize("暂无选项，请新建。")}</p>
+                  ))}
                 </div>
-                <label htmlFor="request-field-option">新选项</label>
+                <label htmlFor="request-field-option">{localize("新选项")}</label>
                 <div className="request-field-option-add">
                   <Input
                     id="request-field-option"
                     value={newOption}
                     onChange={(event) => setNewOption(event.target.value)}
-                    placeholder="输入选项，多个选项用逗号分隔"
+                    placeholder={localize("输入选项，多个选项用逗号分隔")}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault();
@@ -545,27 +543,24 @@ export function RequestFieldSettings({
                   />
                   <Button type="button" variant="outline" onClick={add}>
                     <Plus />
-                    新建
-                  </Button>
+                    {localize("新建")}</Button>
                 </div>
               </section>
-            )}
-            {error && (
+            ))}
+            {localize(error && (
               <p role="alert" className="sr-error sr-span">
-                {error}
+                {localize(error)}
               </p>
-            )}
+            ))}
             <DialogFooter className="sr-span">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setTarget(null)}
               >
-                取消
-              </Button>
+                {localize("取消")}</Button>
               <Button type="submit" disabled={!ready}>
-                保存
-              </Button>
+                {localize("保存")}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -587,6 +582,7 @@ export function RequestFieldControl({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const { localize } = useI18n();
   const addressDetailId = useId();
   if (field.type === 'address') {
     const address = readAddress(value);
@@ -595,9 +591,9 @@ export function RequestFieldControl({
       <fieldset
         className="request-address"
         disabled={disabled}
-        aria-label={field.name}
+        aria-label={localize(field.name)}
       >
-        {(['province', 'city'] as const).map((key) => {
+        {localize((['province', 'city'] as const).map((key) => {
           const label = key === 'province' ? '省' : '市';
           const items = [
             ...(key === 'province' ? provinceNames : cities),
@@ -605,7 +601,7 @@ export function RequestFieldControl({
           ];
           return (
             <div key={key} className="request-address-choice">
-              <span>{label}</span>
+              <span>{localize(label)}</span>
               <Combobox
                 items={items}
                 value={address[key] || null}
@@ -622,16 +618,16 @@ export function RequestFieldControl({
                 }}
               >
                 <ComboboxInput
-                  aria-label={`${field.name}·${label}`}
-                  placeholder={`请选择或搜索${label}`}
+                  aria-label={localize(`${field.name}·${label}`)}
+                  placeholder={localize(`请选择或搜索${label}`)}
                   disabled={disabled}
                 />
                 <ComboboxContent>
-                  <ComboboxEmpty>未找到匹配的{label}</ComboboxEmpty>
+                  <ComboboxEmpty>{localize("未找到匹配的")}{localize(label)}</ComboboxEmpty>
                   <ComboboxList>
                     {(item: string) => (
                       <ComboboxItem key={item} value={item}>
-                        {item}
+                        {localize(item)}
                       </ComboboxItem>
                     )}
                   </ComboboxList>
@@ -639,17 +635,16 @@ export function RequestFieldControl({
               </Combobox>
             </div>
           );
-        })}
+        }))}
         <label className="request-address-detail" htmlFor={addressDetailId}>
-          详细地址
-          <Input
+          {localize("详细地址")}<Input
             id={addressDetailId}
-            aria-label={`${field.name}·详细地址`}
+            aria-label={localize(`${field.name}·详细地址`)}
             value={address.detail}
             onChange={(event) =>
               onChange(writeAddress({ ...address, detail: event.target.value }))
             }
-            placeholder="街道、门牌号等"
+            placeholder={localize("街道、门牌号等")}
           />
         </label>
       </fieldset>
@@ -665,17 +660,17 @@ export function RequestFieldControl({
         disabled={disabled}
       >
         <ComboboxInput
-          aria-label={field.name}
-          placeholder="搜索并选择合作伙伴"
+          aria-label={localize(field.name)}
+          placeholder={localize("搜索并选择合作伙伴")}
           showClear
           disabled={disabled}
         />
         <ComboboxContent>
-          <ComboboxEmpty>未找到匹配的合作伙伴</ComboboxEmpty>
+          <ComboboxEmpty>{localize("未找到匹配的合作伙伴")}</ComboboxEmpty>
           <ComboboxList>
             {(partner: string) => (
               <ComboboxItem key={partner} value={partner}>
-                {partner}
+                {localize(partner)}
               </ComboboxItem>
             )}
           </ComboboxList>
@@ -689,22 +684,21 @@ export function RequestFieldControl({
   if (field.type === 'single')
     return (
       <select
-        aria-label={field.name}
+        aria-label={localize(field.name)}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       >
-        <option value="">请选择</option>
-        {value &&
+        <option value="">{localize("请选择")}</option>
+        {localize(value &&
           !field.options.some(
             (option) => option.value === value && optionIsAvailable(option),
           ) && (
             <option value={value} disabled>
-              {value}（当前不可用）
-            </option>
-          )}
-        {field.options.filter(optionIsAvailable).map((option) => (
-          <option key={option.value}>{option.value}</option>
-        ))}
+              {localize(value)}{localize("（当前不可用）")}</option>
+          ))}
+        {localize(field.options.filter(optionIsAvailable).map((option) => (
+          <option value={option.value} key={option.value}>{localize(option.value)}</option>
+        )))}
       </select>
     );
   if (field.type === 'multiple') {
@@ -730,8 +724,8 @@ export function RequestFieldControl({
         .map((item) => ({ value: item, enabled: false })),
     ];
     return (
-      <fieldset className="request-field-checkboxes" aria-label={field.name}>
-        {choices
+      <fieldset className="request-field-checkboxes" aria-label={localize(field.name)}>
+        {localize(choices
           .filter(
             (option) =>
               optionIsAvailable(option) || selected.includes(option.value),
@@ -751,31 +745,31 @@ export function RequestFieldControl({
                   !optionIsAvailable(option) && !selected.includes(option.value)
                 }
               />
-              {option.value}
-              {!optionIsAvailable(option) && '（当前不可用）'}
+              {localize(option.value)}
+              {localize(!optionIsAvailable(option) && '（当前不可用）')}
             </label>
-          ))}
-        {!choices.some(
+          )))}
+        {localize(!choices.some(
           (option) =>
             optionIsAvailable(option) || selected.includes(option.value),
-        ) && <span>暂无可用选项</span>}
+        ) && <span>{localize("暂无可用选项")}</span>)}
       </fieldset>
     );
   }
   if (field.type === 'textarea')
     return (
       <textarea
-        aria-label={field.name}
+        aria-label={localize(field.name)}
         rows={3}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
     );
   if (field.type === 'date')
-    return <DateField label={field.name} hideLabel value={value} onChange={onChange} disabled={disabled} />;
+    return <DateField label={localize(field.name)} hideLabel value={value} onChange={onChange} disabled={disabled} />;
   return (
     <Input
-      aria-label={field.name}
+      aria-label={localize(field.name)}
       type={
         field.type === 'integer' || field.type === 'decimal'
           ? 'number'

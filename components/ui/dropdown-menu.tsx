@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import * as React from 'react';
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
@@ -111,6 +113,7 @@ function DropdownMenuSubTrigger({
 }: MenuPrimitive.SubmenuTrigger.Props & {
   inset?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <MenuPrimitive.SubmenuTrigger
       data-slot="dropdown-menu-sub-trigger"
@@ -121,7 +124,7 @@ function DropdownMenuSubTrigger({
       )}
       {...props}
     >
-      {children}
+      {localize(children)}
       <ChevronRightIcon className="ml-auto" />
     </MenuPrimitive.SubmenuTrigger>
   );
@@ -160,6 +163,7 @@ function DropdownMenuCheckboxItem({
 }: MenuPrimitive.CheckboxItem.Props & {
   inset?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <MenuPrimitive.CheckboxItem
       data-slot="dropdown-menu-checkbox-item"
@@ -179,7 +183,7 @@ function DropdownMenuCheckboxItem({
           <CheckIcon />
         </MenuPrimitive.CheckboxItemIndicator>
       </span>
-      {children}
+      {localize(children)}
     </MenuPrimitive.CheckboxItem>
   );
 }
@@ -201,6 +205,7 @@ function DropdownMenuRadioItem({
 }: MenuPrimitive.RadioItem.Props & {
   inset?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <MenuPrimitive.RadioItem
       data-slot="dropdown-menu-radio-item"
@@ -219,7 +224,7 @@ function DropdownMenuRadioItem({
           <CheckIcon />
         </MenuPrimitive.RadioItemIndicator>
       </span>
-      {children}
+      {localize(children)}
     </MenuPrimitive.RadioItem>
   );
 }

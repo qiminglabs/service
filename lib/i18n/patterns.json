@@ -1,0 +1,1106 @@
+[
+  [
+    "{0}的{1}可用数量不足或已被占用，请重新完成人天核定后进行服务依据关联。",
+    "Insufficient or reserved {1} for {0}. Verify person-days again before linking coverage."
+  ],
+  [
+    "「{0}」未匹配到包含启用步骤的服务流程，请先配置分配规则或默认流程。",
+    "No workflow with enabled steps matches “{0}”. Configure assignment rules or a default workflow."
+  ],
+  [
+    "{0} · 请求退回客户确认步骤，服务依据、资产冻结及审批结果保留。",
+    "{0} · Request returned to customer confirmation. Coverage, reservations, and approvals are retained."
+  ],
+  [
+    "模板「{0}」引用的「{1}」来源步骤或字段已不存在，请先调整模板引用。",
+    "The source step or field for “{1}” in template “{0}” no longer exists. Update the template references."
+  ],
+  [
+    "步骤「{0}」的报告模板不属于当前流程或版本已失效，请重新选择。",
+    "The report template for step “{0}” is not in the current workflow or is outdated. Select another template."
+  ],
+  [
+    "{0}：无法获取目录最新的最小人天数量，请维护服务目录后重试。",
+    "{0}: The current minimum person-days are unavailable. Update the service catalog and try again."
+  ],
+  [
+    "录入人：{0}。按起止时间计算分钟数，自动换算为投入小时。",
+    "Entered by {0}. Minutes are calculated from the start and end times and converted into hours."
+  ],
+  [
+    "模板「{0}」被步骤「{1}」引用，请先替换或解除绑定后再停用。",
+    "Template “{0}” is used by step “{1}”. Replace or unlink it before disabling."
+  ],
+  [
+    "{0}：服务目录未配置有效计价系数，请先维护服务目录。",
+    "{0}: No valid billing multiplier is configured. Update the service catalog."
+  ],
+  [
+    "{0} · 计价总人天 {1} · 客户资产 {2} · 特批 {3}",
+    "{0} · Total billable person-days {1} · Customer assets {2} · Exception allowance {3}"
+  ],
+  [
+    "{0} 无法识别人天类别，请选择远程或现场人天资产。",
+    "Cannot identify the person-day type of {0}. Select remote or onsite assets."
+  ],
+  [
+    "{0}：业务对象已失效或不属于当前客户，请重新选择。",
+    "{0}: The business object is invalid or belongs to another customer. Select again."
+  ],
+  [
+    "{0} · {1} 小时；作废后保留原记录，不计入汇总。",
+    "{0} · {1} hours. Voided entries are retained but excluded from totals."
+  ],
+  [
+    "{0} 尚未维护余额，请先在主数据中填写余额人天。",
+    "The balance for {0} is not set. Enter remaining person-days in master data first."
+  ],
+  [
+    "{0} 可冻结余额不足，请刷新后重新评估资产方案。",
+    "Insufficient reservable balance for {0}. Refresh and reassess the asset plan."
+  ],
+  [
+    "{0}：预估人天须为大于 0、最多一位小数的数字。",
+    "{0}: Estimated person-days must be greater than 0 with up to one decimal place."
+  ],
+  [
+    "{0}：预估人天不能小于当前最小人天数量 {1} 人天。",
+    "{0}: Estimated person-days cannot be below the current minimum of {1}."
+  ],
+  [
+    "请输入 0 至 {0} 的整数，离开输入框后保存",
+    "Enter an integer from 0 to {0}; saves on leaving the field"
+  ],
+  [
+    "步骤「{0}」的报告字段来源与流程模板不一致。",
+    "Report field sources for step “{0}” do not match the workflow template."
+  ],
+  [
+    "“{0}”尚未分配申请项，请分配或移除空项目。",
+    "“{0}” has no request items. Assign items or remove the empty project."
+  ],
+  [
+    "「{0}」的服务目录不存在，无法确认认证要求。",
+    "The catalog entry for “{0}” does not exist. Certification requirements cannot be verified."
+  ],
+  [
+    "请为“{0}”至少选择一个当前目录可用选项。",
+    "Select at least one currently available option for “{0}”."
+  ],
+  [
+    "{0}未设置汇报人，无法确定第 {1} 级审批人。",
+    "{0} has no manager configured. Cannot determine the level {1} approver."
+  ],
+  [
+    "{0}：权益类工单的最终计价人天固定为 0。",
+    "{0}: Final billable person-days are always 0 for entitlement work orders."
+  ],
+  [
+    "{0}：资产已失效或类别已变更，请重新关联。",
+    "{0}: The asset is invalid or its type has changed. Link it again."
+  ],
+  [
+    "【SmartX 项目实施报告及确认】{0}",
+    "[SmartX Implementation Report & Confirmation] {0}"
+  ],
+  [
+    "「{0}」的来源字段已不存在，请重新绑定。",
+    "The source field for “{0}” no longer exists. Link another field."
+  ],
+  [
+    "预估 {0} 人天 · 计价 {1} 人天 · {2}{3}",
+    "Estimated {0} person-days · Billable {1} person-days · {2}{3}"
+  ],
+  [
+    "{0}冻结人天不能超过{1}计价总人天 {2} 人天。",
+    "Reserved {0} person-days cannot exceed the {1} billable total of {2} person-days."
+  ],
+  [
+    "{0}：计价系数已变更，请刷新后重新核定。",
+    "{0}: The billing multiplier has changed. Refresh and verify again."
+  ],
+  [
+    "项目 {0} 的名称不能超过 100 字。",
+    "The name of project {0} must not exceed 100 characters."
+  ],
+  [
+    "{0}：请在工单中明确远程或现场服务方式。",
+    "{0}: Specify remote or onsite delivery in the work order."
+  ],
+  [
+    "{0}：权益不足或已失效，请重新核定人天。",
+    "{0}: Entitlements are insufficient or invalid. Verify person-days again."
+  ],
+  [
+    "模板「{0}」的「{1}」未绑定当前流程步骤。",
+    "“{1}” in template “{0}” is not linked to a current workflow step."
+  ],
+  [
+    "步骤「{0}」请选择有效的服务步骤表单。",
+    "Select a valid service step form for “{0}”."
+  ],
+  [
+    "{0} · {1} · {2} {3}–{4} · {5} 小时 · {6}",
+    "{0} · {1} · {2} {3}–{4} · {5} hours · {6}"
+  ],
+  [
+    "{0}：节点数量已变更，请重新核定人天。",
+    "{0}: The node count has changed. Verify person-days again."
+  ],
+  [
+    "{0}资产关联人天不能超过该类计价人天。",
+    "Linked {0} asset person-days cannot exceed billable person-days of the same type."
+  ],
+  [
+    "已创建 {0} 个服务项目、{1} 个服务项",
+    "Created {0} service projects and {1} service items"
+  ],
+  [
+    "未到达审批截止人：{0}未设置汇报人。",
+    "Final approver not reached: {0} has no manager configured."
+  ],
+  [
+    "模板已被步骤「{0}」引用，不能删除。",
+    "The template is used by step “{0}” and cannot be deleted."
+  ],
+  [
+    "本次没有{0}计价人天，不能冻结{1}资产。",
+    "There are no {0} billable person-days. Cannot reserve {1} assets."
+  ],
+  [
+    "{0}：请选择业务对象，不可重复关联。",
+    "{0}: Select business objects without duplicates."
+  ],
+  [
+    "表单已被步骤「{0}」引用，不能删除。",
+    "The form is used by step “{0}” and cannot be deleted."
+  ],
+  [
+    "{0}已按转换映射设为只读，不能修改。",
+    "{0} is read-only under the conversion mapping and cannot be changed."
+  ],
+  [
+    "{0}：请关联有效且不重复的业务对象。",
+    "{0}: Link valid business objects without duplicates."
+  ],
+  [
+    "{0}：业务对象已失效或节点数量无效。",
+    "{0}: The business object or node count is invalid."
+  ],
+  [
+    "确认“{0}”后，请求将进入待受理。",
+    "Confirming “{0}” moves the request to pending acceptance."
+  ],
+  [
+    "【SmartX 项目实施日报】{0}",
+    "[SmartX Daily Implementation Report] {0}"
+  ],
+  [
+    "计价总人天 {0} · 关联 {1} 人天",
+    "Total billable {0} person-days · Linked {1} person-days"
+  ],
+  [
+    "{0} 人天类别已变更，请重新关联。",
+    "The person-day type of {0} has changed. Link it again."
+  ],
+  [
+    "{0}：节点数或可用权益未正确维护。",
+    "{0}: Node count or available entitlements are invalid."
+  ],
+  [
+    "{0}：无法获取有效的权益换算系数。",
+    "{0}: No valid entitlement conversion factor is available."
+  ],
+  [
+    "{0}为默认分配协作人，不允许移除。",
+    "{0} is a default collaborator and cannot be removed."
+  ],
+  [
+    "{0}已完成或跳过 {1} 步／共 {2} 步",
+    "{0}: {1} of {2} steps completed or skipped"
+  ],
+  [
+    "工单：{0}；项目：{1}；日期：{2} 至 {3}",
+    "Work order: {0}; Project: {1}; Dates: {2} to {3}"
+  ],
+  [
+    "{0}已完成或跳过 {1} 步，共 {2} 步",
+    "{0}: {1} of {2} steps completed or skipped"
+  ],
+  [
+    "项目报告最多选择 {0} 个文件。",
+    "Select up to {0} files for the project report."
+  ],
+  [
+    "{0}：可用人天不足，请重新关联。",
+    "{0}: Insufficient available person-days. Link coverage again."
+  ],
+  [
+    "已锁定 {0} 个服务项并生成工单",
+    "Locked {0} service items and generated work orders"
+  ],
+  [
+    "{0}：{1}。本次所选文件均未添加。",
+    "{0}: {1}. None of the selected files were added."
+  ],
+  [
+    "{0} 已失效，请重新选择资产。",
+    "{0} is no longer valid. Select another asset."
+  ],
+  [
+    "在「评估」中处理特殊审批{0}。",
+    "Handle exception approval {0} in Assessment."
+  ],
+  [
+    "{0}未通过校验，请补充以下内容",
+    "{0} failed validation. Complete the following"
+  ],
+  [
+    "{0}为固定协作人，不允许移除",
+    "{0} is a fixed collaborator and cannot be removed"
+  ],
+  [
+    "保存后将清空{0}，是否继续？",
+    "Saving clears {0}. Continue?"
+  ],
+  [
+    "{0} 不符合允许的文件格式。",
+    "{0} has an unsupported file format."
+  ],
+  [
+    "{0}的汇报人不存在或已停用。",
+    "The manager of {0} does not exist or is disabled."
+  ],
+  [
+    "【示例日报】{0} · {1} · {2}",
+    "[Sample daily report] {0} · {1} · {2}"
+  ],
+  [
+    "「{0}」不属于当前服务流程。",
+    "“{0}” does not belong to the current service workflow."
+  ],
+  [
+    "文件说明不能超过 {0} 字。",
+    "File descriptions must not exceed {0} characters."
+  ],
+  [
+    "共用材料 · {0} 个服务项",
+    "Shared materials · {0} service items"
+  ],
+  [
+    "请补齐服务交付必传材料：{0}",
+    "Complete the required service delivery materials: {0}"
+  ],
+  [
+    "{0}在所选日期内没有工作日。",
+    "{0} has no working days in the selected period."
+  ],
+  [
+    "{0}补充额度超过待覆盖人天。",
+    "The additional {0} allowance exceeds the uncovered person-days."
+  ],
+  [
+    "「{0}」至少需要 {1} 个文件。",
+    "“{0}” requires at least {1} files."
+  ],
+  [
+    "「{0}」的认证要求配置异常。",
+    "Certification requirements for “{0}” are invalid."
+  ],
+  [
+    "{0} {1} 查看全部 {2} 个工单",
+    "{0} {1} View all {2} work orders"
+  ],
+  [
+    "硬件产品经理评估 · {0}",
+    "Hardware product manager assessment · {0}"
+  ],
+  [
+    "{0} {1}–{2} · {3} 小时 · {4}",
+    "{0} {1}–{2} · {3} hours · {4}"
+  ],
+  [
+    "请填写项目 {0} 的名称。",
+    "Enter a name for project {0}."
+  ],
+  [
+    "{0}的引用字段格式不完整。",
+    "{0} contains an incomplete field reference."
+  ],
+  [
+    "{0}：权益余额未正确维护。",
+    "{0}: The entitlement balance is invalid."
+  ],
+  [
+    "查看工单概览：{0} · {1}",
+    "View work order overview: {0} · {1}"
+  ],
+  [
+    "当前用户：{0}，切换身份",
+    "Current user: {0}; switch user"
+  ],
+  [
+    "样例申请校验未通过：{0}",
+    "Sample request validation failed: {0}"
+  ],
+  [
+    "{0} · {1} {2} · {3} 分钟",
+    "{0} · {1} {2} · {3} minutes"
+  ],
+  [
+    "{0} {1}{2}，请选择其他日期。",
+    "{0} {1}{2}. Select other dates."
+  ],
+  [
+    "{0}引用了不支持的字段：{1}",
+    "{0} references unsupported fields: {1}"
+  ],
+  [
+    "待复核 → 进行中；{0}",
+    "Pending review → In progress; {0}"
+  ],
+  [
+    "{0}工单不能指派或改派。",
+    "{0} work orders cannot be assigned or reassigned."
+  ],
+  [
+    "「{0}」缺少有效认证：{1}。",
+    "“{0}” lacks valid certifications: {1}."
+  ],
+  [
+    "请选择{0}中的有效选项。",
+    "Select a valid option in {0}."
+  ],
+  [
+    "暂无涉及特殊审批的{0}",
+    "No {0} requiring exception approval"
+  ],
+  [
+    "1 次 = {0} 人天",
+    "1 use = {0} person-days"
+  ],
+  [
+    "{0} 计价系数（只读）",
+    "{0} billing multiplier (read-only)"
+  ],
+  [
+    "{0} 换算系数（只读）",
+    "{0} conversion factor (read-only)"
+  ],
+  [
+    "{0}-全部文件.zip",
+    "{0}-all-files.zip"
+  ],
+  [
+    "变更前：{0}；变更后：{1}",
+    "Before: {0}; After: {1}"
+  ],
+  [
+    "演示报告缺少字段：{0}",
+    "Demo report is missing fields: {0}"
+  ],
+  [
+    "【示例日报】{0} · {1}",
+    "[Sample daily report] {0} · {1}"
+  ],
+  [
+    "请绑定「{0}」的来源。",
+    "Link a source for “{0}”."
+  ],
+  [
+    "{0} · {1} 小时 · {2}",
+    "{0} · {1} hours · {2}"
+  ],
+  [
+    "{0} · {1} 人天 · {2}",
+    "{0} · {1} person-days · {2}"
+  ],
+  [
+    "{0} · {1} · {2} 小时",
+    "{0} · {1} · {2} hours"
+  ],
+  [
+    "{0}（请填写详细地址）",
+    "{0} (enter the full address)"
+  ],
+  [
+    "请选择{0}的有效选项。",
+    "Select a valid option for {0}."
+  ],
+  [
+    "{0}不符合允许的格式。",
+    "{0} has an unsupported format."
+  ],
+  [
+    "剩余可用 {0} 人天",
+    "{0} person-days available"
+  ],
+  [
+    "{0}，{1}，打开下方{2}配置",
+    "{0}, {1}. Open the {2} configuration below."
+  ],
+  [
+    "查看关联服务项：{0}",
+    "View linked service item: {0}"
+  ],
+  [
+    "{0}-交付物.zip",
+    "{0}-deliverables.zip"
+  ],
+  [
+    "项目 {0} 已创建。",
+    "Project {0} created."
+  ],
+  [
+    "【示例】{0}交付项目",
+    "[Sample] {0} delivery project"
+  ],
+  [
+    "申请额度 {0} · {1}{2}",
+    "Requested allowance {0} · {1}{2}"
+  ],
+  [
+    "{0}（管理员代确认）",
+    "{0} (confirmed by administrator)"
+  ],
+  [
+    "合作伙伴协作人：{0}",
+    "Partner collaborators: {0}"
+  ],
+  [
+    "{0}不能超过 {1} 字。",
+    "{0} must not exceed {1} characters."
+  ],
+  [
+    "{0}须填写有效数字。",
+    "Enter a valid number for {0}."
+  ],
+  [
+    "服务方式：{0} → {1}",
+    "Delivery method: {0} → {1}"
+  ],
+  [
+    "{0} {1} 的工时记录",
+    "Time entries for {0} {1}"
+  ],
+  [
+    "定位服务项 {0} {1}",
+    "Locate service item {0} {1}"
+  ],
+  [
+    "{0} {1} · {2} 分钟",
+    "{0} {1} · {2} minutes"
+  ],
+  [
+    "全部 {0} 个工单",
+    "All {0} work orders"
+  ],
+  [
+    "{0}待覆盖 {1} 人天",
+    "{0}: {1} person-days not yet covered"
+  ],
+  [
+    "项目已恢复至{0}。",
+    "Project restored to {0}."
+  ],
+  [
+    "选择工程师 {0} {1}",
+    "Select engineer {0} {1}"
+  ],
+  [
+    "{0} {1}（含已冻结）",
+    "{0} {1} (including reserved)"
+  ],
+  [
+    "合作伙伴用户 {0}",
+    "Partner user {0}"
+  ],
+  [
+    "；下一审批人：{0}",
+    "; Next approver: {0}"
+  ],
+  [
+    "{0} · 交付确认",
+    "{0} · Delivery confirmation"
+  ],
+  [
+    "{0}（示例）.md",
+    "{0} (sample).md"
+  ],
+  [
+    "{0}（共用）.md",
+    "{0} (shared).md"
+  ],
+  [
+    "{0} → 执行说明",
+    "{0} → Execution notes"
+  ],
+  [
+    "{0} → 附件名称",
+    "{0} → Attachment name"
+  ],
+  [
+    "材料评估 · {0}",
+    "Material assessment · {0}"
+  ],
+  [
+    "请填写完整的{0}。",
+    "Complete all of {0}."
+  ],
+  [
+    "{0}须为有效数字。",
+    "{0} must be a valid number."
+  ],
+  [
+    "{0}须为有效日期。",
+    "{0} must be a valid date."
+  ],
+  [
+    "{0}（已不存在）",
+    "{0} (no longer exists)"
+  ],
+  [
+    "；可用选项：{0}",
+    "; Available options: {0}"
+  ],
+  [
+    "暂无未完成的{0}",
+    "No open {0}"
+  ],
+  [
+    "{0}已保存为 V{1}",
+    "{0} saved as V{1}"
+  ],
+  [
+    "选择 {0} · {1}",
+    "Select {0} · {1}"
+  ],
+  [
+    " · 引用 {0}",
+    " · Reference {0}"
+  ],
+  [
+    "项目文件（{0}）",
+    "Project files ({0})"
+  ],
+  [
+    "{0} {1} 预估人天",
+    "{0} {1} estimated person-days"
+  ],
+  [
+    "最少 {0} 人天",
+    "Minimum {0} person-days"
+  ],
+  [
+    "{0} {1} 关联{2}人天",
+    "{0} {1}: {2} linked person-days"
+  ],
+  [
+    "移除空项目 {0}",
+    "Remove empty project {0}"
+  ],
+  [
+    "项目 {0} 名称",
+    "Project {0} name"
+  ],
+  [
+    "{0} 可用 {1} 人",
+    "{0}: {1} available engineers"
+  ],
+  [
+    "{0}最终计价人天",
+    "{0} final billable person-days"
+  ],
+  [
+    "搜索{0}、编号或{1}",
+    "Search {0}, ID, or {1}"
+  ],
+  [
+    "上载 {0} 模板",
+    "Upload {0} template"
+  ],
+  [
+    "选择工单 {0} {1}",
+    "Select work order {0} {1}"
+  ],
+  [
+    "{0}步骤完成进度",
+    "{0} step progress"
+  ],
+  [
+    "认证未满足：{0}",
+    "Missing certifications: {0}"
+  ],
+  [
+    "更多 {0} 操作",
+    "More actions for {0}"
+  ],
+  [
+    "{0}的客户所有人",
+    "Customer owner of {0}"
+  ],
+  [
+    "服务认证 {0} {1}",
+    "Service certification {0} {1}"
+  ],
+  [
+    "{0} {1}，待分配。",
+    "{0} {1}, pending assignment."
+  ],
+  [
+    "【示例工时】{0}",
+    "[Sample time entry] {0}"
+  ],
+  [
+    "【未填写：{0}】",
+    "[Not provided: {0}]"
+  ],
+  [
+    "内部协作人：{0}",
+    "Internal collaborators: {0}"
+  ],
+  [
+    "外部协作人：{0}",
+    "External collaborators: {0}"
+  ],
+  [
+    "{0} 项交付客户",
+    "{0} items delivered to customer"
+  ],
+  [
+    "取消原因：{0}",
+    "Cancellation reason: {0}"
+  ],
+  [
+    "暂停原因：{0}",
+    "Reason for pausing: {0}"
+  ],
+  [
+    "选择{0}协作人",
+    "Select {0} collaborators"
+  ],
+  [
+    "搜索{0}协作人",
+    "Search {0} collaborators"
+  ],
+  [
+    "项目工时：{0}",
+    "Project time entries: {0}"
+  ],
+  [
+    "已失效（{0}）",
+    "Invalidated ({0})"
+  ],
+  [
+    "查看邮件：{0}",
+    "View email: {0}"
+  ],
+  [
+    "{0} 文件说明",
+    "{0} file description"
+  ],
+  [
+    "请选择{0}预览",
+    "Select a {0} preview"
+  ],
+  [
+    "额外额度：{0}",
+    "Additional allowance: {0}"
+  ],
+  [
+    "{0} 计价人天",
+    "{0} billable person-days"
+  ],
+  [
+    "删除附件 {0}",
+    "Delete attachment {0}"
+  ],
+  [
+    "查看项目 {0}",
+    "View project {0}"
+  ],
+  [
+    "{0} {1} 的工单",
+    "Work orders for {0} {1}"
+  ],
+  [
+    "执行工单 {0}",
+    "Execute work order {0}"
+  ],
+  [
+    "{0}，{1}，{2}张工单",
+    "{0}, {1}, {2} work orders"
+  ],
+  [
+    "搜索{0}或编号",
+    "Search {0} or ID"
+  ],
+  [
+    "允许格式：{0}",
+    "Allowed formats: {0}"
+  ],
+  [
+    "已绑定 v{0}",
+    "Bound to v{0}"
+  ],
+  [
+    "{0}（原记录）",
+    "{0} (previous record)"
+  ],
+  [
+    "{0}（不可用）",
+    "{0} (unavailable)"
+  ],
+  [
+    "查看服务 {0}",
+    "View service {0}"
+  ],
+  [
+    "{0} 余额人天",
+    "{0} remaining person-days"
+  ],
+  [
+    "服务资产 {0}",
+    "Service asset {0}"
+  ],
+  [
+    "业务对象 {0}",
+    "Business object {0}"
+  ],
+  [
+    "合作伙伴 {0}",
+    "Partner {0}"
+  ],
+  [
+    "内部用户 {0}",
+    "Internal user {0}"
+  ],
+  [
+    "模板「{0}」：{1}",
+    "Template “{0}”: {1}"
+  ],
+  [
+    "文件说明：{0}",
+    "File description: {0}"
+  ],
+  [
+    "差额权益 {0}",
+    "Entitlement shortfall {0}"
+  ],
+  [
+    "{0}（申请人）",
+    "{0} (requester)"
+  ],
+  [
+    "的「{0}」环节",
+    "at the “{0}” stage"
+  ],
+  [
+    "{0} · 请求{1}",
+    "{0} · Request {1}"
+  ],
+  [
+    "申请项 {0}：",
+    "Request item {0}:"
+  ],
+  [
+    "{0}须为单行。",
+    "{0} must be a single line."
+  ],
+  [
+    "申请字段 {0}",
+    "Request field {0}"
+  ],
+  [
+    "{0} 项{1} · {2}",
+    "{0} {1} items · {2}"
+  ],
+  [
+    "{0}内容无效。",
+    "{0} content is invalid."
+  ],
+  [
+    "{0}类型无效。",
+    "{0} type is invalid."
+  ],
+  [
+    "{0}内容过长。",
+    "{0} content is too long."
+  ],
+  [
+    "{0}选项无效。",
+    "Invalid option for {0}."
+  ],
+  [
+    "{0}日期无效。",
+    "Invalid date for {0}."
+  ],
+  [
+    "{0}须为{1}整数。",
+    "{0} must be a {1} integer."
+  ],
+  [
+    "选择服务{0}",
+    "Select service {0}"
+  ],
+  [
+    "查看{0}详情",
+    "View {0} details"
+  ],
+  [
+    "{0}统计说明",
+    "About {0}"
+  ],
+  [
+    "查看{0}：{1}项",
+    "View {0}: {1} items"
+  ],
+  [
+    "{0} 来源 {1}",
+    "{0} source: {1}"
+  ],
+  [
+    "搜索预览{0}",
+    "Search preview {0}"
+  ],
+  [
+    "选择预览{0}",
+    "Select preview {0}"
+  ],
+  [
+    "{0}阅读预览",
+    "{0} reading preview"
+  ],
+  [
+    "{0}额度审批",
+    "{0} allowance approval"
+  ],
+  [
+    "{0}人天资产",
+    "{0} person-day assets"
+  ],
+  [
+    "项目 {0}：{1}",
+    "Project {0}: {1}"
+  ],
+  [
+    "{0} 个工单",
+    "{0} work orders"
+  ],
+  [
+    "{0} 个项目",
+    "{0} projects"
+  ],
+  [
+    "批量下载{0}",
+    "Download all {0}"
+  ],
+  [
+    "{0}补充人天",
+    "{0} additional person-days"
+  ],
+  [
+    "请补充：{0}",
+    "Please complete: {0}"
+  ],
+  [
+    "修改{0}配置",
+    "Edit {0} configuration"
+  ],
+  [
+    "{0} {1} 配置",
+    "{0} {1} configuration"
+  ],
+  [
+    "联系人 {0}",
+    "Contact {0}"
+  ],
+  [
+    "{0}的汇报人",
+    "Manager of {0}"
+  ],
+  [
+    "节点 {0}：",
+    "Node {0}:"
+  ],
+  [
+    "【示例】{0}",
+    "[Sample] {0}"
+  ],
+  [
+    "{0}服务分配",
+    "{0} service assignment"
+  ],
+  [
+    "{0}生产集群",
+    "{0} production cluster"
+  ],
+  [
+    "{0}必须上传",
+    "{0} must be uploaded"
+  ],
+  [
+    "请填写{0}。",
+    "Enter {0}."
+  ],
+  [
+    "额度特批{0}",
+    "Allowance exception {0}"
+  ],
+  [
+    "{0} {1} 人天",
+    "{0} {1} person-days"
+  ],
+  [
+    "服务项 {0}",
+    "Service item {0}"
+  ],
+  [
+    "{0}月{1}日 周{2}",
+    "{0}/{1} {2}"
+  ],
+  [
+    "{0}：请补充{1}",
+    "{0}: Complete {1}"
+  ],
+  [
+    "{0} 人天",
+    "{0} person-days"
+  ],
+  [
+    "待填写{0}",
+    "Awaiting {0}"
+  ],
+  [
+    "下载 {0}",
+    "Download {0}"
+  ],
+  [
+    "{0} 小时",
+    "{0} hours"
+  ],
+  [
+    "{0}已移至{1}",
+    "{0} moved to {1}"
+  ],
+  [
+    "移除 {0}",
+    "Remove {0}"
+  ],
+  [
+    "项目：{0}",
+    "Project: {0}"
+  ],
+  [
+    "未添加{0}",
+    "No {0} added"
+  ],
+  [
+    "{0}的老师",
+    "{0} team"
+  ],
+  [
+    "选择 {0}",
+    "Select {0}"
+  ],
+  [
+    "{0} 节点",
+    "{0} nodes"
+  ],
+  [
+    "按{0}计价",
+    "Billed by {0}"
+  ],
+  [
+    "删除{0} {1}",
+    "Delete {0} {1}"
+  ],
+  [
+    "{0} 至 {1}",
+    "{0} to {1}"
+  ],
+  [
+    "查看 {0}",
+    "View {0}"
+  ],
+  [
+    "客户 {0}",
+    "Customer {0}"
+  ],
+  [
+    "{0}：上传{1}",
+    "{0}: Upload {1}"
+  ],
+  [
+    "{0}协作人",
+    "{0} collaborators"
+  ],
+  [
+    "文档 {0}",
+    "Document {0}"
+  ],
+  [
+    "文件 {0}",
+    "File {0}"
+  ],
+  [
+    "{0}列表",
+    "{0} list"
+  ],
+  [
+    "{0} 份",
+    "{0} units"
+  ],
+  [
+    "{0} 人",
+    "{0} people"
+  ],
+  [
+    "上一{0}",
+    "Previous {0}"
+  ],
+  [
+    "下一{0}",
+    "Next {0}"
+  ],
+  [
+    "查看{0}",
+    "View {0}"
+  ],
+  [
+    "填写{0}",
+    "Enter {0}"
+  ],
+  [
+    "{0}{1}表单",
+    "{0}{1} form"
+  ],
+  [
+    "移除{0}",
+    "Remove {0}"
+  ],
+  [
+    "返回{0}",
+    "Back to {0}"
+  ],
+  [
+    "{0}详情",
+    "{0} details"
+  ],
+  [
+    "停用{0}",
+    "Disable {0}"
+  ],
+  [
+    "上传{0}",
+    "Upload {0}"
+  ],
+  [
+    "新建{0}",
+    "New {0}"
+  ],
+  [
+    "{0}：{1}",
+    "{0}: {1}"
+  ]
+]

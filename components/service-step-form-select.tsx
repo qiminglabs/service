@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -22,6 +24,7 @@ export function ServiceStepFormSelect({
   editable: boolean;
   onChange: (patch: Partial<ServiceFlowStep>) => void;
 }) {
+  const { localize } = useI18n();
   const [forms, setForms] = useState<ExecutionForm[]>();
   const [error, setError] = useState(''),
     [preview, setPreview] = useState(false);
@@ -47,9 +50,9 @@ export function ServiceStepFormSelect({
   return (
     <div className="service-step-deliverables">
       <label className="approval-field">
-        <span>服务步骤表单 <RequiredMark /></span>
+        <span>{localize("服务步骤表单")}<RequiredMark /></span>
         <NativeSelect
-          aria-label="选择服务步骤表单"
+          aria-label={localize("选择服务步骤表单")}
           disabled={!editable || !forms}
           value={forms?.some((form) => form.id === id) ? id : ''}
           onChange={(event) => {
@@ -63,40 +66,37 @@ export function ServiceStepFormSelect({
           }}
         >
           <option value="" disabled>
-            {forms ? '请选择服务步骤表单' : '正在读取表单…'}
+            {localize(forms ? '请选择服务步骤表单' : '正在读取表单…')}
           </option>
-          {forms?.map((form) => (
+          {localize(forms?.map((form) => (
             <option key={form.id} value={form.id}>
-              {form.name}
+              {localize(form.name)}
             </option>
-          ))}
+          )))}
         </NativeSelect>
       </label>
-      {error && (
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {selected ? (
+      ))}
+      {localize(selected ? (
         <>
           <p className="sr-help">
-            {selected.name} · {selected.layout.order.length} 个字段
-          </p>
+            {localize(selected.name)} · {localize(selected.layout.order.length)} {localize(" 个字段")}</p>
           <Button variant="outline" onClick={() => setPreview(true)}>
-            预览表单
-          </Button>
+            {localize("预览表单")}</Button>
         </>
       ) : (
         <p className="sr-help">
-          请先在“服务执行流程 → 服务步骤表单”选项卡创建字段和布局，再选择表单。
-        </p>
-      )}
-      {selected && preview && (
+          {localize("请先在“服务执行流程 → 服务步骤表单”选项卡创建字段和布局，再选择表单。")}</p>
+      ))}
+      {localize(selected && preview && (
         <ExecutionFormPreview
           form={selected}
           onClose={() => setPreview(false)}
         />
-      )}
+      ))}
     </div>
   );
 }

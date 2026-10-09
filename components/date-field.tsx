@@ -1,8 +1,10 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useId, useState } from 'react';
 import { format, isValid, parseISO } from 'date-fns';
-import { zhCN } from 'date-fns/locale';
+import { zhCN, enUS } from 'date-fns/locale';
 import { CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -36,6 +38,7 @@ export function DateField({
   uncertain?: boolean;
   onUncertain?: () => void;
 }) {
+  const { localize, locale } = useI18n();
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const [open, setOpen] = useState(false);
@@ -51,17 +54,17 @@ export function DateField({
     <div className="sr-service-date-field">
       <label htmlFor={fieldId} className={hideLabel ? 'sr-only' : undefined}>
         <span>
-          {label}
-          {required ? (
+          {localize(label)}
+          {localize(required ? (
             <>
-              {' '}
+              {localize(' ')}
               <em>*</em>
             </>
-          ) : null}
+          ) : null)}
         </span>
       </label>
-      {readonly ? (
-        <Input id={fieldId} value={uncertain ? '暂不确定' : value || '未填写'} readOnly />
+      {localize(readonly ? (
+        <Input id={fieldId} value={localize(uncertain ? '暂不确定' : value || '未填写')} readOnly />
       ) : (
         <Popover open={open && !disabled} onOpenChange={setOpen}>
           <PopoverTrigger
@@ -71,18 +74,18 @@ export function DateField({
             className="sr-service-date-trigger"
             data-empty={(!value && !uncertain) || undefined}
           >
-            <span>{uncertain ? '暂不确定' : value || '请选择日期'}</span>
+            <span>{localize(uncertain ? '暂不确定' : value || '请选择日期')}</span>
             <CalendarDays size={16} aria-hidden="true" />
           </PopoverTrigger>
           <PopoverContent
             align="start"
             className="sr-service-date-popover"
-            aria-label={'选择' + label}
+            aria-label={localize('选择' + label)}
           >
             <Calendar
               mode="single"
               required
-              locale={zhCN}
+              locale={locale === 'en' ? enUS : zhCN}
               selected={selected}
               defaultMonth={selected}
               onSelect={choose}
@@ -93,29 +96,26 @@ export function DateField({
                 variant="ghost"
                 onClick={() => choose(new Date())}
               >
-                今天
-              </Button>
+                {localize("今天")}</Button>
               <Button
                 type="button"
                 variant="ghost"
                 disabled={!value && !uncertain}
                 onClick={() => choose()}
               >
-                清空
-              </Button>
-              {onUncertain && (
+                {localize("清空")}</Button>
+              {localize(onUncertain && (
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={() => { onUncertain(); setOpen(false); }}
                 >
-                  暂不确定
-                </Button>
-              )}
+                  {localize("暂不确定")}</Button>
+              ))}
             </div>
           </PopoverContent>
         </Popover>
-      )}
+      ))}
     </div>
   );
 }

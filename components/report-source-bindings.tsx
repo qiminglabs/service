@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { NativeSelect } from '@/components/ui/native-select';
 import {
   reportFields,
@@ -20,13 +22,14 @@ export function ReportSourceBindings({
   onChange: (value: ReportBindings) => void;
   disabled?: boolean;
 }) {
+  const { localize } = useI18n();
   const fields = reportFields(template.body).filter((f) => f.scope === 'step'),
     options = stepFieldOptions(steps);
   if (!fields.length) return null;
   return (
     <div className="report-source-bindings">
-      <h4>步骤字段来源</h4>
-      {fields.map((f, i) => {
+      <h4>{localize("步骤字段来源")}</h4>
+      {localize(fields.map((f, i) => {
         const b = bindings[f.id],
           valid = options.some(
             (o) => o.stepId === b?.stepId && o.fieldId === b?.fieldId,
@@ -34,13 +37,13 @@ export function ReportSourceBindings({
         return (
           <label className="approval-field" key={f.id}>
             <span>
-              {f.label}
-              {fields.filter((x) => x.label === f.label).length > 1
+              {localize(f.label)}
+              {localize(fields.filter((x) => x.label === f.label).length > 1
                 ? ` · 引用 ${i + 1}`
-                : ''}
+                : '')}
             </span>
             <NativeSelect
-              aria-label={`${f.label} 来源 ${i + 1}`}
+              aria-label={localize(`${f.label} 来源 ${i + 1}`)}
               disabled={disabled}
               value={valid ? JSON.stringify([b.stepId, b.fieldId]) : ''}
               onChange={(e) => {
@@ -53,19 +56,19 @@ export function ReportSourceBindings({
                 onChange(next);
               }}
             >
-              <option value="">请选择来源步骤和字段</option>
-              {options.map((o) => (
+              <option value="">{localize("请选择来源步骤和字段")}</option>
+              {localize(options.map((o) => (
                 <option
                   key={JSON.stringify([o.stepId, o.fieldId])}
                   value={JSON.stringify([o.stepId, o.fieldId])}
                 >
-                  {o.label}
+                  {localize(o.label)}
                 </option>
-              ))}
+              )))}
             </NativeSelect>
           </label>
         );
-      })}
+      }))}
     </div>
   );
 }

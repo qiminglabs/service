@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -58,6 +60,7 @@ export function ReportTemplateSettings({
   onTemplatesChange?: (templates: ReportTemplate[]) => void;
   onViewStep?: (stepId: string) => void;
 }) {
+  const { localize } = useI18n();
   const [data, setData] =
     useState<Awaited<ReturnType<typeof readReportTemplateData>>>();
   const [draft, setDraft] = useState<ReportTemplate>();
@@ -149,7 +152,7 @@ export function ReportTemplateSettings({
   }
   function close() {
     if (busy) return;
-    if (dirty && !window.confirm('模板尚未保存，确定放弃修改？')) return;
+    if (dirty && !window.confirm(localize('模板尚未保存，确定放弃修改？'))) return;
     setDraft(undefined);
     setError('');
     void readReportTemplateData()
@@ -227,25 +230,25 @@ export function ReportTemplateSettings({
   return (
     <section
       className="report-template-settings execution-form-settings"
-      aria-label={templateKind}
+      aria-label={localize(templateKind)}
     >
       <div className="submission-rules-toolbar">
         <Input
           className="execution-form-search"
-          aria-label={`搜索${templateKind}`}
-          placeholder="搜索模板名称"
+          aria-label={localize(`搜索${templateKind}`)}
+          placeholder={localize("搜索模板名称")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <div className="approval-toolbar-actions">
-          {flow &&
+          {localize(flow &&
             data?.library.templates.some(
               (t) =>
                 t.scope === 'step' ||
                 reportFields(t.body).some((f) => f.scope !== 'project'),
             ) && (
               <NativeSelect
-                aria-label="从已有模板创建"
+                aria-label={localize("从已有模板创建")}
                 value=""
                 disabled={!editable}
                 onChange={(event) => {
@@ -261,8 +264,8 @@ export function ReportTemplateSettings({
                     });
                 }}
               >
-                <option value="">从已有模板创建</option>
-                {data.library.templates
+                <option value="">{localize("从已有模板创建")}</option>
+                {localize(data.library.templates
                   .filter(
                     (t) =>
                       t.scope === 'step' ||
@@ -270,11 +273,11 @@ export function ReportTemplateSettings({
                   )
                   .map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name}
+                      {localize(t.name)}
                     </option>
-                  ))}
+                  )))}
               </NativeSelect>
-            )}
+            ))}
           <Button
             disabled={!editable || !data}
             onClick={() =>
@@ -290,46 +293,45 @@ export function ReportTemplateSettings({
             }
           >
             <Plus size={16} />
-            新建模板
-          </Button>
+            {localize("新建模板")}</Button>
         </div>
       </div>
-      {notice && <output className="sr-notice">{notice}</output>}
-      {!draft && error && (
+      {localize(notice && <output className="sr-notice">{localize(notice)}</output>)}
+      {localize(!draft && error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
+      ))}
       <div className="table-scroll">
         <table className="reference-table app-list-table report-template-table">
           <thead>
             <tr>
-              <th>模板名称</th>
-              <th>适用范围</th>
-              <th>状态</th>
-              <th>{flow ? '引用步骤' : '引用字段'}</th>
-              <th>版本</th>
-              <th>修改时间</th>
-              <th data-list-actions>操作</th>
+              <th>{localize("模板名称")}</th>
+              <th>{localize("适用范围")}</th>
+              <th>{localize("状态")}</th>
+              <th>{localize(flow ? '引用步骤' : '引用字段')}</th>
+              <th>{localize("版本")}</th>
+              <th>{localize("修改时间")}</th>
+              <th data-list-actions>{localize("操作")}</th>
             </tr>
           </thead>
           <tbody>
-            {matches.map((t) => (
+            {localize(matches.map((t) => (
               <tr key={t.id}>
-                <td>{t.name}</td>
-                <td>{t.scope === 'project' ? '项目报告' : '工单文档'}</td>
+                <td>{localize(t.name)}</td>
+                <td>{localize(t.scope === 'project' ? '项目报告' : '工单文档')}</td>
                 <td>
                   <span
                     className="sr-badge"
                     data-tone={t.enabled ? 'green' : 'muted'}
                   >
-                    {t.enabled ? '启用' : '停用'}
+                    {localize(t.enabled ? '启用' : '停用')}
                   </span>
                 </td>
                 <td>
-                  {flow ? (
+                  {localize(flow ? (
                     <div className="report-template-step-links">
-                      {reportTemplateSteps(flow, t.id).length ? (
+                      {localize(reportTemplateSteps(flow, t.id).length ? (
                         reportTemplateSteps(flow, t.id).map((step) =>
                           onViewStep ? (
                             <button
@@ -337,27 +339,27 @@ export function ReportTemplateSettings({
                               key={step.id}
                               onClick={() => onViewStep(step.id)}
                             >
-                              {step.name}
+                              {localize(step.name)}
                             </button>
                           ) : (
-                            <span key={step.id}>{step.name}</span>
+                            <span key={step.id}>{localize(step.name)}</span>
                           ),
                         )
                       ) : (
-                        <span className="sr-help">未被引用</span>
-                      )}
+                        <span className="sr-help">{localize("未被引用")}</span>
+                      ))}
                     </div>
                   ) : (
                     reportFields(t.body).length
-                  )}
+                  ))}
                 </td>
-                <td>v{t.version}</td>
+                <td>v{localize(t.version)}</td>
                 <td>
-                  {t.updatedAt
+                  {localize(t.updatedAt
                     ? new Date(t.updatedAt).toLocaleString('zh-CN', {
                         hour12: false,
                       })
-                    : '—'}
+                    : '—')}
                 </td>
                 <td>
                   <Button
@@ -365,7 +367,7 @@ export function ReportTemplateSettings({
                     disabled={busy}
                     onClick={() => open(t)}
                   >
-                    {editable ? '编辑模板' : '查看模板'}
+                    {localize(editable ? '编辑模板' : '查看模板')}
                   </Button>
                   <Button
                     variant="ghost"
@@ -379,35 +381,34 @@ export function ReportTemplateSettings({
                       })
                     }
                   >
-                    复制
-                  </Button>
-                  {editable && (
+                    {localize("复制")}</Button>
+                  {localize(editable && (
                     <Button
                       variant="ghost"
                       disabled={busy}
                       onClick={() => toggleTemplate(t)}
                     >
-                      {t.enabled ? '停用' : '启用'}
+                      {localize(t.enabled ? '停用' : '启用')}
                     </Button>
-                  )}
+                  ))}
                 </td>
               </tr>
-            ))}
-            {(!data || !matches.length) && (
+            )))}
+            {localize((!data || !matches.length) && (
               <tr>
                 <td colSpan={7} className="routing-empty">
-                  {data
+                  {localize(data
                     ? '暂无匹配的模板'
                     : error
                       ? '模板读取失败'
-                      : '正在读取模板…'}
+                      : '正在读取模板…')}
                 </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>
-      {blockedTemplate && flow && (
+      {localize(blockedTemplate && flow && (
         <Dialog
           open
           onOpenChange={(open) => {
@@ -416,14 +417,13 @@ export function ReportTemplateSettings({
         >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>模板正在使用</DialogTitle>
+              <DialogTitle>{localize("模板正在使用")}</DialogTitle>
               <DialogDescription>
-                模板「{blockedTemplate.name}
-                」被以下步骤引用，请先替换或解除绑定后再停用。
-              </DialogDescription>
+                {localize("模板「")}{localize(blockedTemplate.name)}
+                {localize("」被以下步骤引用，请先替换或解除绑定后再停用。")}</DialogDescription>
             </DialogHeader>
             <div className="report-template-step-links">
-              {reportTemplateSteps(flow, blockedTemplate.id).map((step) =>
+              {localize(reportTemplateSteps(flow, blockedTemplate.id).map((step) =>
                 onViewStep ? (
                   <button
                     type="button"
@@ -433,25 +433,24 @@ export function ReportTemplateSettings({
                       onViewStep(step.id);
                     }}
                   >
-                    {step.name}
+                    {localize(step.name)}
                   </button>
                 ) : (
-                  <span key={step.id}>{step.name}</span>
+                  <span key={step.id}>{localize(step.name)}</span>
                 ),
-              )}
+              ))}
             </div>
             <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => setBlockedTemplate(undefined)}
               >
-                关闭
-              </Button>
+                {localize("关闭")}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
-      {draft && (
+      ))}
+      {localize(draft && (
         <Dialog
           open
           onOpenChange={(value) => {
@@ -463,25 +462,24 @@ export function ReportTemplateSettings({
             showCloseButton={false}
           >
             <DialogHeader>
-              <DialogTitle>{draft.name || `新建${templateKind}`} </DialogTitle>
+              <DialogTitle>{localize(draft.name || `新建${templateKind}`)} </DialogTitle>
             </DialogHeader>
             <div className="report-template-config">
-              {preview ? (
+              {localize(preview ? (
                 <div className="report-template-preview-scope">
-                  <span>适用范围</span>
-                  <strong>{flow ? flow.name : '通用项目报告'}</strong>
+                  <span>{localize("适用范围")}</span>
+                  <strong>{localize(flow ? flow.name : '通用项目报告')}</strong>
                 </div>
               ) : (
                 <label htmlFor="report-template-scope">
-                  适用范围
-                  <Input
+                  {localize("适用范围")}<Input
                     id="report-template-scope"
                     readOnly
                     value={flow ? flow.name : '通用项目报告'}
                   />
                 </label>
-              )}
-              {!preview && (
+              ))}
+              {localize(!preview && (
                 <Button
                   variant="outline"
                   onClick={() => {
@@ -489,21 +487,21 @@ export function ReportTemplateSettings({
                     setPreview(false);
                   }}
                 >
-                  {fieldSettings
+                  {localize(fieldSettings
                     ? '返回正文'
-                    : `引用字段（${reportFields(draft.body).length}）`}
+                    : `引用字段（${reportFields(draft.body).length}）`)}
                 </Button>
-              )}
+              ))}
               <Button
                 variant="outline"
                 disabled={fieldSettings}
                 onClick={() => setPreview((v) => !v)}
               >
-                {preview ? '返回编辑' : flow ? '预览工单' : '预览报告'}
+                {localize(preview ? '返回编辑' : flow ? '预览工单' : '预览报告')}
               </Button>
             </div>
             <div className="report-editor-host">
-              {fieldSettings ? (
+              {localize(fieldSettings ? (
                 <ReportFieldSettings
                   template={draft}
                   options={options}
@@ -518,7 +516,7 @@ export function ReportTemplateSettings({
                   customers={data?.customers ?? []}
                 />
               ) : (
-                <Suspense fallback={<p className="sr-help">正在打开编辑器…</p>}>
+                <Suspense fallback={<p className="sr-help">{localize("正在打开编辑器…")}</p>}>
                   <LocalDocumentEditor
                     key={draft.id}
                     value={{
@@ -541,26 +539,24 @@ export function ReportTemplateSettings({
                     onBack={close}
                   />
                 </Suspense>
-              )}
+              ))}
             </div>
-            {error && (
+            {localize(error && (
               <p className="sr-error" role="alert">
-                {error}
+                {localize(error)}
               </p>
-            )}
+            ))}
             <DialogFooter>
               <Button variant="outline" disabled={busy} onClick={close}>
-                关闭
-              </Button>
-              {editable && !preview && (
+                {localize("关闭")}</Button>
+              {localize(editable && !preview && (
                 <Button disabled={busy} onClick={() => void save(draft)}>
-                  保存模板
-                </Button>
-              )}
+                  {localize("保存模板")}</Button>
+              ))}
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
+      ))}
     </section>
   );
 }

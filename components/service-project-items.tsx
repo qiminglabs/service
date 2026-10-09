@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useContext, useRef, useState } from 'react';
 import { CircleAlert, FileText, Plus, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -80,6 +82,7 @@ function ProjectItemsPanel({
   onRemove: (id: string) => void;
   onCopy: (id: string) => void;
 }) {
+  const { localize } = useI18n();
   const fieldNames = Object.fromEntries(
     useContext(RequestFieldsContext).map((field) => [field.id, field.name]),
   );
@@ -89,25 +92,24 @@ function ProjectItemsPanel({
       <div className="sr-panel-heading">
         <div>
           <div className="sr-panel-title-with-visibility">
-            <h3>服务项</h3>
-            {showCustomerVisibility && <CustomerVisibleBadge />}
+            <h3>{localize("服务项")}</h3>
+            {localize(showCustomerVisibility && <CustomerVisibleBadge />)}
           </div>
         </div>
-        {!readonly && (
+        {localize(!readonly && (
           <Button variant="outline" disabled={busy || !canAdd} onClick={onAdd}>
             <Plus size={15} />
-            添加服务项
-          </Button>
-        )}
+            {localize("添加服务项")}</Button>
+        ))}
       </div>
-      {!record.items.length ? (
+      {localize(!record.items.length ? (
         <div className="sr-empty">
           <FileText size={30} />
-          <h3>还没有服务项</h3>
+          <h3>{localize("还没有服务项")}</h3>
         </div>
       ) : (
         <div className="sr-item-list">
-          {record.items.map((item, index) => {
+          {localize(record.items.map((item, index) => {
             const basicMissing = showCompleteness ? itemBasicIssues(item) : [];
             const summary = itemSummaryFields(item, fieldNames, objects);
             const inlineFields = summary.filter((field) => !field.address);
@@ -120,31 +122,30 @@ function ProjectItemsPanel({
               >
                 <div className="sr-item-row">
                   <span className="sr-item-number">
-                    {String(index + 1).padStart(2, '0')}
+                    {localize(String(index + 1).padStart(2, '0'))}
                   </span>
                   <div className="sr-item-copy">
                     <h4>
-                      {item.serviceName}
-                      {basicMissing.length > 0 && (
+                      {localize(item.serviceName)}
+                      {localize(basicMissing.length > 0 && (
                         <span className="sr-badge" data-tone="amber">
-                          待完善
-                        </span>
-                      )}
+                          {localize("待完善")}</span>
+                      ))}
                     </h4>
-                    {(summary.length > 0 || item.description.trim()) && (
+                    {localize((summary.length > 0 || item.description.trim()) && (
                       <div className="sr-item-summary">
                         <div className="sr-item-summary-fields">
-                          {inlineFields.map((field) => (
+                          {localize(inlineFields.map((field) => (
                             <span className="sr-summary-field" key={field.key}>
                               <span className="sr-summary-label">
-                                {field.label}
+                                {localize(field.label)}
                               </span>
                               <span className="sr-summary-value">
-                                {field.value}
+                                {localize(field.value)}
                               </span>
                             </span>
-                          ))}
-                          {item.description.trim() && (
+                          )))}
+                          {localize(item.description.trim() && (
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger
@@ -152,7 +153,7 @@ function ProjectItemsPanel({
                                     <button
                                       type="button"
                                       className="sr-description-hint"
-                                      aria-label={`查看${fieldNames.description ?? '需求说明'}`}
+                                      aria-label={localize(`查看${fieldNames.description ?? '需求说明'}`)}
                                     >
                                       <CircleAlert size={16} />
                                     </button>
@@ -164,32 +165,32 @@ function ProjectItemsPanel({
                                 >
                                   <div>
                                     <strong className="sr-tooltip-heading">
-                                      {fieldNames.description ?? '需求说明'}
+                                      {localize(fieldNames.description ?? '需求说明')}
                                     </strong>
-                                    <div>{item.description}</div>
+                                    <div>{localize(item.description)}</div>
                                   </div>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
-                          )}
+                          ))}
                         </div>
-                        {addressFields.map((field) => (
+                        {localize(addressFields.map((field) => (
                           <div className="sr-summary-address" key={field.key}>
                             <span className="sr-summary-label">
-                              {field.label}
+                              {localize(field.label)}
                             </span>
                             <span className="sr-summary-value">
-                              {field.value}
+                              {localize(field.value)}
                             </span>
                           </div>
-                        ))}
+                        )))}
                       </div>
-                    )}
-                    {basicMissing.length > 0 && (
+                    ))}
+                    {localize(basicMissing.length > 0 && (
                       <p className="sr-missing">
-                        待补充：{basicMissing.join('、')}
+                        {localize("待补充：")}{localize(basicMissing.join('、'))}
                       </p>
-                    )}
+                    ))}
                   </div>
                   <div className="sr-item-actions">
                     <Button
@@ -197,9 +198,9 @@ function ProjectItemsPanel({
                       disabled={busy}
                       onClick={() => onEdit(item)}
                     >
-                      {readonly ? '查看详细信息' : '编辑详细信息'}
+                      {localize(readonly ? '查看详细信息' : '编辑详细信息')}
                     </Button>
-                    {!readonly && (
+                    {localize(!readonly && (
                       <div className="sr-item-secondary-actions">
                         <button
                           type="button"
@@ -207,25 +208,23 @@ function ProjectItemsPanel({
                           disabled={busy || !canAdd}
                           onClick={() => onCopy(item.id)}
                         >
-                          复制
-                        </button>
+                          {localize("复制")}</button>
                         <button
                           type="button"
                           className="sr-muted-button"
                           disabled={busy || !canRemove(item)}
                           onClick={() => onRemove(item.id)}
                         >
-                          移除
-                        </button>
+                          {localize("移除")}</button>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
               </article>
             );
-          })}
+          }))}
         </div>
-      )}
+      ))}
     </section>
   );
 }
@@ -255,6 +254,7 @@ export function ProjectItemBasicFields({
   busy: boolean;
   update: (patch: Partial<RequestItem>) => void;
 }) {
+  const { localize } = useI18n();
   const fieldReadonly = (target: MappingTarget) => readonly || lockedFields.includes(target);
   const fields = useContext(RequestFieldsContext);
   const methodField = fields.find((field) => field.id === 'method');
@@ -268,7 +268,7 @@ export function ProjectItemBasicFields({
   return (
     <div className="sr-basic-fields">
       <section className="sr-sheet-section">
-        <h3>服务需求</h3>
+        <h3>{localize("服务需求")}</h3>
         <fieldset
           disabled={readonly || busy}
           className="sr-form-grid sr-live-fields"
@@ -289,8 +289,8 @@ export function ProjectItemBasicFields({
               if (key === 'method')
                 return (
                   <label>
-                    {methodField?.name ?? '服务方式'} <em>*</em>
-                    {methodField && methodField.type !== 'single' ? (
+                    {localize(methodField?.name ?? '服务方式')} <em>*</em>
+                    {localize(methodField && methodField.type !== 'single' ? (
                       <RequestFieldControl
                         disabled={fieldReadonly('method') || busy}
                         field={methodField}
@@ -318,37 +318,36 @@ export function ProjectItemBasicFields({
                           })
                         }
                       >
-                        <option value="">请选择</option>
-                        {value.method &&
+                        <option value="">{localize("请选择")}</option>
+                        {localize(value.method &&
                           !methodOptions.includes(value.method) && (
                             <option disabled value={value.method}>
-                              {value.method}（已停用）
-                            </option>
-                          )}
-                        {methodOptions.map((m) => (
-                          <option key={m}>{m}</option>
-                        ))}
+                              {localize(value.method)}{localize("（已停用）")}</option>
+                          ))}
+                        {localize(methodOptions.map((m) => (
+                          <option value={m} key={m}>{localize(m)}</option>
+                        )))}
                       </select>
-                    )}
+                    ))}
                   </label>
                 );
               if (key === 'description')
                 return (
                   <label>
-                    {fields.find((field) => field.id === 'description')?.name ??
-                      '需求说明'}{' '}
-                    {value.config.basicFields?.description?.required !==
+                    {localize(fields.find((field) => field.id === 'description')?.name ??
+                      '需求说明')}{localize(' ')}
+                    {localize(value.config.basicFields?.description?.required !==
                     false ? (
                       <em>*</em>
                     ) : (
-                      <small>选填</small>
-                    )}
+                      <small>{localize("选填")}</small>
+                    ))}
                     <textarea
                       rows={4}
                       readOnly={fieldReadonly('description')}
                       value={value.description}
                       onChange={(e) => update({ description: e.target.value })}
-                      placeholder={descriptionPlaceholder}
+                      placeholder={localize(descriptionPlaceholder)}
                     />
                   </label>
                 );
@@ -356,26 +355,24 @@ export function ProjectItemBasicFields({
                 return (
                   <section className="sr-sheet-section">
                     <h3>
-                      {fields.find((field) => field.id === 'businessObjects')
-                        ?.name ?? '业务对象'}{' '}
+                      {localize(fields.find((field) => field.id === 'businessObjects')
+                        ?.name ?? '业务对象')}{localize(' ')}
                       <span>
-                        {value.config.basicFields?.businessObjects?.required
+                        {localize(value.config.basicFields?.businessObjects?.required
                           ? '必填'
-                          : '选填'}{' '}
-                        · 可多选
-                      </span>
+                          : '选填')}{localize(' ')}
+                        {localize("· 可多选")}</span>
                     </h3>
-                    {value.config.basicFields?.businessObjects?.required && (
+                    {localize(value.config.basicFields?.businessObjects?.required && (
                       <p className="sr-help">
-                        请至少关联一个当前客户的业务对象。
-                      </p>
-                    )}
+                        {localize("请至少关联一个当前客户的业务对象。")}</p>
+                    ))}
                     <fieldset
                       disabled={fieldReadonly('businessObjectIds') || busy}
                       className="sr-object-options"
                     >
-                      <ul aria-label="可关联的业务对象">
-                        {(fieldReadonly('businessObjectIds')
+                      <ul aria-label={localize("可关联的业务对象")}>
+                        {localize((fieldReadonly('businessObjectIds')
                           ? savedItemBusinessObjects(value)
                           : objects
                               .filter(
@@ -422,60 +419,57 @@ export function ProjectItemBasicFields({
                                 />
                                 <span className="sr-object-copy">
                                   <span className="sr-object-name">
-                                    {o.name}
+                                    {localize(o.name)}
                                     <small>
                                       （
-                                      {recorded
+                                      {localize(recorded
                                         ? `${o.nodeCount} 节点`
-                                        : '保存时数量未记录'}
+                                        : '保存时数量未记录')}
                                       ）
                                     </small>
                                   </span>
-                                  {entitlement && (
+                                  {localize(entitlement && (
                                     <span
                                       className="sr-object-entitlement"
                                       data-insufficient={
                                         entitlement.insufficient || undefined
                                       }
                                     >
-                                      <span title="可用权益 / 集群节点数">
-                                        {entitlement.name}（
-                                        {entitlement.available ?? '未维护'}/
-                                        {entitlement.required}）
+                                      <span title={localize("可用权益 / 集群节点数")}>
+                                        {localize(entitlement.name)}（
+                                        {localize(entitlement.available ?? '未维护')}/
+                                        {localize(entitlement.required)}）
                                       </span>
-                                      {entitlement.insufficient && (
+                                      {localize(entitlement.insufficient && (
                                         <span className="sr-object-entitlement-warning">
-                                          权益不足，可继续申请
-                                        </span>
-                                      )}
-                                      {entitlement.available === undefined && (
+                                          {localize("权益不足，可继续申请")}</span>
+                                      ))}
+                                      {localize(entitlement.available === undefined && (
                                         <span className="sr-help">
-                                          权益数量未维护，可继续申请
-                                        </span>
-                                      )}
+                                          {localize("权益数量未维护，可继续申请")}</span>
+                                      ))}
                                     </span>
-                                  )}
+                                  ))}
                                   <span className="sr-object-sn">
-                                    序列号：{o.sn?.trim() || '未填写'}
+                                    {localize("序列号：")}{localize(o.sn?.trim() || '未填写')}
                                   </span>
-                                  {!fieldReadonly('businessObjectIds') && o.status !== '启用' && (
+                                  {localize(!fieldReadonly('businessObjectIds') && o.status !== '启用' && (
                                     <span className="sr-missing">
-                                      已停用，请取消关联
-                                    </span>
-                                  )}
+                                      {localize("已停用，请取消关联")}</span>
+                                  ))}
                                 </span>
                               </label>
                             </li>
                           );
-                        })}
+                        }))}
                       </ul>
-                      {!objects.length && (
+                      {localize(!objects.length && (
                         <p className="sr-help">
-                          {customerId
+                          {localize(customerId
                             ? '该客户暂时没有可关联的业务对象。'
-                            : '请先在项目中选择客户。'}
+                            : '请先在项目中选择客户。')}
                         </p>
-                      )}
+                      ))}
                     </fieldset>
                   </section>
                 );
@@ -497,19 +491,19 @@ export function ProjectItemBasicFields({
               return (
                 <div className="request-field-input" key={key}>
                   <span>
-                    {label}{' '}
-                    {!requestFieldIsRequired(
+                    {localize(label)}{localize(' ')}
+                    {localize(!requestFieldIsRequired(
                       value.config,
                       key,
                       value.method,
                       value.values,
                     ) ? (
-                      <small>选填</small>
+                      <small>{localize("选填")}</small>
                     ) : (
                       <em>*</em>
-                    )}
+                    ))}
                   </span>
-                  {key !== 'nodes' && field ? (
+                  {localize(key !== 'nodes' && field ? (
                     <RequestFieldControl
                       disabled={fieldReadonly('values') || busy}
                       field={field}
@@ -531,14 +525,14 @@ export function ProjectItemBasicFields({
                           values: { ...value.values, [key]: e.target.value },
                         })
                       }
-                      aria-label={label}
+                      aria-label={localize(label)}
                       placeholder={
-                        key === 'nodes'
+                        localize(key === 'nodes'
                           ? '填写本项涉及的节点数'
-                          : `填写${label}`
+                          : `填写${label}`)
                       }
                     />
-                  )}
+                  ))}
                 </div>
               );
             }}
@@ -572,6 +566,7 @@ export function ServiceProjectItems({
   busy: boolean;
   save: (change: ProjectItemChange) => Promise<string | null>;
 }) {
+  const { localize } = useI18n();
   const readonly = requestedReadonly || actor.role === '客户';
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<RequestItem | null>(null);
@@ -591,7 +586,7 @@ export function ServiceProjectItems({
     serviceAvailableForRequest(service, audience),
   );
   const matches = available.filter((service) =>
-    `${service.id} ${service.name}`
+    `${service.id} ${service.name} ${localize(service.name)}`
       .toLowerCase()
       .includes(query.trim().toLowerCase()),
   );
@@ -678,14 +673,14 @@ export function ServiceProjectItems({
           setRemoveId(id);
         }}
       />
-      {!customerId && !readonly && (
-        <p className="sr-help">请先选择客户，再添加服务项。</p>
-      )}
-      {error && !open && !removeId && (
+      {localize(!customerId && !readonly && (
+        <p className="sr-help">{localize("请先选择客户，再添加服务项。")}</p>
+      ))}
+      {localize(error && !open && !removeId && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
+      ))}
       <Dialog
         open={open}
         onOpenChange={(next) => {
@@ -705,37 +700,37 @@ export function ServiceProjectItems({
         >
           <DialogHeader>
             <DialogTitle>
-              {readonly
+              {localize(readonly
                 ? '服务项详细信息'
                 : pending && items.some((item) => item.id === pending.id)
                   ? '编辑服务项'
-                  : '添加服务项'}
+                  : '添加服务项')}
             </DialogTitle>
-            {!readonly && <DialogDescription>
-              {pending ? '填写并保存服务项信息。' : '选择本项目的服务目录。'}
-            </DialogDescription>}
+            {localize(!readonly && <DialogDescription>
+              {localize(pending ? '填写并保存服务项信息。' : '选择本项目的服务目录。')}
+            </DialogDescription>)}
           </DialogHeader>
           <div className="sr-item-dialog-body">
-            {pending ? (
+            {localize(pending ? (
               <>
                 <div className="sr-selected-service">
                   <div>
                     <div className="sr-selected-service-heading">
-                      <strong>{pending.serviceName}</strong>
+                      <strong>{localize(pending.serviceName)}</strong>
                       <p>
-                        {pending.serviceId} · 版本{' '}
-                        {selectedService
+                        {localize(pending.serviceId)} {localize(" · 版本")}{localize(' ')}
+                        {localize(selectedService
                           ? `v${selectedService.version ?? 1}`
-                          : '—'}
+                          : '—')}
                       </p>
                     </div>
-                    {selectedService?.description?.trim() && (
+                    {localize(selectedService?.description?.trim() && (
                       <p className="sr-selected-service-content">
-                        服务内容：{selectedService.description}
+                        {localize("服务内容：")}{localize(selectedService.description)}
                       </p>
-                    )}
+                    ))}
                   </div>
-                  {!readonly &&
+                  {localize(!readonly &&
                     !items.some((item) => item.id === pending.id) && (
                       <Button
                         variant="ghost"
@@ -745,9 +740,8 @@ export function ServiceProjectItems({
                           setError('');
                         }}
                       >
-                        重新选择目录
-                      </Button>
-                    )}
+                        {localize("重新选择目录")}</Button>
+                    ))}
                 </div>
                 <ProjectItemBasicFields
                   lockedFields={projectItemReadonlyTargets(project, pending.id)}
@@ -770,47 +764,46 @@ export function ServiceProjectItems({
             ) : (
               <>
                 <Input
-                  aria-label="搜索可添加服务"
+                  aria-label={localize("搜索可添加服务")}
                   value={query}
                   disabled={disabled}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="搜索服务名称或编码"
+                  placeholder={localize("搜索服务名称或编码")}
                 />
                 <div className="sr-catalog-options">
-                  {matches.map((service) => (
+                  {localize(matches.map((service) => (
                     <div key={service.id}>
                       <FileText size={20} />
                       <div>
-                        <strong>{service.name}</strong>
+                        <strong>{localize(service.name)}</strong>
                         <p>
-                          {service.id} · {service.category}
+                          {localize(service.id)} · {localize(service.category)}
                         </p>
-                        {service.description?.trim() && (
+                        {localize(service.description?.trim() && (
                           <p className="sr-catalog-service-description">
-                            {service.description}
+                            {localize(service.description)}
                           </p>
-                        )}
+                        ))}
                       </div>
                       <Button
                         variant="outline"
                         disabled={disabled}
                         onClick={() => void select(service)}
                       >
-                        选择
-                      </Button>
+                        {localize("选择")}</Button>
                     </div>
+                  )))}
+                  {localize(!matches.length && (
+                    <p className="sr-empty">{localize("没有匹配的已启用服务。")}</p>
                   ))}
-                  {!matches.length && (
-                    <p className="sr-empty">没有匹配的已启用服务。</p>
-                  )}
                 </div>
               </>
-            )}
-            {error && (
+            ))}
+            {localize(error && (
               <p className="sr-error" role="alert">
-                {error}
+                {localize(error)}
               </p>
-            )}
+            ))}
           </div>
           <DialogFooter>
             <Button
@@ -822,17 +815,17 @@ export function ServiceProjectItems({
                 setError('');
               }}
             >
-              {readonly ? '关闭' : '取消'}
+              {localize(readonly ? '关闭' : '取消')}
             </Button>
-            {pending && !readonly && (
+            {localize(pending && !readonly && (
               <Button
                 disabled={disabled}
                 onClick={() => void persist({ type: 'save', item: pending })}
               >
                 <Save size={15} />
-                {disabled ? '正在保存…' : '保存服务项'}
+                {localize(disabled ? '正在保存…' : '保存服务项')}
               </Button>
-            )}
+            ))}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -847,16 +840,15 @@ export function ServiceProjectItems({
       >
         <DialogContent className="sr-dialog">
           <DialogHeader>
-            <DialogTitle>移除此服务项？</DialogTitle>
+            <DialogTitle>{localize("移除此服务项？")}</DialogTitle>
             <DialogDescription>
-              该服务项将从项目中移除，其他服务项将保留。
-            </DialogDescription>
+              {localize("该服务项将从项目中移除，其他服务项将保留。")}</DialogDescription>
           </DialogHeader>
-          {error && (
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
@@ -866,8 +858,7 @@ export function ServiceProjectItems({
                 setError('');
               }}
             >
-              保留服务项
-            </Button>
+              {localize("保留服务项")}</Button>
             <Button
               variant="destructive"
               disabled={disabled || readonly}
@@ -875,8 +866,7 @@ export function ServiceProjectItems({
                 removeId && void persist({ type: 'remove', id: removeId })
               }
             >
-              确认移除
-            </Button>
+              {localize("确认移除")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

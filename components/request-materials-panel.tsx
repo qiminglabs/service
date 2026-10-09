@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useState } from 'react';
 import { FileText, Link2 } from 'lucide-react';
@@ -22,6 +24,7 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
   audience?: RequestAudience;
   onMaterial: (target: { itemId: string; requirementId: string }) => void;
 }) {
+  const { localize } = useI18n();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [focusedItem, setFocusedItem] = useState<string | null>(null);
   const highlightedItem = hoveredItem ?? focusedItem;
@@ -36,42 +39,42 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
   const showVisibilityBadge = showCustomerVisibility ?? customerVisible;
   const groups = requestMaterialGroups(record).map(group => ({ group, files: requestMaterialFiles(record, group.material, internal ? 'internal' : 'customer') }));
   if (!internal && !customerVisible) return null;
-  return <section className={`sr-panel sr-request-materials-panel${showVisibilityBadge ? ' sr-customer-visible-panel' : ''}`} aria-label={title}>
+  return <section className={`sr-panel sr-request-materials-panel${showVisibilityBadge ? ' sr-customer-visible-panel' : ''}`} aria-label={localize(title)}>
     <div className="sr-panel-heading"><div className="sr-panel-title-with-visibility">
-      <h3>{title}</h3>
-      {showVisibilityBadge && <CustomerVisibleBadge />}
+      <h3>{localize(title)}</h3>
+      {localize(showVisibilityBadge && <CustomerVisibleBadge />)}
     </div></div>
-    {description && <p className="sr-request-material-description">{description}</p>}
-    {!groups.length ? <div className="sr-materials-empty">{record.items.length ? '当前服务项没有材料要求。' : '添加服务项后，将在此显示材料要求。'}</div> : <div className="sr-request-material-list">
-      {groups.map(({ group, files }) => {
+    {localize(description && <p className="sr-request-material-description">{localize(description)}</p>)}
+    {localize(!groups.length ? <div className="sr-materials-empty">{localize(record.items.length ? '当前服务项没有材料要求。' : '添加服务项后，将在此显示材料要求。')}</div> : <div className="sr-request-material-list">
+      {localize(groups.map(({ group, files }) => {
         const member = group.members[0];
         const related = group.members.filter((entry, index, members) => members.findIndex(other => other.item.id === entry.item.id) === index);
         return <article className="sr-request-material-row" data-readonly={readonly || isGroupReadonly?.(group) || undefined} key={group.key}>
           <FileText className="sr-request-material-icon" size={22} aria-hidden="true" />
           <div className="sr-request-material-copy">
-            <div className="sr-request-material-title"><h4>{group.requirement.name}{group.requirement.required && <sup className="sr-material-required" aria-label="必填">*</sup>}</h4>
-              <span className="sr-badge" data-tone={files.length ? 'green' : group.requirement.required ? 'amber' : 'muted'}>{files.length ? '已提供' : group.requirement.required ? '待提供' : '选填'}</span>
+            <div className="sr-request-material-title"><h4>{localize(group.requirement.name)}{localize(group.requirement.required && <sup className="sr-material-required" aria-label={localize("必填")}>*</sup>)}</h4>
+              <span className="sr-badge" data-tone={files.length ? 'green' : group.requirement.required ? 'amber' : 'muted'}>{localize(files.length ? '已提供' : group.requirement.required ? '待提供' : '选填')}</span>
             </div>
             <div className="sr-material-relations">
-              <span className="sr-material-relations-label"><Link2 size={14} aria-hidden="true" />关联服务项</span>
-              {related.map(entry => <button type="button" className="sr-material-relation" key={entry.item.id}
+              <span className="sr-material-relations-label"><Link2 size={14} aria-hidden="true" />{localize("关联服务项")}</span>
+              {localize(related.map(entry => <button type="button" className="sr-material-relation" key={entry.item.id}
               onMouseEnter={() => setHoveredItem(entry.item.id)} onMouseLeave={() => setHoveredItem(null)}
               onFocus={() => setFocusedItem(entry.item.id)} onBlur={() => setFocusedItem(null)}
               onClick={() => document.getElementById(`sr-service-${record.id}-${entry.item.id}`)?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })}
-              title={`查看关联服务项：${entry.item.serviceName}`}
-              aria-label={`定位服务项 ${entry.index + 1} ${entry.item.serviceName}`}>
-              <span className="sr-material-relation-number">{String(entry.index + 1).padStart(2, '0')}</span><span>{entry.item.serviceName}</span>
-            </button>)}</div>
-            {files.length > 0 && <ul className="sr-material-file-summary">{files.map(file => <li key={file.id}>
-              <span>{file.name}</span>
-            </li>)}</ul>}
+              title={localize(`查看关联服务项：${entry.item.serviceName}`)}
+              aria-label={localize(`定位服务项 ${entry.index + 1} ${entry.item.serviceName}`)}>
+              <span className="sr-material-relation-number">{localize(String(entry.index + 1).padStart(2, '0'))}</span><span>{localize(entry.item.serviceName)}</span>
+            </button>))}</div>
+            {localize(files.length > 0 && <ul className="sr-material-file-summary">{localize(files.map(file => <li key={file.id}>
+              <span>{localize(file.name)}</span>
+            </li>))}</ul>)}
           </div>
           <Button variant="outline" disabled={busy}
             onClick={() => onMaterial({ itemId: member.item.id, requirementId: member.requirement.id })}>
-            {readonly || isGroupReadonly?.(group) || files.length ? '查看材料' : '填写材料'}
+            {localize(readonly || isGroupReadonly?.(group) || files.length ? '查看材料' : '填写材料')}
           </Button>
         </article>;
-      })}
-    </div>}
+      }))}
+    </div>)}
   </section>;
 }

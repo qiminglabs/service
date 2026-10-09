@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { ReportFieldExtension } from '@/components/report-field-extension';
 import type { ReportField } from '@/lib/report-templates';
@@ -44,6 +46,7 @@ export function LocalDocumentEditor({
   onChange: (value: OnlineDocument) => void;
   onBack: () => void;
 }) {
+  const { localize } = useI18n();
   const [zoom, setZoom] = useState(100);
   const editor = useEditor({
     extensions: [StarterKit.configure({ link: false }), ReportFieldExtension],
@@ -172,15 +175,15 @@ export function LocalDocumentEditor({
       className={`sr-doc-sdk${value.reportSource ? ' sr-doc-sdk--report' : ''}`}
       data-readonly={readonly || undefined}
       data-compact={compact || undefined}
-      aria-label={compact ? '邮件正文编辑器' : '在线文档编辑器（本地模拟）'}
+      aria-label={localize(compact ? '邮件正文编辑器' : '在线文档编辑器（本地模拟）')}
     >
-      {!compact && (
+      {localize(!compact && (
         <header className="sr-doc-topbar">
           <Button
             variant="ghost"
             size="icon"
-            aria-label="返回材料"
-            title="返回材料"
+            aria-label={localize("返回材料")}
+            title={localize("返回材料")}
             disabled={busy}
             onClick={onBack}
           >
@@ -189,23 +192,23 @@ export function LocalDocumentEditor({
           <FileText className="sr-doc-symbol" size={30} />
           <div className="sr-doc-title">
             <Input
-              aria-label="文档名称"
+              aria-label={localize("文档名称")}
               value={value.title}
               readOnly={readonly}
               disabled={busy}
               onChange={(e) => onChange({ ...value, title: e.target.value })}
             />
             <span>
-              {!readonly && (dirty ? '有未保存的修改' : '已保存到本机')}
+              {localize(!readonly && (dirty ? '有未保存的修改' : '已保存到本机'))}
             </span>
           </div>
-          <span className="sr-doc-simulation">腾讯文档风格 · 本地模拟</span>
+          <span className="sr-doc-simulation">{localize("腾讯文档风格 · 本地模拟")}</span>
         </header>
-      )}
-      <div className="sr-doc-toolbar" role="toolbar" aria-label="文档格式">
-        {fieldOptions && (
+      ))}
+      <div className="sr-doc-toolbar" role="toolbar" aria-label={localize("文档格式")}>
+        {localize(fieldOptions && (
           <select
-            aria-label="插入字段"
+            aria-label={localize("插入字段")}
             value=""
             disabled={readonly || busy || !editor}
             onChange={(event) => {
@@ -225,22 +228,22 @@ export function LocalDocumentEditor({
               }
             }}
           >
-            <option value="">＋ 插入字段</option>
-            {[...new Set(fieldOptions.map((f) => f.group))].map((group) => (
-              <optgroup key={group} label={group}>
-                {fieldOptions
+            <option value="">{localize("＋ 插入字段")}</option>
+            {localize([...new Set(fieldOptions.map((f) => f.group))].map((group) => (
+              <optgroup key={group} label={localize(group)}>
+                {localize(fieldOptions
                   .filter((f) => f.group === group)
                   .map((f) => (
                     <option key={f.id} value={f.id}>
-                      {f.label}
+                      {localize(f.label)}
                     </option>
-                  ))}
+                  )))}
               </optgroup>
-            ))}
+            )))}
           </select>
-        )}
+        ))}
         <select
-          aria-label="段落样式"
+          aria-label={localize("段落样式")}
           value={state?.heading ?? '0'}
           disabled={readonly || busy || !editor}
           onChange={(e) => {
@@ -249,19 +252,19 @@ export function LocalDocumentEditor({
             else editor?.chain().focus().setParagraph().run();
           }}
         >
-          <option value="0">正文</option>
-          <option value="1">标题 1</option>
-          <option value="2">标题 2</option>
-          <option value="3">标题 3</option>
+          <option value="0">{localize("正文")}</option>
+          <option value="1">{localize("标题 1")}</option>
+          <option value="2">{localize("标题 2")}</option>
+          <option value="3">{localize("标题 3")}</option>
         </select>
         <span className="sr-doc-toolbar-divider" />
-        {tools.map((tool) => (
+        {localize(tools.map((tool) => (
           <Button
             key={tool.label}
             size="icon-sm"
             variant="ghost"
-            title={tool.label}
-            aria-label={tool.label}
+            title={localize(tool.label)}
+            aria-label={localize(tool.label)}
             aria-pressed={tool.active}
             disabled={readonly || busy || !editor || tool.disabled}
             onMouseDown={(e) => e.preventDefault()}
@@ -269,13 +272,13 @@ export function LocalDocumentEditor({
           >
             <tool.icon size={16} />
           </Button>
-        ))}
+        )))}
       </div>
       <div className="sr-doc-workspace">
-        {!compact && (
+        {localize(!compact && (
           <aside className="sr-doc-outline">
-            <h4>文档目录</h4>
-            {state?.headings.length ? (
+            <h4>{localize("文档目录")}</h4>
+            {localize(state?.headings.length ? (
               state.headings.map((heading) => (
                 <button
                   key={heading.pos}
@@ -289,14 +292,14 @@ export function LocalDocumentEditor({
                       .run()
                   }
                 >
-                  {heading.text}
+                  {localize(heading.text)}
                 </button>
               ))
             ) : (
-              <p>设置标题后显示目录</p>
-            )}
+              <p>{localize("设置标题后显示目录")}</p>
+            ))}
           </aside>
-        )}
+        ))}
         <div className="sr-doc-canvas">
           <div className="sr-doc-paper" style={{ zoom: zoom / 100 }}>
             <EditorContent editor={editor} />
@@ -304,13 +307,12 @@ export function LocalDocumentEditor({
         </div>
       </div>
       <footer className="sr-doc-status">
-        <span>{value.content.replace(/\s/g, '').length} 字</span>
-        {!readonly && <span>编辑模式</span>}
-        {!compact && (
+        <span>{localize(value.content.replace(/\s/g, '').length)} {localize(" 字")}</span>
+        {localize(!readonly && <span>{localize("编辑模式")}</span>)}
+        {localize(!compact && (
           <label>
-            缩放
-            <select
-              aria-label="文档缩放"
+            {localize("缩放")}<select
+              aria-label={localize("文档缩放")}
               value={zoom}
               onChange={(e) => setZoom(Number(e.target.value))}
             >
@@ -319,7 +321,7 @@ export function LocalDocumentEditor({
               <option value={125}>125%</option>
             </select>
           </label>
-        )}
+        ))}
       </footer>
     </section>
   );

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useId, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
@@ -52,6 +54,7 @@ function CollaboratorCard({
   allowRemove?: boolean;
   showCustomerVisibility?: boolean;
 }) {
+  const { localize } = useI18n();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -71,11 +74,11 @@ function CollaboratorCard({
       <div className="sr-panel-heading">
         <div className="sr-panel-title-with-visibility">
           <h3 id={id}>
-            {title} <span>{selected.length}</span>
+            {localize(title)} <span>{localize(selected.length)}</span>
           </h3>
-          {showCustomerVisibility && <CustomerVisibleBadge />}
+          {localize(showCustomerVisibility && <CustomerVisibleBadge />)}
         </div>
-        {!readonly && (
+        {localize(!readonly && (
           <Dialog
             open={open}
             onOpenChange={(nextOpen) => {
@@ -87,23 +90,22 @@ function CollaboratorCard({
           >
             <DialogTrigger
               render={<Button size="sm" variant="outline" disabled={busy} />}
-              aria-label={'添加' + title}
+              aria-label={localize('添加' + title)}
             >
               <Plus size={14} />
-              添加
-            </DialogTrigger>
+              {localize("添加")}</DialogTrigger>
             <DialogContent
               className="sr-collaborator-dialog"
               showCloseButton={!busy}
             >
               <DialogHeader>
-                <DialogTitle>添加{title}</DialogTitle>
+                <DialogTitle>{localize("添加")}{localize(title)}</DialogTitle>
               </DialogHeader>
               <div className="sr-collaborator-search">
                 <Search size={16} aria-hidden="true" />
                 <Input
-                  aria-label={'搜索' + title}
-                  placeholder={placeholder}
+                  aria-label={localize('搜索' + title)}
+                  placeholder={localize(placeholder)}
                   value={query}
                   disabled={busy}
                   onChange={(event) => setQuery(event.target.value)}
@@ -111,9 +113,9 @@ function CollaboratorCard({
               </div>
               <div
                 className="sr-collaborator-results"
-                aria-label={title + '搜索结果'}
+                aria-label={localize(title + '搜索结果')}
               >
-                {matches.length ? (
+                {localize(matches.length ? (
                   matches.map((person) => {
                     const added = selectedIds.has(person.id);
                     return (
@@ -137,29 +139,28 @@ function CollaboratorCard({
                         />
                         <span className="sr-collaborator-copy">
                           <span className="sr-participant-name">
-                            {person.name}
+                            {localize(person.name)}
                           </span>
-                          <small>{person.details}</small>
+                          <small>{localize(person.details)}</small>
                         </span>
-                        {person.disabled ? <span className="sr-help">已停用</span> : added && <span className="sr-help">已添加</span>}
+                        {localize(person.disabled ? <span className="sr-help">{localize("已停用")}</span> : added && <span className="sr-help">{localize("已添加")}</span>)}
                       </label>
                     );
                   })
                 ) : (
                   <output className="sr-collaborator-empty">
-                    {query.trim() ? '没有匹配的搜索结果' : '暂无可添加的协作人'}
+                    {localize(query.trim() ? '没有匹配的搜索结果' : '暂无可添加的协作人')}
                   </output>
-                )}
+                ))}
               </div>
               <DialogFooter className="sr-collaborator-footer">
-                <output>已选择 {additions.length} 人</output>
+                <output>{localize("已选择")}{localize(additions.length)} {localize(" 人")}</output>
                 <Button
                   variant="outline"
                   disabled={busy}
                   onClick={() => setOpen(false)}
                 >
-                  取消
-                </Button>
+                  {localize("取消")}</Button>
                 <Button
                   disabled={busy || additions.length === 0}
                   onClick={() => {
@@ -169,42 +170,40 @@ function CollaboratorCard({
                     setPendingIds([]);
                   }}
                 >
-                  确认添加
-                </Button>
+                  {localize("确认添加")}</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        )}
+        ))}
       </div>
       <div className="sr-internal-body">
-        {selected.length ? (
+        {localize(selected.length ? (
           <ul className="sr-participants">
-            {selected.map((person) => (
+            {localize(selected.map((person) => (
               <li key={person.id}>
                 <span className="sr-collaborator-copy">
-                  <span className="sr-participant-name" title={person.name}>
-                    {person.name}
+                  <span className="sr-participant-name" title={localize(person.name)}>
+                    {localize(person.name)}
                   </span>
-                  <small title={person.details}>{person.details}</small>
+                  <small title={localize(person.details)}>{localize(person.details)}</small>
                 </span>
-                {person.fixed && <span className="sr-help" title={`${person.fixed}为固定协作人，不允许移除`}>{person.fixed}</span>}
-                {!readonly && allowRemove && !person.fixed && (
+                {localize(person.fixed && <span className="sr-help" title={localize(`${person.fixed}为固定协作人，不允许移除`)}>{localize(person.fixed)}</span>)}
+                {localize(!readonly && allowRemove && !person.fixed && (
                   <Button
                     size="sm"
                     variant="ghost"
                     disabled={busy}
-                    aria-label={'移除' + title + ' ' + person.name}
+                    aria-label={localize('移除' + title + ' ' + person.name)}
                     onClick={() => onRemove(person.id)}
                   >
-                    移除
-                  </Button>
-                )}
+                    {localize("移除")}</Button>
+                ))}
               </li>
-            ))}
+            )))}
           </ul>
         ) : (
-          <p className="sr-help">未添加{title}</p>
-        )}
+          <p className="sr-help">{localize("未添加")}{localize(title)}</p>
+        ))}
       </div>
     </section>
   );
@@ -229,12 +228,13 @@ export function RequestExternalCollaborators({
   busy: boolean;
   onChange: (value: ExternalCollaborator[]) => void;
 }) {
+  const { localize } = useI18n();
   const available = contacts.filter((contact) => contact.status === '启用');
   return (
     <CollaboratorCard
-      title="客户协作人"
+      title={localize("客户协作人")}
       showCustomerVisibility={showCustomerVisibility}
-      placeholder="搜索姓名、手机号或邮箱"
+      placeholder={localize("搜索姓名、手机号或邮箱")}
       options={contacts.map((contact) => ({
         disabled: contact.status !== '启用',
         id: contact.id,
@@ -289,11 +289,12 @@ export function RequestInternalInfo({
   busy: boolean;
   onChange: (value: InternalParticipant[]) => void;
 }) {
+  const { localize } = useI18n();
   const available = users.filter((user) => user.status === '启用');
   return (
     <CollaboratorCard
-      title="SmartX 协作人"
-      placeholder="搜索姓名或邮箱"
+      title={localize("SmartX 协作人")}
+      placeholder={localize("搜索姓名或邮箱")}
       options={available.map((user) => ({
         id: user.id,
         name: user.name,
@@ -335,7 +336,8 @@ export function RequestPartnerCollaborators({ users, value, readonly, busy, onCh
   onChange: (value: InternalParticipant[]) => void;
   showCustomerVisibility?: boolean;
 }) {
-  return <CollaboratorCard title="合作伙伴协作人" placeholder="搜索姓名或邮箱" readonly={readonly} busy={busy}
+  const { localize } = useI18n();
+  return <CollaboratorCard title={localize("合作伙伴协作人")} placeholder={localize("搜索姓名或邮箱")} readonly={readonly} busy={busy}
     showCustomerVisibility={showCustomerVisibility}
     options={users.map(user => ({ id: user.id, name: user.name, details: user.email, disabled: user.status !== '启用' }))}
     selected={value.map(person => {

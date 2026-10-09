@@ -55,7 +55,7 @@ export function modelRequest(input: AssistantInput, model: string) {
   return {
     model, store: false, max_output_tokens: 4000,
     ...(model.startsWith('gpt-5.6') ? { reasoning: { effort: 'low' } } : {}),
-    instructions: `${assistantSystemInstructions}\n\n经核实的功能知识：\n${demoKnowledge}`,
+    instructions: `${assistantSystemInstructions}${input.context.locale === 'en' ? '\nThe interface language is English. Answer in concise English, while preserving original names and user-entered content.' : ''}\n\n经核实的功能知识：\n${demoKnowledge}`,
     input: [...input.history, { role: 'user', content: JSON.stringify({ question: input.question, sourceEvidence, pageContext: { ...input.context, pageName: assistantPages[input.context.page] }, siteContent: input.siteContent || { incomplete: true, notes: ['本次未收到站点内容。'] } }) }],
     // Read-only context supplied by the browser; no action tools or stored conversation ID.
   };

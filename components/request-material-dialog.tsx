@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { lazy, Suspense, useRef, useState } from 'react';
 import { materialRequiredFor } from '@/lib/material-requirements';
@@ -88,6 +90,7 @@ export function RequestMaterialDialog({
   onClose: () => void;
   lockedFileIds?: string[];
 }) {
+  const { localize } = useI18n();
   const [material, setMaterial] = useState<ItemMaterial>(() =>
     structuredClone(
       item.materials.find((m) => m.requirementId === requirement.id) ?? {
@@ -129,7 +132,7 @@ export function RequestMaterialDialog({
   function replaceEditor(next: OnlineDocument) {
     if (
       editorChanged &&
-      !window.confirm('当前正文尚未保存，是否放弃正文并切换填写方式？')
+      !window.confirm(localize('当前正文尚未保存，是否放弃正文并切换填写方式？'))
     )
       return;
     setEditor(next);
@@ -144,7 +147,7 @@ export function RequestMaterialDialog({
     if (lock.current || blocked || readonly) return;
     if (
       editorChanged &&
-      !window.confirm('当前正文尚未保存，是否重新从模板开始？')
+      !window.confirm(localize('当前正文尚未保存，是否重新从模板开始？'))
     )
       return;
     lock.current = true;
@@ -215,33 +218,33 @@ export function RequestMaterialDialog({
         }
       >
         <DialogHeader className={editing ? 'sr-only' : undefined}>
-          <DialogTitle>{requirement.name}{required && <sup className="sr-material-required" aria-label="必填">*</sup>}</DialogTitle>
+          <DialogTitle>{localize(requirement.name)}{localize(required && <sup className="sr-material-required" aria-label={localize("必填")}>*</sup>)}</DialogTitle>
           <DialogDescription>
-            {item.serviceName} ·{' '}
-            {required ? '必填材料' : '选填材料'}
+            {localize(item.serviceName)} ·{localize(' ')}
+            {localize(required ? '必填材料' : '选填材料')}
           </DialogDescription>
         </DialogHeader>
         <div className="sr-document-body">
-          {internal && !readonly && (
+          {localize(internal && !readonly && (
             <div className="sr-material-visibility-notice" role="note">
-              {customerVisible ? <CustomerVisibleBadge /> : <span className="sr-assessment-badge">仅内部可见</span>}
-              <span>{customerVisible ? '此申请由客户中心发起，上传或在线填写的材料对客户可见。' : '此申请由内部发起，上传或在线填写的材料仅内部人员可见。'}</span>
+              {localize(customerVisible ? <CustomerVisibleBadge /> : <span className="sr-assessment-badge">{localize("仅内部可见")}</span>)}
+              <span>{localize(customerVisible ? '此申请由客户中心发起，上传或在线填写的材料对客户可见。' : '此申请由内部发起，上传或在线填写的材料仅内部人员可见。')}</span>
             </div>
-          )}
-          {!editing && (
+          ))}
+          {localize(!editing && (
             <>
               <div className="sr-document-instructions">
-                <strong>文件说明</strong>
+                <strong>{localize("文件说明")}</strong>
                 <p>
-                  {requirement.instructions ||
-                    '请说明本项服务的实际情况，不适用内容注明原因。'}
+                  {localize(requirement.instructions ||
+                    '请说明本项服务的实际情况，不适用内容注明原因。')}
                 </p>
               </div>
               <div
                 className="sr-document-actions"
                 data-readonly={readonly || undefined}
               >
-                {!readonly && (
+                {localize(!readonly && (
                   <>
                     <Button
                       size="lg"
@@ -251,7 +254,7 @@ export function RequestMaterialDialog({
                       onClick={() => void fromTemplate()}
                     >
                       <FilePenLine size={22} />
-                      {loading ? '正在读取模板…' : '从模板开始在线填写'}
+                      {localize(loading ? '正在读取模板…' : '从模板开始在线填写')}
                     </Button>
                     <Button
                       size="lg"
@@ -267,12 +270,11 @@ export function RequestMaterialDialog({
                       }
                     >
                       <FilePlus2 size={22} />
-                      从空白开始在线填写
-                    </Button>
+                      {localize("从空白开始在线填写")}</Button>
                   </>
-                )}
+                ))}
                 <div className="sr-document-file-actions">
-                  {!readonly && (
+                  {localize(!readonly && (
                     <Button
                       size="lg"
                       className="sr-document-entry"
@@ -282,17 +284,15 @@ export function RequestMaterialDialog({
                       aria-describedby="sr-upload-size-hint"
                     >
                       <Upload size={22} />
-                      上传已有文件
-                    </Button>
-                  )}
-                  {!readonly && (
+                      {localize("上传已有文件")}</Button>
+                  ))}
+                  {localize(!readonly && (
                     <p id="sr-upload-size-hint" className="sr-upload-size-hint">
-                      单文件上限 20 MB
-                    </p>
-                  )}
-                  {!readonly && (
+                      {localize("单文件上限 20 MB")}</p>
+                  ))}
+                  {localize(!readonly && (
                   <div className="sr-document-template-download">
-                    {/^https?:\/\//i.test(
+                    {localize(/^https?:\/\//i.test(
                       requirement.onlineTemplateUrl?.trim() ?? '',
                     ) && (
                       <a
@@ -301,18 +301,16 @@ export function RequestMaterialDialog({
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        打开在线文档模板
-                      </a>
-                    )}
-                    {requirement.template ? (
+                        {localize("打开在线文档模板")}</a>
+                    ))}
+                    {localize(requirement.template ? (
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => downloadFile(requirement.template!)}
                       >
                         <Download size={14} />
-                        下载模板
-                      </Button>
+                        {localize("下载模板")}</Button>
                     ) : requirement.templateUrl ? (
                       <a
                         className="sr-download"
@@ -320,17 +318,15 @@ export function RequestMaterialDialog({
                         download
                       >
                         <Download size={14} />
-                        下载模板
-                      </a>
+                        {localize("下载模板")}</a>
                     ) : (
                       <Button size="sm" variant="ghost" disabled>
-                        未配置模板
-                      </Button>
-                    )}
+                        {localize("未配置模板")}</Button>
+                    ))}
                   </div>
-                  )}
+                  ))}
                 </div>
-                {!readonly && (
+                {localize(!readonly && (
                   <input
                     ref={uploadRef}
                     className="sr-only"
@@ -338,7 +334,7 @@ export function RequestMaterialDialog({
                     multiple
                     accept={fileAccept}
                     disabled={blocked}
-                    aria-label={'上传' + requirement.name}
+                    aria-label={localize('上传' + requirement.name)}
                     onChange={(e) => {
                       const selected = Array.from(e.target.files ?? []);
                       e.target.value = '';
@@ -362,22 +358,22 @@ export function RequestMaterialDialog({
                       setDirty(true);
                     }}
                   />
-                )}
+                ))}
               </div>
-              {!readonly && (!hasTemplate || !editableTemplate) && (
+              {localize(!readonly && (!hasTemplate || !editableTemplate) && (
                 <p className="sr-help">
-                  {!hasTemplate
+                  {localize(!hasTemplate
                     ? '此材料未配置模板，可从空白开始。'
                     : !editableTemplate
                       ? '当前模板格式不支持在线提取正文。'
-                      : ''}
+                      : '')}
                 </p>
-              )}
+              ))}
             </>
-          )}
-          {editing && editor ? (
+          ))}
+          {localize(editing && editor ? (
             <Suspense
-              fallback={<output className="sr-help">正在打开在线文档…</output>}
+              fallback={<output className="sr-help">{localize("正在打开在线文档…")}</output>}
             >
               <LocalDocumentEditor
                 key={editingFileId ?? 'new-document'}
@@ -394,31 +390,31 @@ export function RequestMaterialDialog({
                 }}
               />
             </Suspense>
-          ) : null}
-          {!editing && editor && (
+          ) : null)}
+          {localize(!editing && editor && (
             <Button variant="outline" onClick={() => setShowEditor(true)}>
-              返回在线文档{editorChanged ? ' · 未保存' : ''}
+              {localize("返回在线文档")}{localize(editorChanged ? ' · 未保存' : '')}
             </Button>
-          )}
-          {!editing && files.length > 0 && (
-            <section className="sr-material-files" aria-label="材料文件">
+          ))}
+          {localize(!editing && files.length > 0 && (
+            <section className="sr-material-files" aria-label={localize("材料文件")}>
               <h3>
-                材料文件 <span>（{files.length}）</span>
+                {localize("材料文件")}<span>（{localize(files.length)}）</span>
               </h3>
               <ul>
-                {files.map((file) => (
+                {localize(files.map((file) => (
                   <li key={file.id}>
                     <FileText size={20} aria-hidden="true" />
                     <div className="sr-material-file-info">
-                      <span>{file.name}</span>
+                      <span>{localize(file.name)}</span>
                       <small>
-                        {file.onlineDocument ? '在线文档' : '上传文件'} ·{' '}
-                        {(file.size / 1024).toFixed(1)} KB ·{' '}
-                        {new Date(file.uploadedAt).toLocaleString('zh-CN')}
+                        {localize(file.onlineDocument ? '在线文档' : '上传文件')} ·{localize(' ')}
+                        {localize((file.size / 1024).toFixed(1))} KB ·{localize(' ')}
+                        {localize(new Date(file.uploadedAt).toLocaleString('zh-CN'))}
                       </small>
                     </div>
                     <div className="sr-material-file-controls">
-                      {file.onlineDocument && (
+                      {localize(file.onlineDocument && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -431,7 +427,7 @@ export function RequestMaterialDialog({
                             if (
                               editorChanged &&
                               !window.confirm(
-                                '当前在线正文尚未保存，是否放弃正文并打开此文件？',
+                                localize('当前在线正文尚未保存，是否放弃正文并打开此文件？'),
                               )
                             )
                               return;
@@ -441,74 +437,70 @@ export function RequestMaterialDialog({
                             setEditorChanged(false);
                           }}
                         >
-                          {canEditFile(file) ? '在线编辑' : '查看正文'}
+                          {localize(canEditFile(file) ? '在线编辑' : '查看正文')}
                         </Button>
-                      )}
+                      ))}
                       <Button
                         size="sm"
                         variant="ghost"
                         disabled={blocked}
                         onClick={() => downloadFile(file)}
-                        aria-label={'下载 ' + file.name}
+                        aria-label={localize('下载 ' + file.name)}
                       >
                         <Download size={14} />
-                        下载
-                      </Button>
-                      {canEditFile(file) && (
+                        {localize("下载")}</Button>
+                      {localize(canEditFile(file) && (
                         <Button
                           size="sm"
                           variant="ghost"
                           className="sr-material-delete"
                           disabled={blocked}
                           onClick={() => setDeleteTarget(file)}
-                          aria-label={'删除 ' + file.name}
+                          aria-label={localize('删除 ' + file.name)}
                         >
                           <Trash2 size={14} />
-                          删除
-                        </Button>
-                      )}
+                          {localize("删除")}</Button>
+                      ))}
                     </div>
                   </li>
-                ))}
+                )))}
               </ul>
             </section>
-          )}
-          {(problem || error) && (
+          ))}
+          {localize((problem || error) && (
             <p className="sr-error" role="alert">
-              {problem || error}
+              {localize(problem || error)}
             </p>
-          )}
+          ))}
         </div>
         <DialogFooter>
-          {discardOpen ? (
+          {localize(discardOpen ? (
             <div className="sr-discard-confirm" role="alert">
-              <span>材料修改尚未保存，确定放弃？</span>
+              <span>{localize("材料修改尚未保存，确定放弃？")}</span>
               <Button variant="outline" onClick={() => setDiscardOpen(false)}>
-                继续编辑
-              </Button>
+                {localize("继续编辑")}</Button>
               <Button variant="destructive" onClick={onClose}>
-                放弃修改
-              </Button>
+                {localize("放弃修改")}</Button>
             </div>
           ) : (
             <>
               <Button variant="outline" disabled={blocked} onClick={close}>
-                {readonly ? '关闭' : '取消'}
+                {localize(readonly ? '关闭' : '取消')}
               </Button>
-              {!readonly && (
+              {localize(!readonly && (
                 <Button
                   disabled={blocked || !dirty}
                   onClick={() => void save()}
                 >
-                  {saving || busy
+                  {localize(saving || busy
                     ? '正在保存…'
                     : editing
                       ? '保存文档'
-                      : '保存材料'}
+                      : '保存材料')}
                 </Button>
-              )}
+              ))}
             </>
-          )}
+          ))}
         </DialogFooter>
         <AlertDialog
           open={!!deleteTarget}
@@ -518,20 +510,19 @@ export function RequestMaterialDialog({
         >
           <AlertDialogContent className="sr-material-delete-confirm">
             <AlertDialogHeader>
-              <AlertDialogTitle>删除此材料文件？</AlertDialogTitle>
+              <AlertDialogTitle>{localize("删除此材料文件？")}</AlertDialogTitle>
               <AlertDialogDescription>
-                将移除“{deleteTarget?.name}”
-                {editingFileId === deleteTarget?.id && editorChanged
+                {localize("将移除“")}{localize(deleteTarget?.name)}”
+                {localize(editingFileId === deleteTarget?.id && editorChanged
                   ? '及其未保存的正文'
-                  : ''}
-                ，保存材料后生效；取消材料修改可保留文件。
-                {required && files.length === 1
+                  : '')}
+                {localize("，保存材料后生效；取消材料修改可保留文件。")}{localize(required && files.length === 1
                   ? '删除后需补充至少一个文件，才能提交申请。'
-                  : ''}
+                  : '')}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>保留文件</AlertDialogCancel>
+              <AlertDialogCancel>{localize("保留文件")}</AlertDialogCancel>
               <AlertDialogAction
                 variant="destructive"
                 disabled={blocked}
@@ -549,8 +540,7 @@ export function RequestMaterialDialog({
                   setDeleteTarget(null);
                 }}
               >
-                删除文件
-              </AlertDialogAction>
+                {localize("删除文件")}</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, TriangleAlert, Search, X } from 'lucide-react';
@@ -49,6 +51,7 @@ export function WorkOrderAssignmentDialog({
   onBusy: (busy: boolean) => void;
   onSaved: (project: ServiceProjectRecord) => void;
 }) {
+  const { localize } = useI18n();
   const orders = (project.workOrders ?? []).filter((order) =>
     orderIds.includes(order.id),
   );
@@ -186,83 +189,83 @@ export function WorkOrderAssignmentDialog({
     >
       <DialogContent className="wo-dispatch-dialog" showCloseButton={!saving}>
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle>{localize(title)}</DialogTitle>
           <DialogDescription>
-            {project.name} · {orders.length} 张工单 ·{' '}
-            {project.serviceProviderName || '未设置服务方'}
+            {localize(project.name)} · {localize(orders.length)} {localize(" 张工单 ·")}{localize(' ')}
+            {localize(project.serviceProviderName || '未设置服务方')}
           </DialogDescription>
         </DialogHeader>
         <div className="wo-dispatch-body">
           <div className="wo-dispatch-project-dates">
             <CalendarDays size={16} aria-hidden="true" />
-            <strong>项目日期</strong>
+            <strong>{localize("项目日期")}</strong>
             <span>
-              {project.expectedServiceDate || '未设置'} 至{' '}
-              {project.plannedCompletionDate || '未设置'}
+              {localize(project.expectedServiceDate || '未设置')} {localize(" 至")}{localize(' ')}
+              {localize(project.plannedCompletionDate || '未设置')}
             </span>
           </div>
           <div className="wo-dispatch-orders">
-            {orders.map((order, index) => (
+            {localize(orders.map((order, index) => (
               <span key={order.id}>
-                <strong>{order.item.serviceName}</strong>
-                <small>{order.id}</small>
+                <strong>{localize(order.item.serviceName)}</strong>
+                <small>{localize(order.id)}</small>
                 <span className="wo-dispatch-order-dates">
-                  {periods[index]?.source === 'project'
+                  {localize(periods[index]?.source === 'project'
                     ? '采用项目日期'
-                    : '工单日期'}
+                    : '工单日期')}
                   ：
-                  {periods[index]
+                  {localize(periods[index]
                     ? `${periods[index]!.start} 至 ${periods[index]!.end}`
-                    : `${order.expectedServiceDate || '未设置'} 至 ${order.plannedCompletionDate || '未设置'}`}
+                    : `${order.expectedServiceDate || '未设置'} 至 ${order.plannedCompletionDate || '未设置'}`)}
                 </span>
               </span>
-            ))}
+            )))}
           </div>
           <div className="wo-dispatch-requirements">
-            <strong>所需认证</strong>
+            <strong>{localize("所需认证")}</strong>
             <span>
-              {directory
+              {localize(directory
                 ? requirements.join('、') ||
                   (requirementError ? '无法确定' : '无认证要求')
-                : '读取中…'}
+                : '读取中…')}
             </span>
           </div>
           <div className="wo-dispatch-filters">
             <label>
               <Search size={16} aria-hidden="true" />
               <Input
-                aria-label="搜索可派工程师"
-                placeholder="搜索姓名、邮箱或企业"
+                aria-label={localize("搜索可派工程师")}
+                placeholder={localize("搜索姓名、邮箱或企业")}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
             <select
-              aria-label="筛选工程师企业"
+              aria-label={localize("筛选工程师企业")}
               value={company}
               onChange={(event) => setCompany(event.target.value)}
             >
-              <option value="">全部企业</option>
-              {companies.map(([id, name]) => (
+              <option value="">{localize("全部企业")}</option>
+              {localize(companies.map(([id, name]) => (
                 <option key={id} value={id}>
-                  {name}
+                  {localize(name)}
                 </option>
-              ))}
+              )))}
             </select>
           </div>
           <div className="wo-dispatch-selected" aria-live="polite">
-            <strong>已选 {selectedKeys.length} 人</strong>
-            {selectedKeys.map((key) => {
+            <strong>{localize("已选")}{localize(selectedKeys.length)} {localize(" 人")}</strong>
+            {localize(selectedKeys.map((key) => {
               const person =
                 candidates.find((person) => engineerKey(person) === key) ??
                 initialPeople.find((person) => engineerKey(person) === key);
               return (
                 <span key={key}>
-                  {person?.name || key}
-                  {unavailable.includes(key) && '（不可用）'}
+                  {localize(person?.name || key)}
+                  {localize(unavailable.includes(key) && '（不可用）')}
                   <button
                     type="button"
-                    aria-label={`移除${person?.name || key}`}
+                    aria-label={localize(`移除${person?.name || key}`)}
                     disabled={saving}
                     onClick={() =>
                       setSelectedKeys((keys) =>
@@ -274,9 +277,9 @@ export function WorkOrderAssignmentDialog({
                   </button>
                 </span>
               );
-            })}
+            }))}
           </div>
-          {directory &&
+          {localize(directory &&
             selected.length > 0 &&
             (overlaps.length > 0 || periods.some((period) => !period)) && (
               <section
@@ -284,77 +287,74 @@ export function WorkOrderAssignmentDialog({
                 role="status"
                 aria-live="polite"
               >
-                {overlaps.length > 0 && (
+                {localize(overlaps.length > 0 && (
                   <>
                     <header>
                       <TriangleAlert size={17} aria-hidden="true" />
                       <strong>
-                        {overlaps.length}{' '}
-                        名已选工程师存在工单日期重叠，可继续指派
-                      </strong>
+                        {localize(overlaps.length)}{localize(' ')}
+                        {localize("名已选工程师存在工单日期重叠，可继续指派")}</strong>
                     </header>
                     <div className="wo-dispatch-overlaps">
-                      {overlaps.map((group) => (
+                      {localize(overlaps.map((group) => (
                         <div key={group.key}>
                           <strong>
                             {
-                              selected.find(
+                              localize(selected.find(
                                 (person) => engineerKey(person) === group.key,
-                              )?.name
-                            }{' '}
-                            · {group.orders.length} 张已有工单
-                          </strong>
+                              )?.name)
+                            }{localize(' ')}
+                            · {localize(group.orders.length)} {localize(" 张已有工单")}</strong>
                           <ul>
-                            {group.orders.map((entry) => (
+                            {localize(group.orders.map((entry) => (
                               <li key={entry.key}>
                                 <span>
-                                  {entry.orderName} · {entry.projectName}
+                                  {localize(entry.orderName)} · {localize(entry.projectName)}
                                 </span>
                                 <small>
-                                  重叠日期：
-                                  {entry.ranges
+                                  {localize("重叠日期：")}{localize(entry.ranges
                                     .map((range) =>
                                       range.start === range.end
                                         ? range.start
                                         : `${range.start} 至 ${range.end}`,
                                     )
-                                    .join('、')}
-                                  {entry.period.source === 'project' &&
-                                    '（按项目日期）'}
+                                    .join('、'))}
+                                  {localize(entry.period.source === 'project' &&
+                                    '（按项目日期）')}
                                 </small>
                               </li>
-                            ))}
+                            )))}
                           </ul>
                         </div>
-                      ))}
+                      )))}
                     </div>
                   </>
-                )}
-                {periods.some((period) => !period) && (
-                  <p>部分工单日期未完整设置或无效，暂未检查其日期重叠。</p>
-                )}
+                ))}
+                {localize(periods.some((period) => !period) && (
+                  <p>{localize("部分工单日期未完整设置或无效，暂未检查其日期重叠。")}</p>
+                ))}
               </section>
-            )}
+            ))}
           <div className="wo-dispatch-table-scroll">
             <table className="reference-table wo-dispatch-table">
               <thead>
                 <tr>
-                  <th>选择</th>
-                  <th>姓名</th>
-                  <th>所属企业</th>
-                  <th>角色</th>
-                  <th>有效认证</th>
+                  <th>{localize("选择")}</th>
+                  <th>{localize("姓名")}</th>
+                  <th>{localize("所属企业")}</th>
+                  <th>{localize("角色")}</th>
+                  <th>{localize("有效认证")}</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((person) => (
+                {localize(filtered.map((person) => (
                   <tr
                     key={engineerKey(person)}
                     data-selected={selectedKeys.includes(engineerKey(person))}
                   >
                     <td>
                       <Checkbox
-                        aria-label={`选择工程师 ${person.name} ${person.companyName}`}
+                        aria-label={localize(`选择工程师 ${person.name} ${person.companyName}`)}
                         disabled={saving}
                         checked={selectedKeys.includes(engineerKey(person))}
                         onCheckedChange={(checked) =>
@@ -369,15 +369,15 @@ export function WorkOrderAssignmentDialog({
                       />
                     </td>
                     <td>
-                      <strong>{person.name}</strong>
-                      <small>{person.email}</small>
+                      <strong>{localize(person.name)}</strong>
+                      <small>{localize(person.email)}</small>
                     </td>
-                    <td>{person.companyName}</td>
-                    <td>{person.role}</td>
+                    <td>{localize(person.companyName)}</td>
+                    <td>{localize(person.role)}</td>
                     <td>
-                      {person.certifications.length ? (
+                      {localize(person.certifications.length ? (
                         <div className="wo-dispatch-certs">
-                          {[
+                          {localize([
                             ...new Set(
                               person.certifications.map(
                                 (cert) => cert.certification,
@@ -385,33 +385,33 @@ export function WorkOrderAssignmentDialog({
                             ),
                           ].map((name) => (
                             <span className="wo-dispatch-cert" key={name}>
-                              {name}
+                              {localize(name)}
                             </span>
-                          ))}
+                          )))}
                         </div>
                       ) : (
                         '无有效认证'
-                      )}
+                      ))}
                     </td>
                   </tr>
-                ))}
-                {!filtered.length && (
+                )))}
+                {localize(!filtered.length && (
                   <tr>
                     <td colSpan={5} className="routing-empty">
-                      {!directory
+                      {localize(!directory
                         ? error
                           ? '无法读取工程师'
                           : '正在读取工程师…'
                         : query || company
                           ? '暂无匹配工程师'
-                          : '当前服务方下暂无可派工程师'}
+                          : '当前服务方下暂无可派工程师')}
                     </td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
-          {directory && !requirementError && selectedKeys.length > 0 && (
+          {localize(directory && !requirementError && selectedKeys.length > 0 && (
             <p
               className={
                 missing.length || unavailable.length
@@ -420,23 +420,22 @@ export function WorkOrderAssignmentDialog({
               }
               role="status"
             >
-              {unavailable.length
+              {localize(unavailable.length
                 ? '包含不可用工程师，请移除后重新选择。'
                 : missing.length
                   ? `认证未满足：${missing.join('、')}`
-                  : '所选人员认证并集已满足全部所选工单要求'}
+                  : '所选人员认证并集已满足全部所选工单要求')}
             </p>
-          )}
-          {(error || requirementError) && (
+          ))}
+          {localize((error || requirementError) && (
             <p className="sr-error" role="alert">
-              {error || requirementError}
+              {localize(error || requirementError)}
             </p>
-          )}
+          ))}
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={saving} onClick={onClose}>
-            取消
-          </Button>
+            {localize("取消")}</Button>
           <Button
             disabled={
               saving ||
@@ -448,13 +447,13 @@ export function WorkOrderAssignmentDialog({
             }
             onClick={() => void save()}
           >
-            {saving
+            {localize(saving
               ? '指派中…'
               : orders.length > 1
                 ? '确认批量指派'
                 : title === '改派工单'
                   ? '确认改派'
-                  : '确认指派'}
+                  : '确认指派')}
           </Button>
         </DialogFooter>
       </DialogContent>

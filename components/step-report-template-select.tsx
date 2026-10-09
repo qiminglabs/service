@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import {
@@ -23,13 +25,14 @@ export function StepReportTemplateSelect({
   onChange: (value: ReportTemplateSelection | undefined) => void;
   onManage: () => void;
 }) {
+  const { localize } = useI18n();
   const current = value?.template;
   return (
     <section className="report-step-template">
       <label className="approval-field">
-        <span>工单文档模板</span>
+        <span>{localize("工单文档模板")}</span>
         <NativeSelect
-          aria-label="选择工单文档模板"
+          aria-label={localize("选择工单文档模板")}
           disabled={!editable}
           value={current?.id ?? ''}
           onChange={(event) => {
@@ -46,25 +49,24 @@ export function StepReportTemplateSelect({
             );
           }}
         >
-          <option value="">不使用工单文档模板</option>
-          {current &&
+          <option value="">{localize("不使用工单文档模板")}</option>
+          {localize(current &&
             !templates.some((t) => t.enabled && t.id === current.id) && (
-              <option value={current.id}>{current.name} · 已绑定</option>
-            )}
-          {templates
+              <option value={current.id}>{localize(current.name)} {localize(" · 已绑定")}</option>
+            ))}
+          {localize(templates
             .filter((t) => t.enabled)
             .map((t) => (
               <option key={t.id} value={t.id}>
-                {t.name}
+                {localize(t.name)}
               </option>
-            ))}
+            )))}
         </NativeSelect>
       </label>
       <div className="report-template-version">
-        <span>{current ? `已绑定 v${current.version}` : '当前流程模板'}</span>
+        <span>{localize(current ? `已绑定 v${current.version}` : '当前流程模板')}</span>
         <Button size="sm" variant="ghost" onClick={onManage}>
-          前往文档模板
-        </Button>
+          {localize("前往文档模板")}</Button>
       </div>
     </section>
   );

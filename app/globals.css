@@ -7847,3 +7847,44 @@ body:has(.report-template-dialog) [data-slot='dialog-overlay'] { z-index: 240; }
 .collaboration-record-table .pm-link{white-space:nowrap}
 .collaboration-record-table :is(th,td):last-child{text-align:right}
 @media(max-width:700px){.collaboration-record-tabs{gap:12px;flex-wrap:nowrap;overflow:auto}.collaboration-record-tabs button{white-space:nowrap;flex-shrink:0}.collaboration-home .pm-panel-heading{flex-wrap:wrap;gap:12px}.collaboration-home .workspace-followup-controls{width:100%;gap:8px}.collaboration-home .workspace-followup-controls input{flex:1;width:auto}}
+
+.language-switch { display: inline-flex; flex: 0 0 auto; gap: 2px; padding: 2px; border: 1px solid var(--border, #e2e5e9); border-radius: 7px; background: #fff; }
+.language-switch button { border: 0; border-radius: 4px; padding: 4px 8px; background: transparent; color: #576171; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.language-switch button[aria-pressed="true"] { background: #edf3ff; color: #215dc6; font-weight: 600; }
+.language-switch button:focus-visible { outline: 2px solid #215dc6; outline-offset: 2px; }
+html[lang="en"] .sidebar-item { white-space: normal; line-height: 1.35; min-height: 38px; }
+html[lang="en"] .sidebar-children .sidebar-item { white-space: nowrap; }
+html[lang="en"] .topbar-brand strong { white-space: nowrap; }
+html[lang="en"] .ct-button { white-space: normal; }
+/* Translation management shares the operation-permission panel styles. */
+.translation-workbench { min-width: 0; }
+.translation-list-table { min-width: 900px; table-layout: fixed; }
+.translation-list-table thead th { position: sticky; top: 0; z-index: 1; background: #f5f8fc; }
+.translation-list-table th:nth-child(1) { width: 110px; }
+.translation-list-table th:nth-child(2), .translation-list-table th:nth-child(3) { width: calc((100% - 380px) / 2); }
+.translation-list-table th:nth-child(4) { width: 110px; }
+.translation-list-table th:nth-child(5) { width: 160px; }
+.translation-list-table td { white-space: normal; vertical-align: top; line-height: 1.7; overflow-wrap: anywhere; padding-top: 16px; padding-bottom: 16px; }
+.translation-row-actions { display: flex; align-items: center; gap: 4px; }
+.translation-list-table .translation-empty { padding: 64px; text-align: center; color: #8190a3; }
+.translation-feedback { display: block; margin: 0; padding: 12px 24px; font-size: 13px; }
+.translation-workbench > output { color: #167057; }
+.translation-editor-dialog { max-width: min(640px, calc(100vw - 32px)); }
+.translation-editor-fields { grid-template-columns: 1fr; }
+.translation-editor-fields textarea { max-height: 32vh; overflow-y: auto; }
+@media (max-width: 760px) { .topbar-actions { gap: 6px; } html[lang="en"] .topbar-brand strong { font-size: 12px; white-space: normal; } }
+
+.language-switch { margin: 0 12px 0 0; min-inline-size: 0; }
+@media (max-width: 1100px) {
+  html[lang="en"] .topbar-brand > strong { font-size: 16px; }
+  html[lang="en"] .primary-nav { display: none; }
+}
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; height: auto; min-height: 56px; }
+  .topbar-brand { flex: 1; min-width: 0; }
+  .topbar-actions { width: 100%; height: 42px; justify-content: flex-end; margin: 0; padding: 0 8px 8px; }
+  .app-main { padding-top: 98px; }
+  .language-switch { margin-right: auto; }
+  .role-switcher { max-width: 45vw; min-width: 0; }
+  .role-switcher > span { overflow: hidden; text-overflow: ellipsis; }
+}

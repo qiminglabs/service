@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import * as React from 'react';
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
@@ -46,6 +48,7 @@ function SheetContent({
   side?: 'top' | 'right' | 'bottom' | 'left';
   showCloseButton?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -58,8 +61,8 @@ function SheetContent({
         )}
         {...props}
       >
-        {children}
-        {showCloseButton && (
+        {localize(children)}
+        {localize(showCloseButton && (
           <SheetPrimitive.Close
             data-slot="sheet-close"
             render={
@@ -73,7 +76,7 @@ function SheetContent({
             <XIcon />
             <span className="sr-only">Close</span>
           </SheetPrimitive.Close>
-        )}
+        ))}
       </SheetPrimitive.Popup>
     </SheetPortal>
   );

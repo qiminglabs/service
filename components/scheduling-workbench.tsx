@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -85,6 +87,7 @@ export function SchedulingWorkbench({
   onOpen,
   onOpenProject,
 }: Props) {
+  const { localize } = useI18n();
   const [snapshot, setSnapshot] = useState<ScheduleSnapshot>();
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -191,62 +194,62 @@ export function SchedulingWorkbench({
   };
   return (
     <div className="schedule-workbench">
-      {error && (
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && (
+      ))}
+      {localize(notice && (
         <div className="schedule-notice" role="status">
-          {notice}
+          {localize(notice)}
         </div>
-      )}
+      ))}
       <div className="schedule-layout">
         <aside className="schedule-pending">
           <div className="schedule-pending-title">
             <h2>
-              待排事项{' '}
-              <span aria-label={`${pending.length} 个项目`}>
-                {pending.length}
+              {localize("待排事项")}{localize(' ')}
+              <span aria-label={localize(`${pending.length} 个项目`)}>
+                {localize(pending.length)}
               </span>
             </h2>
           </div>
           <Input
-            aria-label="搜索待排项目"
-            placeholder="搜索客户、项目或工单"
+            aria-label={localize("搜索待排项目")}
+            placeholder={localize("搜索客户、项目或工单")}
             value={pendingQuery}
             onChange={(e) => setPendingQuery(e.target.value)}
           />
           <div className="schedule-pending-list">
-            {pendingVisible.map(({ project, orders }) => (
+            {localize(pendingVisible.map(({ project, orders }) => (
               <article key={project.id}>
                 <div className="schedule-pending-project-heading">
-                  <span className="schedule-project-type">服务项目</span>
-                  <h3>{project.name}</h3>
+                  <span className="schedule-project-type">{localize("服务项目")}</span>
+                  <h3>{localize(project.name)}</h3>
                   <button
-                    aria-label={`查看项目 ${project.name}`}
+                    aria-label={localize(`查看项目 ${project.name}`)}
                     onClick={() => onOpenProject(project.id)}
                   >
                     <ArrowUpRight size={16} />
                   </button>
                 </div>
                 <p>
-                  {customers.find((c) => c.id === project.customerId)?.name ||
-                    project.customerId}
+                  {localize(customers.find((c) => c.id === project.customerId)?.name ||
+                    project.customerId)}
                 </p>
                 <ul
                   className="schedule-pending-project-orders"
-                  aria-label="项目可指派工单"
+                  aria-label={localize("项目可指派工单")}
                 >
-                  {orders.map((order) => (
-                    <li key={order.id} title={order.id}>
-                      工单：{order.item.serviceName}
+                  {localize(orders.map((order) => (
+                    <li key={order.id} title={localize(order.id)}>
+                      {localize("工单：")}{localize(order.item.serviceName)}
                     </li>
-                  ))}
+                  )))}
                 </ul>
                 <small>
-                  {project.expectedServiceDate || '未定开始'} —{' '}
-                  {project.plannedCompletionDate || '未定完成'}
+                  {localize(project.expectedServiceDate || '未定开始')} —{localize(' ')}
+                  {localize(project.plannedCompletionDate || '未定完成')}
                 </small>
                 <Button
                   size="sm"
@@ -263,31 +266,30 @@ export function SchedulingWorkbench({
                     })
                   }
                 >
-                  指派
-                </Button>
+                  {localize("指派")}</Button>
               </article>
-            ))}
-            {!pendingVisible.length && (
+            )))}
+            {localize(!pendingVisible.length && (
               <div className="schedule-empty">
-                {snapshot
+                {localize(snapshot
                   ? pendingQuery
                     ? '暂无匹配项目'
                     : '暂无待排事项'
-                  : '读取中…'}
+                  : '读取中…')}
               </div>
-            )}
+            ))}
           </div>
         </aside>
         <div className="schedule-main">
-          <section className="schedule-board" aria-label="工程师排期">
+          <section className="schedule-board" aria-label={localize("工程师排期")}>
             <div className="schedule-toolbar">
               <div className="schedule-period">
                 <div
                   className="schedule-view-switch"
                   role="group"
-                  aria-label="排期时间视图"
+                  aria-label={localize("排期时间视图")}
                 >
-                  {(['week', 'month'] as const).map((option) => (
+                  {localize((['week', 'month'] as const).map((option) => (
                     <Button
                       key={option}
                       variant="ghost"
@@ -296,14 +298,14 @@ export function SchedulingWorkbench({
                         setView(option);
                       }}
                     >
-                      {option === 'week' ? '周' : '月'}
+                      {localize(option === 'week' ? '周' : '月')}
                     </Button>
-                  ))}
+                  )))}
                 </div>
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label={`上一${periodName}`}
+                  aria-label={localize(`上一${periodName}`)}
                   onClick={() =>
                     resetDate(moveScheduleViewDate(anchor, view, -1))
                   }
@@ -311,16 +313,16 @@ export function SchedulingWorkbench({
                   <ChevronLeft />
                 </Button>
                 <DateField
-                  label={view === 'week' ? '查看周' : '查看月份'}
+                  label={localize(view === 'week' ? '查看周' : '查看月份')}
                   hideLabel
                   value={start}
                   onChange={resetDate}
                 />
-                <span className="schedule-period-end">至 {end}</span>
+                <span className="schedule-period-end">{localize("至")}{localize(end)}</span>
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label={`下一${periodName}`}
+                  aria-label={localize(`下一${periodName}`)}
                   onClick={() =>
                     resetDate(moveScheduleViewDate(anchor, view, 1))
                   }
@@ -331,8 +333,7 @@ export function SchedulingWorkbench({
                   variant="outline"
                   onClick={() => resetDate(scheduleToday())}
                 >
-                  今天
-                </Button>
+                  {localize("今天")}</Button>
               </div>
               <div className="schedule-actions">
                 <Button
@@ -341,78 +342,76 @@ export function SchedulingWorkbench({
                   onClick={() => setPanel({ kind: 'calendar' })}
                 >
                   <CalendarDays size={16} />
-                  全局日历
-                </Button>
+                  {localize("全局日历")}</Button>
                 <Button
                   variant="outline"
                   disabled={!snapshot?.resources.length}
                   onClick={() => setPanel({ kind: 'personal-calendar' })}
                 >
                   <UserRound size={16} />
-                  个人日历
-                </Button>
+                  {localize("个人日历")}</Button>
               </div>
             </div>
             <div className="schedule-filters">
               <label className="schedule-search">
                 <Search size={16} />
                 <Input
-                  aria-label="搜索工程师"
-                  placeholder="搜索工程师"
+                  aria-label={localize("搜索工程师")}
+                  placeholder={localize("搜索工程师")}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                 />
               </label>
               <select
-                aria-label="工程师类型"
+                aria-label={localize("工程师类型")}
                 value={group}
                 onChange={(e) => {
                   setGroup(e.target.value);
                   setCompany('');
                 }}
               >
-                <option value="">全部类型</option>
-                <option value="internal">内部工程师</option>
-                <option value="partner">伙伴工程师</option>
+                <option value="">{localize("全部类型")}</option>
+                <option value="internal">{localize("内部工程师")}</option>
+                <option value="partner">{localize("伙伴工程师")}</option>
               </select>
               <select
-                aria-label="所属公司"
+                aria-label={localize("所属公司")}
                 value={company}
                 onChange={(e) => setCompany(e.target.value)}
               >
-                <option value="">全部公司</option>
-                {[
+                <option value="">{localize("全部公司")}</option>
+                {localize([
                   ...new Set(
                     (snapshot?.resources ?? [])
                       .filter((p) => !group || p.group === group)
                       .map((p) => p.company),
                   ),
                 ].map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
+                  <option value={name} key={name}>{localize(name)}</option>
+                )))}
               </select>
               <select
-                aria-label="认证筛选"
+                aria-label={localize("认证筛选")}
                 value={cert}
                 onChange={(e) => setCert(e.target.value)}
               >
-                <option value="">全部认证</option>
-                {[
+                <option value="">{localize("全部认证")}</option>
+                {localize([
                   ...new Set(
                     snapshot?.resources.flatMap((p) => p.certifications) ?? [],
                   ),
                 ].map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
+                  <option value={name} key={name}>{localize(name)}</option>
+                )))}
               </select>
             </div>
             <div className="schedule-legend">
-              {Object.entries(labels).map(([state, label]) => (
+              {localize(Object.entries(labels).map(([state, label]) => (
                 <span key={state}>
                   <i data-state={state} />
-                  {label}
+                  {localize(label)}
                 </span>
-              ))}
+              )))}
             </div>
             <div className="schedule-grid-scroll">
               <table
@@ -424,21 +423,21 @@ export function SchedulingWorkbench({
               >
                 <colgroup>
                   <col style={{ width: 188 }} />
-                  {dates.map((date) => (
+                  {localize(dates.map((date) => (
                     <col key={date} />
-                  ))}
+                  )))}
                 </colgroup>
                 <thead>
                   <tr>
                     <th className="schedule-person-heading">
-                      工程师 <small>{filtered.length} 人</small>
+                      {localize("工程师")}<small>{localize(filtered.length)} {localize(" 人")}</small>
                     </th>
-                    {dates.map((date) => (
+                    {localize(dates.map((date) => (
                       <th key={date} data-today={date === scheduleToday()}>
-                        {date.slice(5)}{' '}
+                        {localize(date.slice(5))}{localize(' ')}
                         <small>
                           {
-                            [
+                            localize([
                               '周日',
                               '周一',
                               '周二',
@@ -446,28 +445,28 @@ export function SchedulingWorkbench({
                               '周四',
                               '周五',
                               '周六',
-                            ][new Date(`${date}T00:00:00Z`).getUTCDay()]
+                            ][new Date(`${date}T00:00:00Z`).getUTCDay()])
                           }
                         </small>
                       </th>
-                    ))}
+                    )))}
                   </tr>
                   <tr className="schedule-capacity">
-                    <th>可用人数</th>
-                    {totals.map((total, index) => (
+                    <th>{localize("可用人数")}</th>
+                    {localize(totals.map((total, index) => (
                       <td key={index}>
                         <span
                           className="schedule-capacity-value"
-                          aria-label={`${slots[index].date} 可用 ${total.available} 人`}
+                          aria-label={localize(`${slots[index].date} 可用 ${total.available} 人`)}
                         >
-                          {total.available}
+                          {localize(total.available)}
                         </span>
                       </td>
-                    ))}
+                    )))}
                   </tr>
                 </thead>
                 <tbody>
-                  {snapshot &&
+                  {localize(snapshot &&
                     filtered.map((person) => (
                       <tr key={person.key}>
                         <th>
@@ -478,12 +477,12 @@ export function SchedulingWorkbench({
                             }
                           >
                             <span>
-                              <strong>{person.name}</strong>
-                              <small>{person.company}</small>
+                              <strong>{localize(person.name)}</strong>
+                              <small>{localize(person.company)}</small>
                             </span>
                           </button>
                         </th>
-                        {slots.map((slot) => (
+                        {localize(slots.map((slot) => (
                           <SchedulingDayCell
                             key={slot.date}
                             snapshot={snapshot}
@@ -493,29 +492,29 @@ export function SchedulingWorkbench({
                             customers={customers}
                             onOpen={onOpen}
                           />
-                        ))}
+                        )))}
                       </tr>
-                    ))}
-                  {(!snapshot || !filtered.length) && (
+                    )))}
+                  {localize((!snapshot || !filtered.length) && (
                     <tr>
                       <td colSpan={dates.length + 1} className="schedule-empty">
-                        {!snapshot
+                        {localize(!snapshot
                           ? error
                             ? '无法读取调度数据'
                             : '正在读取调度数据…'
                           : query || group || company || cert
                             ? '暂无匹配工程师'
-                            : '暂无启用的工程师'}
+                            : '暂无启用的工程师')}
                       </td>
                     </tr>
-                  )}
+                  ))}
                 </tbody>
               </table>
             </div>
           </section>
         </div>
       </div>
-      {assignment && assignmentProject && (
+      {localize(assignment && assignmentProject && (
         <WorkOrderAssignmentDialog
           key={`${assignment.projectId}:${assignment.orderIds.join(',')}`}
           project={assignmentProject}
@@ -538,8 +537,8 @@ export function SchedulingWorkbench({
             void load();
           }}
         />
-      )}
-      {panel && snapshot && (
+      ))}
+      {localize(panel && snapshot && (
         <SchedulePanel
           key={JSON.stringify(panel)}
           panel={panel}
@@ -548,7 +547,7 @@ export function SchedulingWorkbench({
           onPanel={setPanel}
           onSave={save}
         />
-      )}
+      ))}
     </div>
   );
 }
@@ -566,6 +565,7 @@ function SchedulePanel({
   onPanel: (panel: Panel) => void;
   onSave: (action: ScheduleAction, revision: number) => Promise<void>;
 }) {
+  const { localize } = useI18n();
   const revision = useRef(snapshot.data.revision);
   const [resourceKey, setResourceKey] = useState(
     panel.kind === 'exception'
@@ -646,40 +646,37 @@ function SchedulePanel({
     >
       <SheetContent className="schedule-sheet" showCloseButton={!busy}>
         <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
-          <SheetDescription className="sr-only">服务调度</SheetDescription>
+          <SheetTitle>{localize(title)}</SheetTitle>
+          <SheetDescription className="sr-only">{localize("服务调度")}</SheetDescription>
         </SheetHeader>
         <div className="schedule-sheet-body">
           <fieldset disabled={busy}>
-            {panel.kind === 'exception' && (
+            {localize(panel.kind === 'exception' && (
               <>
-                {personalCalendar ? (
+                {localize(personalCalendar ? (
                   <label className="schedule-field">
-                    工程师 *
-                    <select
+                    {localize("工程师 *")}<select
                       required
                       value={resourceKey}
                       onChange={(e) => setResourceKey(e.target.value)}
                     >
                       <option value="" disabled>
-                        请选择工程师
-                      </option>
-                      {snapshot.resources.map((p) => (
+                        {localize("请选择工程师")}</option>
+                      {localize(snapshot.resources.map((p) => (
                         <option key={p.key} value={p.key}>
-                          {p.name} · {p.company}
+                          {localize(p.name)} · {localize(p.company)}
                         </option>
-                      ))}
+                      )))}
                     </select>
                   </label>
                 ) : (
                   <div className="schedule-detail-row">
-                    <span>适用人员</span>
-                    <strong>全部工程师</strong>
+                    <span>{localize("适用人员")}</span>
+                    <strong>{localize("全部工程师")}</strong>
                   </div>
-                )}
+                ))}
                 <label className="schedule-field">
-                  类型
-                  <select
+                  {localize("类型")}<select
                     value={exceptionKind}
                     onChange={(e) =>
                       setExceptionKind(
@@ -687,7 +684,7 @@ function SchedulePanel({
                       )
                     }
                   >
-                    {(personalCalendar
+                    {localize((personalCalendar
                       ? [
                           ...new Set([
                             '调休休息',
@@ -698,17 +695,17 @@ function SchedulePanel({
                         ]
                       : ['节假日', '调休上班']
                     ).map((kind) => (
-                      <option key={kind}>{kind}</option>
-                    ))}
+                      <option value={kind} key={kind}>{localize(kind)}</option>
+                    )))}
                   </select>
                 </label>
               </>
-            )}
-            {panel.kind === 'exception' && (
+            ))}
+            {localize(panel.kind === 'exception' && (
               <>
                 <div className="schedule-date-pair">
                   <DateField
-                    label="开始日期"
+                    label={localize("开始日期")}
                     required
                     value={start}
                     onChange={(value) => {
@@ -717,15 +714,14 @@ function SchedulePanel({
                     }}
                   />
                   <DateField
-                    label="结束日期"
+                    label={localize("结束日期")}
                     required
                     value={end}
                     onChange={setEnd}
                   />
                 </div>
                 <label className="schedule-field">
-                  备注
-                  <textarea
+                  {localize("备注")}<textarea
                     rows={3}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
@@ -733,13 +729,12 @@ function SchedulePanel({
                   />
                 </label>
               </>
-            )}
-            {panel.kind === 'calendar' && (
+            ))}
+            {localize(panel.kind === 'calendar' && (
               <>
                 <div className="schedule-field">
-                  每周工作日
-                  <div className="schedule-weekdays">
-                    {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                  {localize("每周工作日")}<div className="schedule-weekdays">
+                    {localize([1, 2, 3, 4, 5, 6, 0].map((day) => (
                       <label key={day}>
                         <Checkbox
                           checked={calendar.weekdays.includes(day)}
@@ -753,7 +748,7 @@ function SchedulePanel({
                           }
                         />
                         {
-                          [
+                          localize([
                             '周日',
                             '周一',
                             '周二',
@@ -761,21 +756,19 @@ function SchedulePanel({
                             '周四',
                             '周五',
                             '周六',
-                          ][day]
+                          ][day])
                         }
                       </label>
-                    ))}
+                    )))}
                   </div>
                 </div>
                 <div className="schedule-subheading">
                   <h3>
-                    节假日与调休（
-                    {
-                      snapshot.data.exceptions.filter((e) => !e.resourceKey)
-                        .length
-                    }{' '}
-                    条）
-                  </h3>
+                    {localize("节假日与调休（")}{
+                      localize(snapshot.data.exceptions.filter((e) => !e.resourceKey)
+                        .length)
+                    }{localize(' ')}
+                    {localize("条）")}</h3>
                   <Button
                     variant="outline"
                     size="sm"
@@ -784,10 +777,9 @@ function SchedulePanel({
                     }
                   >
                     <Plus size={14} />
-                    添加
-                  </Button>
+                    {localize("添加")}</Button>
                 </div>
-                {snapshot.data.exceptions
+                {localize(snapshot.data.exceptions
                   .filter((e) => !e.resourceKey)
                   .map((e) => (
                     <button
@@ -801,22 +793,21 @@ function SchedulePanel({
                         })
                       }
                     >
-                      <strong>{e.kind}</strong>
+                      <strong>{localize(e.kind)}</strong>
                       <span>
-                        {e.start} — {e.end}
+                        {localize(e.start)} — {localize(e.end)}
                       </span>
                     </button>
-                  ))}
-                {!snapshot.data.exceptions.some((e) => !e.resourceKey) && (
-                  <div className="schedule-empty">暂无节假日或调休事项</div>
-                )}
+                  )))}
+                {localize(!snapshot.data.exceptions.some((e) => !e.resourceKey) && (
+                  <div className="schedule-empty">{localize("暂无节假日或调休事项")}</div>
+                ))}
               </>
-            )}
-            {panel.kind === 'personal-calendar' && (
+            ))}
+            {localize(panel.kind === 'personal-calendar' && (
               <>
                 <label className="schedule-field">
-                  工程师
-                  <select
+                  {localize("工程师")}<select
                     value={panel.resourceKey ?? ''}
                     onChange={(event) =>
                       onPanel({
@@ -825,16 +816,16 @@ function SchedulePanel({
                       })
                     }
                   >
-                    <option value="">全部工程师</option>
-                    {snapshot.resources.map((person) => (
+                    <option value="">{localize("全部工程师")}</option>
+                    {localize(snapshot.resources.map((person) => (
                       <option key={person.key} value={person.key}>
-                        {person.name} · {person.company}
+                        {localize(person.name)} · {localize(person.company)}
                       </option>
-                    ))}
+                    )))}
                   </select>
                 </label>
                 <div className="schedule-subheading">
-                  <h3>已登记事项（{personalRecords.length} 条）</h3>
+                  <h3>{localize("已登记事项（")}{localize(personalRecords.length)} {localize(" 条）")}</h3>
                   <Button
                     size="sm"
                     variant="outline"
@@ -848,10 +839,9 @@ function SchedulePanel({
                     }
                   >
                     <Plus size={14} />
-                    登记调休／加班
-                  </Button>
+                    {localize("登记调休／加班")}</Button>
                 </div>
-                {personalRecords.map((entry) => {
+                {localize(personalRecords.map((entry) => {
                   const person = snapshot.resources.find(
                     (resource) => resource.key === entry.resourceKey,
                   );
@@ -869,50 +859,50 @@ function SchedulePanel({
                       }
                     >
                       <strong>
-                        {person?.name ?? entry.resourceKey} · {entry.kind}
+                        {localize(person?.name ?? entry.resourceKey)} · {localize(entry.kind)}
                       </strong>
-                      {person && <small>{person.company}</small>}
+                      {localize(person && <small>{localize(person.company)}</small>)}
                       <span>
-                        {entry.start} — {entry.end}
+                        {localize(entry.start)} — {localize(entry.end)}
                       </span>
-                      {entry.note && <small>{entry.note}</small>}
+                      {localize(entry.note && <small>{localize(entry.note)}</small>)}
                     </button>
                   );
-                })}
-                {!personalRecords.length && (
-                  <div className="schedule-empty">暂无个人日历事项</div>
-                )}
+                }))}
+                {localize(!personalRecords.length && (
+                  <div className="schedule-empty">{localize("暂无个人日历事项")}</div>
+                ))}
               </>
-            )}
-            {panel.kind === 'resource' && (
+            ))}
+            {localize(panel.kind === 'resource' && (
               <>
                 <div className="schedule-resource-heading">
                   <span className={`schedule-avatar ${panel.resource.group}`}>
-                    {panel.resource.name.slice(-2)}
+                    {localize(panel.resource.name.slice(-2))}
                   </span>
                   <div>
-                    <strong>{panel.resource.company}</strong>
+                    <strong>{localize(panel.resource.company)}</strong>
                     <small>
-                      {panel.resource.group === 'internal'
+                      {localize(panel.resource.group === 'internal'
                         ? '内部工程师'
-                        : '伙伴工程师'}
+                        : '伙伴工程师')}
                     </small>
                   </div>
                 </div>
                 <div className="schedule-detail-row">
-                  <span>有效认证</span>
+                  <span>{localize("有效认证")}</span>
                   <strong>
-                    {panel.resource.certifications.join('、') || '无有效认证'}
+                    {localize(panel.resource.certifications.join('、') || '无有效认证')}
                   </strong>
                 </div>
                 <div className="schedule-detail-row">
-                  <span>全局日历</span>
-                  <strong>统一工作日设置</strong>
+                  <span>{localize("全局日历")}</span>
+                  <strong>{localize("统一工作日设置")}</strong>
                 </div>
                 <div className="schedule-detail-row">
-                  <span>每周工作日</span>
+                  <span>{localize("每周工作日")}</span>
                   <strong>
-                    {[1, 2, 3, 4, 5, 6, 0]
+                    {localize([1, 2, 3, 4, 5, 6, 0]
                       .filter((day) =>
                         snapshot.data.calendar.weekdays.includes(day),
                       )
@@ -928,19 +918,17 @@ function SchedulePanel({
                             '周六',
                           ][day],
                       )
-                      .join('、')}
+                      .join('、'))}
                   </strong>
                 </div>
                 <div className="schedule-subheading">
                   <h3>
-                    个人日历事项（
-                    {
-                      snapshot.data.exceptions.filter(
+                    {localize("个人日历事项（")}{
+                      localize(snapshot.data.exceptions.filter(
                         (e) => e.resourceKey === panel.resource.key,
-                      ).length
-                    }{' '}
-                    条）
-                  </h3>
+                      ).length)
+                    }{localize(' ')}
+                    {localize("条）")}</h3>
                   <Button
                     size="sm"
                     variant="outline"
@@ -954,10 +942,9 @@ function SchedulePanel({
                     }
                   >
                     <Plus size={14} />
-                    登记调休／加班
-                  </Button>
+                    {localize("登记调休／加班")}</Button>
                 </div>
-                {snapshot.data.exceptions
+                {localize(snapshot.data.exceptions
                   .filter((e) => e.resourceKey === panel.resource.key)
                   .map((e) => (
                     <button
@@ -972,27 +959,27 @@ function SchedulePanel({
                         })
                       }
                     >
-                      <strong>{e.kind}</strong>
+                      <strong>{localize(e.kind)}</strong>
                       <span>
-                        {e.start} — {e.end}
+                        {localize(e.start)} — {localize(e.end)}
                       </span>
-                      {e.note && <small>{e.note}</small>}
+                      {localize(e.note && <small>{localize(e.note)}</small>)}
                     </button>
-                  ))}
-                {!snapshot.data.exceptions.some(
+                  )))}
+                {localize(!snapshot.data.exceptions.some(
                   (e) => e.resourceKey === panel.resource.key,
-                ) && <div className="schedule-empty">暂无个人日历事项</div>}
+                ) && <div className="schedule-empty">{localize("暂无个人日历事项")}</div>)}
               </>
-            )}
+            ))}
           </fieldset>
-          {error && (
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
         </div>
         <SheetFooter className="schedule-sheet-footer">
-          {panel.kind === 'exception' && panel.exception && (
+          {localize(panel.kind === 'exception' && panel.exception && (
             <Button
               variant="outline"
               disabled={busy}
@@ -1003,9 +990,8 @@ function SchedulePanel({
                 })
               }
             >
-              移除事项
-            </Button>
-          )}
+              {localize("移除事项")}</Button>
+          ))}
           <Button
             variant="outline"
             disabled={busy}
@@ -1015,9 +1001,9 @@ function SchedulePanel({
                 : onClose()
             }
           >
-            {panel.kind === 'exception' ? '返回' : '关闭'}
+            {localize(panel.kind === 'exception' ? '返回' : '关闭')}
           </Button>
-          {panel.kind === 'exception' && (
+          {localize(panel.kind === 'exception' && (
             <Button
               disabled={
                 busy || !start || !end || (personalCalendar && !resourceKey)
@@ -1037,17 +1023,17 @@ function SchedulePanel({
                 })
               }
             >
-              {busy ? '保存中…' : '保存事项'}
+              {localize(busy ? '保存中…' : '保存事项')}
             </Button>
-          )}
-          {panel.kind === 'calendar' && (
+          ))}
+          {localize(panel.kind === 'calendar' && (
             <Button
               disabled={busy}
               onClick={() => void commit({ type: 'calendar', calendar })}
             >
-              {busy ? '保存中…' : '保存日历'}
+              {localize(busy ? '保存中…' : '保存日历')}
             </Button>
-          )}
+          ))}
         </SheetFooter>
       </SheetContent>
     </Sheet>

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { startRequestFieldDrag } from '@/lib/request-field-drag';
 import { requestTypes } from '@/lib/request-types';
@@ -48,6 +50,7 @@ export function RequestFormBuilder({
   readonly?: boolean;
   update: (config: RequestConfig) => void;
 }) {
+  const { localize } = useI18n();
   const busy = saving || readonly;
   const [selected, select] = useState('method');
   const templateInput = useRef<HTMLInputElement>(null);
@@ -191,16 +194,16 @@ export function RequestFormBuilder({
       }}
     >
       <aside className="rf-library">
-        <h3>可用字段</h3>
-        {!readonly && <p className="sr-help">拖入表单，或点击添加</p>}
+        <h3>{localize("可用字段")}</h3>
+        {localize(!readonly && <p className="sr-help">{localize("拖入表单，或点击添加")}</p>)}
         <Input
-          aria-label="搜索可用字段"
-          placeholder="搜索字段"
+          aria-label={localize("搜索可用字段")}
+          placeholder={localize("搜索字段")}
           value={query}
           onChange={(e) => search(e.target.value)}
         />
         <div className="rf-library-list">
-          {all
+          {localize(all
             .filter((f) => f.name.includes(query))
             .map((f) => (
               <button
@@ -217,26 +220,26 @@ export function RequestFormBuilder({
               >
                 <GripVertical size={16} />
                 <span>
-                  {f.name}
-                  <small>{fieldTypes[f.type]}</small>
+                  {localize(f.name)}
+                  <small>{localize(fieldTypes[f.type])}</small>
                 </span>
-                {order.includes(f.id) ? (
-                  <small>已添加</small>
+                {localize(order.includes(f.id) ? (
+                  <small>{localize("已添加")}</small>
                 ) : (
                   <Plus size={16} />
-                )}
+                ))}
               </button>
-            ))}
+            )))}
         </div>
       </aside>
       <main className="rf-center">
         <div className="rf-preview-heading">
-          <strong>申请表单预览</strong>
-          {!readonly && <span>按字段顺序自动排列 · 拖动可调整先后顺序</span>}
+          <strong>{localize("申请表单预览")}</strong>
+          {localize(!readonly && <span>{localize("按字段顺序自动排列 · 拖动可调整先后顺序")}</span>)}
         </div>
         <div className="rf-paper">
-          <h3>{service.name}</h3>
-          <h3 className="rf-service-section-title">服务需求</h3>
+          <h3>{localize(service.name)}</h3>
+          <h3 className="rf-service-section-title">{localize("服务需求")}</h3>
           <div className="rf-canvas">
             <RequestFormLayout config={config} renderField={(id) => {
               const f = all.find((f) => f.id === id);
@@ -254,10 +257,10 @@ export function RequestFormBuilder({
                     disabled={saving}
                     onPointerDown={(event) => beginDrag(event, id)}
                     onClick={() => select(id)}
-                    aria-label={`${readonly ? '查看' : '配置'}${f.name}`}
+                    aria-label={localize(`${readonly ? '查看' : '配置'}${f.name}`)}
                   >
                     <span>
-                      {f.name} {config.fieldRequiredWhen?.[id] ? <small>{fieldRequirementLabels[config.fieldRequiredWhen[id]]}</small> : required(id) && <em>*</em>}
+                      {localize(f.name)} {localize(config.fieldRequiredWhen?.[id] ? <small>{localize(fieldRequirementLabels[config.fieldRequiredWhen[id]])}</small> : required(id) && <em>*</em>)}
                     </span>
                     <GripVertical size={15} />
                   </button>
@@ -266,17 +269,16 @@ export function RequestFormBuilder({
                     onPointerDown={() => select(id)}
                   >
                     <fieldset disabled aria-hidden="true">
-                      {id === 'businessObjects' ? (
+                      {localize(id === 'businessObjects' ? (
                         <div className="rf-object-placeholder">
-                          选择{f.name} · 可多选
-                          <br />
+                          {localize("选择")}{localize(f.name)} {localize(" · 可多选")}<br />
                           <small>
-                            {isEntitlementService(service)
+                            {localize(isEntitlementService(service)
                               ? 'SMTX OS 系统'
                               : (
                                   config.basicFields?.businessObjects
                                     ?.products ?? products
-                                ).join('、')}
+                                ).join('、'))}
                           </small>
                         </div>
                       ) : (
@@ -291,17 +293,17 @@ export function RequestFormBuilder({
                           }
                           onChange={() => {}}
                         />
-                      )}
+                      ))}
                     </fieldset>
                   </div>
                 </div>
               );
             }} />
-            {!readonly && <div className="rf-drop-hint">拖动字段到此处添加</div>}
+            {localize(!readonly && <div className="rf-drop-hint">{localize("拖动字段到此处添加")}</div>)}
           </div>
           <section className="rf-materials">
             <div className="sr-panel-heading">
-              <h3>材料要求（{config.materials.length}）</h3>
+              <h3>{localize("材料要求（")}{localize(config.materials.length)}）</h3>
               <Button
                 variant="outline"
                 disabled={busy}
@@ -319,10 +321,9 @@ export function RequestFormBuilder({
                 }}
               >
                 <Plus size={14} />
-                添加材料要求
-              </Button>
+                {localize("添加材料要求")}</Button>
             </div>
-            {config.materials.map((m) => (
+            {localize(config.materials.map((m) => (
               <button
                 type="button"
                 key={m.id}
@@ -333,35 +334,35 @@ export function RequestFormBuilder({
                   select(`material:${m.id}`);
                   setMaterialError('');
                 }}
-                aria-label={`${readonly ? '查看' : '配置'}材料${m.name || '未命名材料'}`}
+                aria-label={localize(`${readonly ? '查看' : '配置'}材料${m.name || '未命名材料'}`)}
               >
                 <span className="rf-material-title">
-                  {m.name || '未命名材料'}
-                  <small>{materialRequirementLabel(m)}</small>
+                  {localize(m.name || '未命名材料')}
+                  <small>{localize(materialRequirementLabel(m))}</small>
                 </span>
                 <span className="rf-material-instructions">
-                  {m.instructions || '暂无填写说明'}
+                  {localize(m.instructions || '暂无填写说明')}
                 </span>
-                <span className="rf-material-placeholder">上传材料</span>
+                <span className="rf-material-placeholder">{localize("上传材料")}</span>
                 <small>
-                  {m.template?.name ??
-                    (m.templateUrl ? '已配置文件模板' : '未配置文件模板')}
-                  {m.onlineTemplateUrl ? ' · 已配置在线文档模板' : ''}
+                  {localize(m.template?.name ??
+                    (m.templateUrl ? '已配置文件模板' : '未配置文件模板'))}
+                  {localize(m.onlineTemplateUrl ? ' · 已配置在线文档模板' : '')}
                 </small>
               </button>
+            )))}
+            {localize(!config.materials.length && (
+              <p className="sr-help">{localize("暂无材料要求，点击上方按钮添加。")}</p>
             ))}
-            {!config.materials.length && (
-              <p className="sr-help">暂无材料要求，点击上方按钮添加。</p>
-            )}
           </section>
         </div>
       </main>
       <aside className="rf-properties">
-        <h3>{material ? '材料属性' : '字段属性'}</h3>
-        {material ? (
+        <h3>{localize(material ? '材料属性' : '字段属性')}</h3>
+        {localize(material ? (
           <>
             <label className="rf-property-input" htmlFor={`material-name-${material.id}`}>
-              <span className="rf-property-label">材料名称 <em>*</em></span>
+              <span className="rf-property-label">{localize("材料名称")}<em>*</em></span>
               <Input
                 id={`material-name-${material.id}`}
                 disabled={busy}
@@ -370,34 +371,30 @@ export function RequestFormBuilder({
               />
             </label>
             <label className="rf-property-input">
-              填写说明
-              <textarea
+              {localize("填写说明")}<textarea
                 rows={5}
                 disabled={busy}
                 value={material.instructions}
-                placeholder="填写此材料的要求与说明"
+                placeholder={localize("填写此材料的要求与说明")}
                 onChange={(e) =>
                   patchMaterial({ instructions: e.target.value })
                 }
               />
             </label>
-            {requestTypes.map(type => <label className="sr-check-line" key={type}>
+            {localize(requestTypes.map(type => <label className="sr-check-line" key={type}>
               <input
                 type="checkbox"
                 disabled={busy}
                 checked={materialRequiredFor(material, type)}
                 onChange={(e) => patchMaterial({ requiredByType: { ...materialRequiredTypes(material), [type]: e.target.checked } })}
               />
-              {type}类型必须上传
-            </label>)}
+              {localize(type)}{localize("类型必须上传")}</label>))}
             <label className="sr-check-line">
               <input type="checkbox" disabled={busy} checked={material.deduplicate ?? false} onChange={event => patchMaterial({ deduplicate: event.target.checked })} />
-              去重
-            </label>
-            <p className="sr-help">多个服务项使用相同文件模板或在线文档链接时，在申请材料中合并展示。</p>
+              {localize("去重")}</label>
+            <p className="sr-help">{localize("多个服务项使用相同文件模板或在线文档链接时，在申请材料中合并展示。")}</p>
             <label className="rf-property-input" htmlFor={`material-url-${material.id}`}>
-              在线文档模板链接
-              <Input
+              {localize("在线文档模板链接")}<Input
                 id={`material-url-${material.id}`}
                 type="url"
                 disabled={busy}
@@ -408,16 +405,16 @@ export function RequestFormBuilder({
                 }
               />
             </label>
-            <section className="rf-template-section" aria-label="文件模板">
-              <div className="rf-template-heading"><span>文件模板</span>
+            <section className="rf-template-section" aria-label={localize("文件模板")}>
+              <div className="rf-template-heading"><span>{localize("文件模板")}</span>
                 <Button variant="outline" size="sm" disabled={busy} onClick={() => templateInput.current?.click()}>
-                  {material.template || material.templateUrl ? '替换模板' : '上传模板'}
+                  {localize(material.template || material.templateUrl ? '替换模板' : '上传模板')}
                 </Button>
               </div>
               <input
                 ref={templateInput}
                 hidden
-                aria-label="上传文件模板"
+                aria-label={localize("上传文件模板")}
                 type="file"
                 disabled={busy}
                 accept={fileAccept}
@@ -434,36 +431,35 @@ export function RequestFormBuilder({
                   });
                 }}
               />
-            {material.template ? (
+            {localize(material.template ? (
               <Button
                 variant="link"
                 className="rf-template-download"
                 onClick={() => downloadFile(material.template!)}
               >
-                {material.template.name}
+                {localize(material.template.name)}
               </Button>
             ) : material.templateUrl ? (
               <a className="rf-template-download" href={material.templateUrl} download>
-                {templateFileName(material.templateUrl)}
+                {localize(templateFileName(material.templateUrl))}
               </a>
             ) : (
-              <p className="rf-template-empty">尚未上传模板</p>
-            )}
+              <p className="rf-template-empty">{localize("尚未上传模板")}</p>
+            ))}
             </section>
-            {/^https?:\/\//i.test(material.onlineTemplateUrl?.trim() ?? '') && (
+            {localize(/^https?:\/\//i.test(material.onlineTemplateUrl?.trim() ?? '') && (
               <a
                 href={material.onlineTemplateUrl!.trim()}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                打开在线文档模板
-              </a>
-            )}
-            {materialError && (
+                {localize("打开在线文档模板")}</a>
+            ))}
+            {localize(materialError && (
               <p className="sr-error" role="alert">
-                {materialError}
+                {localize(materialError)}
               </p>
-            )}
+            ))}
             <Button
               variant="outline"
               className="rf-material-remove"
@@ -480,19 +476,18 @@ export function RequestFormBuilder({
               }}
             >
               <Trash2 size={14} />
-              移除此材料要求
-            </Button>
+              {localize("移除此材料要求")}</Button>
           </>
         ) : field && order.includes(selected) ? (
           <>
             <div className="rf-property-title">
-              <strong>{field.name}</strong>
-              <small>{fieldTypes[field.type]}</small>
+              <strong>{localize(field.name)}</strong>
+              <small>{localize(fieldTypes[field.type])}</small>
             </div>
             <fieldset disabled={busy}>
-              <legend>字段宽度</legend>
+              <legend>{localize("字段宽度")}</legend>
               <div className="rf-width-options">
-                {(['half', 'full'] as const).map((position) => (
+                {localize((['half', 'full'] as const).map((position) => (
                   <label key={position}>
                     <input
                       type="radio"
@@ -500,21 +495,21 @@ export function RequestFormBuilder({
                       checked={requestFieldWidth(config, selected) === position}
                       onChange={() => update({ ...config, fieldColumns: undefined, fieldWidths: { ...config.fieldWidths, [selected]: position } })}
                     />
-                    {position === 'full' ? '整行' : '半行'}
+                    {localize(position === 'full' ? '整行' : '半行')}
                   </label>
-                ))}
+                )))}
               </div>
-              <p className="sr-help">半行字段按顺序从左到右排列，整行字段独占一行。</p>
+              <p className="sr-help">{localize("半行字段按顺序从左到右排列，整行字段独占一行。")}</p>
             </fieldset>
-            {specialRequirement ? <fieldset className="rf-address-required" disabled={busy}>
-              <legend>特殊填写要求</legend>
-              {([['required', '必填'], ['optional', '选填'], [specialRequirement, fieldRequirementLabels[specialRequirement]]] as const).map(([rule, label]) => <label className="sr-check-line" key={rule}>
+            {localize(specialRequirement ? <fieldset className="rf-address-required" disabled={busy}>
+              <legend>{localize("特殊填写要求")}</legend>
+              {localize(([['required', '必填'], ['optional', '选填'], [specialRequirement, fieldRequirementLabels[specialRequirement]]] as const).map(([rule, label]) => <label className="sr-check-line" key={rule}>
                 <input type="radio" name={`field-required-${selected}`} value={rule} checked={(config.fieldRequiredWhen?.[selected] ?? (required(selected) ? 'required' : 'optional')) === rule} onChange={() => {
                   const conditions = { ...config.fieldRequiredWhen };
                   if (rule === 'required' || rule === 'optional') delete conditions[selected]; else conditions[selected] = rule as FieldRequirement;
                   updateWithDependencies({ ...config, fieldRequired: { ...config.fieldRequired, [selected]: rule === 'required' }, fieldRequiredWhen: conditions });
-                }} />{label}
-              </label>)}
+                }} />{localize(label)}
+              </label>))}
             </fieldset> : <label className="sr-check-line">
               <input
                 type="checkbox"
@@ -546,17 +541,16 @@ export function RequestFormBuilder({
                     });
                 }}
               />
-              必填
-            </label>}
-            {selected === 'edition' && fixed && <p className="sr-help">其他字段的显示条件依赖授权版本，因此该字段必须保留并填写。</p>}
-            {selected === 'method' ? (
+              {localize("必填")}</label>)}
+            {localize(selected === 'edition' && fixed && <p className="sr-help">{localize("其他字段的显示条件依赖授权版本，因此该字段必须保留并填写。")}</p>)}
+            {localize(selected === 'method' ? (
               <p className="sr-help">
-                引用服务目录：{service.deliveryMethods.join('、')}
+                {localize("引用服务目录：")}{localize(service.deliveryMethods.join('、'))}
               </p>
             ) : selected === 'businessObjects' ? (
               <fieldset disabled={busy || fixed}>
-                <legend>可搜索产品</legend>
-                {(fixed ? ['SMTX OS 系统'] : products).map((product) => (
+                <legend>{localize("可搜索产品")}</legend>
+                {localize((fixed ? ['SMTX OS 系统'] : products).map((product) => (
                   <label className="sr-check-line" key={product}>
                     <input
                       type="checkbox"
@@ -583,20 +577,19 @@ export function RequestFormBuilder({
                         });
                       }}
                     />
-                    {product}
+                    {localize(product)}
                   </label>
-                ))}
-                {fixed && (
+                )))}
+                {localize(fixed && (
                   <p className="sr-help">
-                    权益类服务固定必填，仅可关联 SMTX OS 系统。
-                  </p>
-                )}
+                    {localize("权益类服务固定必填，仅可关联 SMTX OS 系统。")}</p>
+                ))}
               </fieldset>
             ) : (
               ['single', 'multiple'].includes(field.type) && (
                 <fieldset disabled={busy}>
-                  <legend>可用选项</legend>
-                  {field.options
+                  <legend>{localize("可用选项")}</legend>
+                  {localize(field.options
                     .filter((o) => o.enabled)
                     .map((option) => (
                       <label className="sr-check-line" key={option.value}>
@@ -618,23 +611,22 @@ export function RequestFormBuilder({
                             });
                           }}
                         />
-                        {option.value}
+                        {localize(option.value)}
                       </label>
-                    ))}
-                  {!field.options.some((o) => o.enabled) && (
-                    <p className="sr-help">后台暂无启用选项</p>
-                  )}
+                    )))}
+                  {localize(!field.options.some((o) => o.enabled) && (
+                    <p className="sr-help">{localize("后台暂无启用选项")}</p>
+                  ))}
                 </fieldset>
               )
-            )}
+            ))}
             <Button variant="outline" disabled={busy || fixed} onClick={remove}>
               <Trash2 size={14} />
-              移除字段
-            </Button>
+              {localize("移除字段")}</Button>
           </>
         ) : (
-          <p className="sr-help">选择中间的字段以配置属性</p>
-        )}
+          <p className="sr-help">{localize("选择中间的字段以配置属性")}</p>
+        ))}
       </aside>
     </div>
   );

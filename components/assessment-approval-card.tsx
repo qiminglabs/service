@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import type { ReactNode } from 'react';
 import type { GapApproval } from '@/lib/request-assessment';
@@ -15,19 +17,20 @@ function stamp(value?: string) {
 export function AssessmentApprovalCard({ approval, fallbackGaps = [], children }: {
   approval: GapApproval; fallbackGaps?: DayRequirement[]; children?: ReactNode;
 }) {
+  const { localize } = useI18n();
   return <article>
     <div>
-      <strong>{formatDayRequirements(approval.gaps ?? fallbackGaps) || `${formatDays(approval.days)} 人天`}额度特批</strong>{' '}
-      <span className="sr-assessment-badge">{approval.state}</span>
-      <p>{approval.reason}</p>
-      <small>{approval.author} 发起 · {approval.workflow ? approval.workflow.ruleName : '上级审批人：' + approval.approver} · {stamp(approval.at)}</small>
-      {approval.workflow && <ol className="sr-approval-step-history">{approval.workflow.steps.map(step => <li key={step.id}>
-        <strong>{step.nodeName} · {step.approver}</strong>{' '}<span className="sr-assessment-badge">{step.state}</span>
-        {step.cutoff && <small>审批截止人</small>}
-        {step.fallback && <small>默认审批人兜底：{step.fallbackReason}</small>}
-        {step.note && <p>{step.note} · {stamp(step.decidedAt)}</p>}
-      </li>)}</ol>}
+      <strong>{localize(formatDayRequirements(approval.gaps ?? fallbackGaps) || `${formatDays(approval.days)} 人天`)}{localize("额度特批")}</strong>{localize(' ')}
+      <span className="sr-assessment-badge">{localize(approval.state)}</span>
+      <p>{localize(approval.reason)}</p>
+      <small>{localize(approval.author)} {localize(" 发起 ·")}{localize(approval.workflow ? approval.workflow.ruleName : '上级审批人：' + approval.approver)} · {localize(stamp(approval.at))}</small>
+      {localize(approval.workflow && <ol className="sr-approval-step-history">{localize(approval.workflow.steps.map(step => <li key={step.id}>
+        <strong>{localize(step.nodeName)} · {localize(step.approver)}</strong>{localize(' ')}<span className="sr-assessment-badge">{localize(step.state)}</span>
+        {localize(step.cutoff && <small>{localize("审批截止人")}</small>)}
+        {localize(step.fallback && <small>{localize("默认审批人兜底：")}{localize(step.fallbackReason)}</small>)}
+        {localize(step.note && <p>{localize(step.note)} · {localize(stamp(step.decidedAt))}</p>)}
+      </li>))}</ol>)}
     </div>
-    {children}
+    {localize(children)}
   </article>;
 }

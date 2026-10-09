@@ -1,3 +1,5 @@
+
+import { useI18n } from '@/lib/i18n/context';
 import type { RequestField } from '@/components/request-field-settings';
 import { addressLabel } from '@/lib/request-address';
 
@@ -16,10 +18,11 @@ export function projectFieldText(field: RequestField, value: string): string {
 export function ServiceProjectBasicInfo({ fields }: {
   fields: { id: string; label: string; value?: string; fullWidth?: boolean }[];
 }) {
+  const { localize } = useI18n();
   return <dl className="sr-form-grid service-project-basic-view">
-    {fields.map(field => <div key={field.id} className={field.fullWidth ? 'sr-span' : undefined}>
-      <dt>{field.label}</dt>
-      <dd>{field.value || '—'}</dd>
-    </div>)}
+    {localize(fields.map(field => <div key={field.id} className={field.fullWidth ? 'sr-span' : undefined}>
+      <dt>{localize(field.label)}</dt>
+      <dd>{localize(field.value || '—')}</dd>
+    </div>))}
   </dl>;
 }

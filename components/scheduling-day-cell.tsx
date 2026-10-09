@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import {
   Popover,
@@ -33,6 +35,7 @@ export function SchedulingDayCell({
   customers: CustomerRef[];
   onOpen: (projectId: string, orderId: string) => void;
 }) {
+  const { localize } = useI18n();
   const day = slotState(snapshot, person, slot);
   const conflict =
     day.bookings.length > 0 &&
@@ -59,17 +62,17 @@ export function SchedulingDayCell({
       <div
         className="schedule-slot"
         data-state={conflict ? 'conflict' : day.state}
-        aria-label={`${person.name} ${slot.date} ${day.bookings.length ? `${day.bookings.length} 个工单` : day.label}${conflict ? '，排期冲突' : ''}`}
+        aria-label={localize(`${person.name} ${slot.date} ${day.bookings.length ? `${day.bookings.length} 个工单` : day.label}${conflict ? '，排期冲突' : ''}`)}
       >
-        {day.exceptions.length > 0 && (
+        {localize(day.exceptions.length > 0 && (
           <small className="schedule-personal-note">
-            {day.exceptions.map((entry) => entry.kind).join('、')}
-            {conflict ? ' · 排期冲突' : ''}
+            {localize(day.exceptions.map((entry) => entry.kind).join('、'))}
+            {localize(conflict ? ' · 排期冲突' : '')}
           </small>
-        )}
-        {day.bookings.length ? (
+        ))}
+        {localize(day.bookings.length ? (
           <>
-            {day.bookings.slice(0, 3).map((booking) => {
+            {localize(day.bookings.slice(0, 3).map((booking) => {
               const order = describe(booking);
               return (
                 <button
@@ -79,36 +82,35 @@ export function SchedulingDayCell({
                   disabled={!order.allowed}
                   onClick={() => onOpen(booking.projectId, booking.orderId)}
                   aria-label={
-                    order.allowed
+                    localize(order.allowed
                       ? `查看工单概览：${order.label} · ${order.detail}`
-                      : order.label
+                      : order.label)
                   }
-                  title={order.detail || order.label}
+                  title={localize(order.detail || order.label)}
                 >
-                  {order.label}
+                  {localize(order.label)}
                 </button>
               );
-            })}
-            {day.bookings.length > 3 && (
+            }))}
+            {localize(day.bookings.length > 3 && (
               <Popover>
                 <PopoverTrigger
                   className="schedule-orders-more"
-                  aria-label={`${person.name} ${slot.date} 查看全部 ${day.bookings.length} 个工单`}
+                  aria-label={localize(`${person.name} ${slot.date} 查看全部 ${day.bookings.length} 个工单`)}
                 >
-                  另有 {day.bookings.length - 3} 个
-                </PopoverTrigger>
+                  {localize("另有")}{localize(day.bookings.length - 3)} {localize(" 个")}</PopoverTrigger>
                 <PopoverContent
                   className="schedule-orders-popover"
                   align="start"
                 >
                   <PopoverTitle>
-                    {person.name} · {slot.date}
+                    {localize(person.name)} · {localize(slot.date)}
                   </PopoverTitle>
                   <div
                     className="schedule-orders-list"
-                    aria-label={`全部 ${day.bookings.length} 个工单`}
+                    aria-label={localize(`全部 ${day.bookings.length} 个工单`)}
                   >
-                    {day.bookings.map((booking) => {
+                    {localize(day.bookings.map((booking) => {
                       const order = describe(booking);
                       return (
                         <button
@@ -119,21 +121,21 @@ export function SchedulingDayCell({
                           onClick={() =>
                             onOpen(booking.projectId, booking.orderId)
                           }
-                          title={order.detail || order.label}
+                          title={localize(order.detail || order.label)}
                         >
-                          <strong>{order.label}</strong>
-                          {order.detail && <small>{order.detail}</small>}
+                          <strong>{localize(order.label)}</strong>
+                          {localize(order.detail && <small>{localize(order.detail)}</small>)}
                         </button>
                       );
-                    })}
+                    }))}
                   </div>
                 </PopoverContent>
               </Popover>
-            )}
+            ))}
           </>
         ) : (
-          <span>{day.label}</span>
-        )}
+          <span>{localize(day.label)}</span>
+        ))}
       </div>
     </td>
   );

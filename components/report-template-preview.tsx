@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useState } from 'react';
 import { ReportBody } from '@/components/report-body';
@@ -25,6 +27,7 @@ export function ReportTemplatePreview({
   flowId?: string;
   customers: CustomerRef[];
 }) {
+  const { localize } = useI18n();
   const [projects, setProjects] = useState<ServiceProjectRecord[]>();
   const [selected, setSelected] = useState('');
   const [query, setQuery] = useState('');
@@ -92,48 +95,48 @@ export function ReportTemplatePreview({
     <div className="report-data-preview">
       <div className="report-data-preview-toolbar">
         <Input
-          aria-label={`搜索预览${objectLabel}`}
+          aria-label={localize(`搜索预览${objectLabel}`)}
           placeholder={
-            flowId ? '搜索工单编号、服务名称或项目名称' : '搜索项目名称或编号'
+            localize(flowId ? '搜索工单编号、服务名称或项目名称' : '搜索项目名称或编号')
           }
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
         <NativeSelect
-          aria-label={`选择预览${objectLabel}`}
+          aria-label={localize(`选择预览${objectLabel}`)}
           value={selected}
           disabled={!projects || !options.length}
           onChange={(event) => setSelected(event.target.value)}
         >
-          <option value="">选择{objectLabel}预览</option>
-          {matches.map((option) => (
+          <option value="">{localize("选择")}{localize(objectLabel)}{localize("预览")}</option>
+          {localize(matches.map((option) => (
             <option key={option.key} value={option.key}>
-              {option.label}
+              {localize(option.label)}
             </option>
-          ))}
+          )))}
         </NativeSelect>
       </div>
-      {issue && (
+      {localize(issue && (
         <p className="sr-error" role="alert">
-          {issue}
+          {localize(issue)}
         </p>
-      )}
-      {resolved?.missing.length ? (
+      ))}
+      {localize(resolved?.missing.length ? (
         <p className="sr-help">
-          未填写或无法匹配的字段：{resolved.missing.join('、')}
+          {localize("未填写或无法匹配的字段：")}{localize(resolved.missing.join('、'))}
         </p>
-      ) : null}
-      {resolved ? (
+      ) : null)}
+      {localize(resolved ? (
         <div
           className="report-data-preview-document"
           key={selected}
           role="region"
-          aria-label={`${template.name}阅读预览`}
+          aria-label={localize(`${template.name}阅读预览`)}
           tabIndex={0}
         >
           <article
             className="report-template-reader"
-            aria-label={template.name}
+            aria-label={localize(template.name)}
           >
             <ReportBody body={resolved.body} />
           </article>
@@ -141,7 +144,7 @@ export function ReportTemplatePreview({
       ) : (
         !issue && (
           <p className="routing-empty">
-            {!projects
+            {localize(!projects
               ? '正在读取预览数据…'
               : !options.length
                 ? flowId
@@ -149,10 +152,10 @@ export function ReportTemplatePreview({
                   : '暂无可预览的项目'
                 : !matches.length
                   ? '暂无匹配的记录'
-                  : `请选择${objectLabel}预览`}
+                  : `请选择${objectLabel}预览`)}
           </p>
         )
-      )}
+      ))}
     </div>
   );
 }

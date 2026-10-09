@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 import { withRequestCollaborators, applicantRemovalIssue } from '@/lib/request-collaboration';
@@ -197,13 +199,14 @@ function configForEditing(
 }
 
 function RequestCustomerLabel({ required = false, hint = '' }: { required?: boolean; hint?: string }) {
+  const { localize } = useI18n();
   const label = useContext(ApplicationFieldsContext).find(field => field.id === 'customerId')?.name ?? '客户';
   return <span className="sr-customer-label">
-    {label}{required && <em>*</em>}
-    {hint && <TooltipProvider><Tooltip>
-      <TooltipTrigger render={<span tabIndex={0} role="img" className="sr-description-hint" aria-label="客户说明" onClick={event => event.preventDefault()}><CircleAlert size={16} aria-hidden="true" /></span>} />
-      <TooltipContent className="sr-description-tooltip" side="top">{hint}</TooltipContent>
-    </Tooltip></TooltipProvider>}
+    {localize(label)}{localize(required && <em>*</em>)}
+    {localize(hint && <TooltipProvider><Tooltip>
+      <TooltipTrigger render={<span tabIndex={0} role="img" className="sr-description-hint" aria-label={localize("客户说明")} onClick={event => event.preventDefault()}><CircleAlert size={16} aria-hidden="true" /></span>} />
+      <TooltipContent className="sr-description-tooltip" side="top">{localize(hint)}</TooltipContent>
+    </Tooltip></TooltipProvider>)}
   </span>;
 }
 
@@ -220,53 +223,55 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
   onRemove: (id: string) => void;
   onCopy: (id: string) => void;
 }) {
+  const { localize } = useI18n();
   const fieldNames = Object.fromEntries(useContext(RequestFieldsContext).map(field => [field.id, field.name]));
   const internal = isInternal(actor.role);
   return <section className={`sr-panel${internal ? ' sr-customer-visible-panel' : ''}`}>
     <div className="sr-panel-heading">
       <div>
         <div className="sr-panel-title-with-visibility">
-          <h3>服务项</h3>
-          {internal && <CustomerVisibleBadge />}
+          <h3>{localize("服务项")}</h3>
+          {localize(internal && <CustomerVisibleBadge />)}
         </div>
       </div>
-      {!readonly && <Button variant="outline" disabled={busy || !canAdd} onClick={onAdd}><Plus size={15} />添加服务项</Button>}
+      {localize(!readonly && <Button variant="outline" disabled={busy || !canAdd} onClick={onAdd}><Plus size={15} />{localize("添加服务项")}</Button>)}
     </div>
-    {!record.items.length ? <div className="sr-empty">
+    {localize(!record.items.length ? <div className="sr-empty">
       <FileText size={30} />
-      <h3>还没有服务项</h3>
+      <h3>{localize("还没有服务项")}</h3>
     </div> : <div className="sr-item-list">
-      {record.items.map((item, index) => {
+      {localize(record.items.map((item, index) => {
         const basicMissing = showCompleteness ? itemBasicIssues(item) : [];
         const summary = itemSummaryFields(item, fieldNames, objects);
         const inlineFields = summary.filter(field => !field.address);
         const addressFields = summary.filter(field => field.address);
         return <article key={item.id} id={`sr-service-${record.id}-${item.id}`} className="sr-item-entry">
           <div className="sr-item-row">
-            <span className="sr-item-number">{String(index + 1).padStart(2, '0')}</span>
+            <span className="sr-item-number">{localize(String(index + 1).padStart(2, '0'))}</span>
             <div className="sr-item-copy">
-              <h4>{item.serviceName}{basicMissing.length > 0 && <span className="sr-badge" data-tone="amber">待完善</span>}</h4>
-              {(summary.length > 0 || item.description.trim()) && <div className="sr-item-summary">
+              <h4>{localize(item.serviceName)}{localize(basicMissing.length > 0 && <span className="sr-badge" data-tone="amber">{localize("待完善")}</span>)}</h4>
+              {localize((summary.length > 0 || item.description.trim()) && <div className="sr-item-summary">
                 <div className="sr-item-summary-fields">
-                  {inlineFields.map(field => <span className="sr-summary-field" key={field.key}><span className="sr-summary-label">{field.label}</span><span className="sr-summary-value">{field.value}</span></span>)}
-                  {item.description.trim() && <TooltipProvider><Tooltip><TooltipTrigger render={<button type="button" className="sr-description-hint" aria-label={`查看${fieldNames.description ?? '需求说明'}`}><CircleAlert size={16} /></button>} /><TooltipContent className="sr-description-tooltip" side="top"><div><strong className="sr-tooltip-heading">{fieldNames.description ?? '需求说明'}</strong><div>{item.description}</div></div></TooltipContent></Tooltip></TooltipProvider>}
+                  {localize(inlineFields.map(field => <span className="sr-summary-field" key={field.key}><span className="sr-summary-label">{localize(field.label)}</span><span className="sr-summary-value">{localize(field.value)}</span></span>))}
+                  {localize(item.description.trim() && <TooltipProvider><Tooltip><TooltipTrigger render={<button type="button" className="sr-description-hint" aria-label={localize(`查看${fieldNames.description ?? '需求说明'}`)}><CircleAlert size={16} /></button>} /><TooltipContent className="sr-description-tooltip" side="top"><div><strong className="sr-tooltip-heading">{localize(fieldNames.description ?? '需求说明')}</strong><div>{localize(item.description)}</div></div></TooltipContent></Tooltip></TooltipProvider>)}
                 </div>
-                {addressFields.map(field => <div className="sr-summary-address" key={field.key}><span className="sr-summary-label">{field.label}</span><span className="sr-summary-value">{field.value}</span></div>)}
-              </div>}
-              {basicMissing.length > 0 && <p className="sr-missing">待补充：{basicMissing.join('、')}</p>}
+                {localize(addressFields.map(field => <div className="sr-summary-address" key={field.key}><span className="sr-summary-label">{localize(field.label)}</span><span className="sr-summary-value">{localize(field.value)}</span></div>))}
+              </div>)}
+              {localize(basicMissing.length > 0 && <p className="sr-missing">{localize("待补充：")}{localize(basicMissing.join('、'))}</p>)}
             </div>
             <div className="sr-item-actions">
-              <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{readonly ? '查看详细信息' : '编辑详细信息'}</Button>
-              {!readonly && <div className="sr-item-secondary-actions"><button type="button" className="sr-copy-item" disabled={busy || !canAdd} onClick={() => onCopy(item.id)}>复制</button><button type="button" className="sr-muted-button" disabled={busy} onClick={() => onRemove(item.id)}>移除</button></div>}
+              <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{localize(readonly ? '查看详细信息' : '编辑详细信息')}</Button>
+              {localize(!readonly && <div className="sr-item-secondary-actions"><button type="button" className="sr-copy-item" disabled={busy || !canAdd} onClick={() => onCopy(item.id)}>{localize("复制")}</button><button type="button" className="sr-muted-button" disabled={busy} onClick={() => onRemove(item.id)}>{localize("移除")}</button></div>)}
             </div>
           </div>
         </article>;
-      })}
-    </div>}
+      }))}
+    </div>)}
   </section>;
 }
 
 export function RequestWorkspace(props: Props) {
+  const { localize } = useI18n();
   const applicationFields = useContext(ApplicationFieldsContext);
   const applicationLabel = (id: string, fallback: string) => applicationFields.find(field => field.id === id)?.name ?? fallback;
   const access = {
@@ -665,12 +670,12 @@ export function RequestWorkspace(props: Props) {
   }
   function closeBasicDialog() {
     if (busy) return;
-    if (basicEditing && basicOriginal.current && JSON.stringify(requestBasicInfo(basicEditing)) !== JSON.stringify(requestBasicInfo(basicOriginal.current)) && !window.confirm('基本信息有未保存的修改，是否放弃？')) return;
+    if (basicEditing && basicOriginal.current && JSON.stringify(requestBasicInfo(basicEditing)) !== JSON.stringify(requestBasicInfo(basicOriginal.current)) && !window.confirm(localize('基本信息有未保存的修改，是否放弃？'))) return;
     setBasicEditing(null); basicOriginal.current = null; setError('');
   }
   function closeCreateDialog() {
     if (busy) return;
-    if (creation && JSON.stringify({ ...requestBasicInfo(creation), customerId: creation.customerId }) !== JSON.stringify({ ...requestBasicInfo(creationOriginal.current!), customerId: creationOriginal.current?.customerId }) && !window.confirm('基本信息有未保存的修改，是否放弃？')) return;
+    if (creation && JSON.stringify({ ...requestBasicInfo(creation), customerId: creation.customerId }) !== JSON.stringify({ ...requestBasicInfo(creationOriginal.current!), customerId: creationOriginal.current?.customerId }) && !window.confirm(localize('基本信息有未保存的修改，是否放弃？'))) return;
     setCreateOpen(false); setCreation(null); setError('');
   }
   async function saveBasicInfo() {
@@ -751,17 +756,16 @@ export function RequestWorkspace(props: Props) {
 
   const feedback = (
     <>
-      {error && !createOpen && !basicEditing && (
+      {localize(error && !createOpen && !basicEditing && (
         <div className="sr-error" role="alert">
-          {error}
-          {!ready && (
+          {localize(error)}
+          {localize(!ready && (
             <Button variant="outline" onClick={() => void load()}>
-              重试读取
-            </Button>
-          )}
+              {localize("重试读取")}</Button>
+          ))}
         </div>
-      )}
-      {notice && <output className="sr-notice">{notice}</output>}
+      ))}
+      {localize(notice && <output className="sr-notice">{localize(notice)}</output>)}
     </>
   );
 
@@ -775,60 +779,59 @@ export function RequestWorkspace(props: Props) {
           : 'sr-workspace'
       }
     >
-      {!draft ? (
+      {localize(!draft ? (
         <>
-          {feedback}
+          {localize(feedback)}
           <section className="sr-panel sr-request-list-panel">
             <div className="sr-toolbar app-list-toolbar">
               <div className="sr-filter-group">
                 <div className="sr-search">
                   <Search size={16} />
                   <Input
-                    aria-label="搜索服务请求"
-                    placeholder={customerPortal ? `搜索${applicationLabel('title', '申请主题')}或编号` : `搜索${applicationLabel('title', '申请主题')}、编号或${applicationLabel('customerId', '客户')}`}
+                    aria-label={localize("搜索服务请求")}
+                    placeholder={localize(customerPortal ? `搜索${applicationLabel('title', '申请主题')}或编号` : `搜索${applicationLabel('title', '申请主题')}、编号或${applicationLabel('customerId', '客户')}`)}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
                 </div>
                 <select
-                  aria-label="筛选请求状态"
+                  aria-label={localize("筛选请求状态")}
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
                 >
-                  <option>全部状态</option>
-                  {requestStatuses.map((state) => (
-                    <option key={state}>{state}</option>
-                  ))}
+                  <option value={"全部状态"}>{localize("全部状态")}</option>
+                  {localize(requestStatuses.map((state) => (
+                    <option value={state} key={state}>{localize(state)}</option>
+                  )))}
                 </select>
               </div>
-              {canCreate && (
+              {localize(canCreate && (
                 <Button
                   className="ct-button ct-button--primary"
                   disabled={!ready || busy}
                   onClick={beginCreate}
                 >
                   <Plus size={16} />
-                  新建服务请求
-                </Button>
-              )}
+                  {localize("新建服务请求")}</Button>
+              ))}
             </div>
             <div className="sr-table-scroll">
               <table className="sr-table app-list-table">
                 <thead>
                   <tr>
-                    <th>{applicationLabel('title', '申请主题')}</th>
-                    {!customerPortal && <th>客户</th>}
-                    <th>申请类型</th>
-                    <th>申请项</th>
-                    <th>{applicationLabel('expectedServiceDate', '期望服务日期')}</th>
-                    <th>状态</th>
-                    {isInternal(props.currentActor.role) && <th>创建站点</th>}
-                    <th>创建时间/创建人</th>
-                    <th data-list-actions>操作</th>
+                    <th>{localize(applicationLabel('title', '申请主题'))}</th>
+                    {localize(!customerPortal && <th>{localize("客户")}</th>)}
+                    <th>{localize("申请类型")}</th>
+                    <th>{localize("申请项")}</th>
+                    <th>{localize(applicationLabel('expectedServiceDate', '期望服务日期'))}</th>
+                    <th>{localize("状态")}</th>
+                    {localize(isInternal(props.currentActor.role) && <th>{localize("创建站点")}</th>)}
+                    <th>{localize("创建时间/创建人")}</th>
+                    <th data-list-actions>{localize("操作")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((record) => (
+                  {localize(filtered.map((record) => (
                     <tr key={record.id}>
                       <td>
                         <button
@@ -840,29 +843,29 @@ export function RequestWorkspace(props: Props) {
                             setNotice('');
                           }}
                         >
-                          {record.title}
+                          {localize(record.title)}
                         </button>
-                        <small>{record.id}</small>
+                        <small>{localize(record.id)}</small>
                       </td>
-                      {!customerPortal && <td>
-                        {props.customers.find((c) => c.id === record.customerId)
-                          ?.name ?? '待选择'}
-                      </td>}
-                      <td>{requestTypeOf(record) || '未选择类型'}</td>
-                      <td>{record.items.length} 项</td>
-                      <td>{record.expectedServiceDateUncertain ? '暂不确定' : record.expectedServiceDate || '—'}</td>
+                      {localize(!customerPortal && <td>
+                        {localize(props.customers.find((c) => c.id === record.customerId)
+                          ?.name ?? '待选择')}
+                      </td>)}
+                      <td>{localize(requestTypeOf(record) || '未选择类型')}</td>
+                      <td>{localize(record.items.length)} {localize(" 项")}</td>
+                      <td>{localize(record.expectedServiceDateUncertain ? '暂不确定' : record.expectedServiceDate || '—')}</td>
                       <td>
                         <span
                           className="sr-badge"
                           data-tone={requestStatusTone(record.status)}
                         >
-                          {record.status}
+                          {localize(record.status)}
                         </span>
                       </td>
-                      {isInternal(props.currentActor.role) && <td>{requestAudience(record) === 'customer' ? '客户中心' : '内部系统'}</td>}
+                      {localize(isInternal(props.currentActor.role) && <td>{localize(requestAudience(record) === 'customer' ? '客户中心' : '内部系统')}</td>)}
                       <td>
-                        {dateLabel(record.createdAt)}
-                        <small>{record.createdBy ?? record.owner ?? '—'}</small>
+                        {localize(dateLabel(record.createdAt))}
+                        <small>{localize(record.createdBy ?? record.owner ?? '—')}</small>
                       </td>
                       <td>
                         <Button
@@ -875,27 +878,26 @@ export function RequestWorkspace(props: Props) {
                             setNotice('');
                           }}
                         >
-                          查看
-                        </Button>
+                          {localize("查看")}</Button>
                       </td>
                     </tr>
-                  ))}
+                  )))}
                 </tbody>
               </table>
             </div>
-            {!filtered.length && (
+            {localize(!filtered.length && (
               <div className="sr-empty">
                 <FileText size={32} />
                 <h3>
-                  {!ready
+                  {localize(!ready
                     ? '正在读取本地资料…'
                     : query || status !== '全部状态'
                       ? '没有匹配的请求'
-                      : '从一份服务请求开始'}
+                      : '从一份服务请求开始')}
                 </h3>
-                <p>先保存申请草稿，再添加服务和准备各项材料。</p>
+                <p>{localize("先保存申请草稿，再添加服务和准备各项材料。")}</p>
               </div>
-            )}
+            ))}
           </section>
         </>
       ) : (
@@ -912,42 +914,41 @@ export function RequestWorkspace(props: Props) {
                 onClick={() => { if (props.detailBack) { props.detailBack.onBack(); return; } setDraft(null); setNotice(''); setError(''); }}
               >
                 <ArrowLeft aria-hidden="true" />
-                {props.detailBack?.label ?? '返回服务请求列表'}
+                {localize(props.detailBack?.label ?? '返回服务请求列表')}
               </button>
               <div className="detail-title-row">
-                <h2>{draft.title || '未命名服务请求'}</h2>
+                <h2>{localize(draft.title || '未命名服务请求')}</h2>
                 <span
                   className="sr-badge"
                   data-tone={requestStatusTone(draft.status)}
                 >
-                  {draft.status}
+                  {localize(draft.status)}
                 </span>
               </div>
               <p>
-                {draft.id} ·{' '}
-                {props.customers.find(
+                {localize(draft.id)} ·{localize(' ')}
+                {localize(props.customers.find(
                   (customer) => customer.id === draft.customerId,
-                )?.name ?? '未关联客户'}
+                )?.name ?? '未关联客户')}
               </p>
             </div>
             <div className="detail-actions">
-              {canCancelRequest(draft, props.currentActor, props.users) && <Button variant="outline" disabled={busy}
-                onClick={() => { setError(''); setCancelReason(''); setCancelOpen(true); }}>取消服务请求</Button>}
-              {draft.status === '评估完成' && requestTypeOf(draft) === '技术评估'
+              {localize(canCancelRequest(draft, props.currentActor, props.users) && <Button variant="outline" disabled={busy}
+                onClick={() => { setError(''); setCancelReason(''); setCancelOpen(true); }}>{localize("取消服务请求")}</Button>)}
+              {localize(draft.status === '评估完成' && requestTypeOf(draft) === '技术评估'
                 && !deliveryConversionIssue(draft, props.currentActor, props.users) && (
-                <Button disabled={busy} onClick={() => { if (busy || saveLock.current) return; setError(''); if (checkBeforeDeliveryConversion(draft)) setConversion(structuredClone(draft)); }}>转为服务交付</Button>
-              )}
-              {isProjectCreationEligible(draft, props.currentActor) && (
+                <Button disabled={busy} onClick={() => { if (busy || saveLock.current) return; setError(''); if (checkBeforeDeliveryConversion(draft)) setConversion(structuredClone(draft)); }}>{localize("转为服务交付")}</Button>
+              ))}
+              {localize(isProjectCreationEligible(draft, props.currentActor) && (
                 <Button
                   className="ct-button ct-button--primary"
                   disabled={busy}
                   onClick={() => setProjectOpen(true)}
                 >
                   <Plus size={16} />
-                  创建服务项目
-                </Button>
-              )}
-              {draft.status === '待评估' &&
+                  {localize("创建服务项目")}</Button>
+              ))}
+              {localize(draft.status === '待评估' &&
                 canPerformAssessmentRole(draft, props.currentActor, 'manager', props.users) && (
                   <Button
                     variant="outline"
@@ -959,37 +960,36 @@ export function RequestWorkspace(props: Props) {
                       setReturnDraftOpen(true);
                     }}
                   >
-                    退回草稿
-                  </Button>
-                )}
-              {!readonly && (
+                    {localize("退回草稿")}</Button>
+                ))}
+              {localize(!readonly && (
                 <>
-                  {canSubmitRequest(draft, props.currentActor) && <Button
+                  {localize(canSubmitRequest(draft, props.currentActor) && <Button
                     className="ct-button ct-button--primary"
                     disabled={busy}
                     onClick={async () => {
                       if (await checkBeforeSubmission(draft)) setSubmitOpen(true);
                     }}
                   >
-                    {validating ? '正在校验…' : '提交申请'}
-                  </Button>}
+                    {localize(validating ? '正在校验…' : '提交申请')}
+                  </Button>)}
                 </>
-              )}
+              ))}
             </div>
           </header>
           <RequestStatusProgress record={draft} />
           <RequestNextStepBanner key={draft.id} record={draft} users={props.users} customers={props.customers} contacts={props.contacts} />
-          {feedback}
-          {showIssues && validationResult?.requestId === draft.id && validationResult.failures.length > 0 && (
+          {localize(feedback)}
+          {localize(showIssues && validationResult?.requestId === draft.id && validationResult.failures.length > 0 && (
             <section className="sr-error sr-validation-alert" role="alert" ref={validationAlert} tabIndex={-1}>
-              <strong>{validationResult.heading ?? validationHeading(validationResult.events)}</strong>
+              <strong>{localize(validationResult.heading ?? validationHeading(validationResult.events))}</strong>
               <ul>
-                {validationResult.failures.map((failure, index) => (
-                  <li key={`${index}-${failure.ruleId}`} title={failure.requirement}>{failure.message}</li>
-                ))}
+                {localize(validationResult.failures.map((failure, index) => (
+                  <li key={`${index}-${failure.ruleId}`} title={localize(failure.requirement)}>{localize(failure.message)}</li>
+                )))}
               </ul>
             </section>
-          )}
+          ))}
           <RequestOperationsTabs
             contacts={props.contacts}
             validationFailures={validationResult?.requestId === draft.id ? validationResult.failures : undefined}
@@ -1005,7 +1005,7 @@ export function RequestWorkspace(props: Props) {
             busy={busy}
             save={persist}
             sidebar={
-              <aside className="sr-collaboration-column" aria-label="协作人">
+              <aside className="sr-collaboration-column" aria-label={localize("协作人")}>
                 <RequestExternalCollaborators
                   showCustomerVisibility={isInternal(props.currentRole)}
                   applicantId={requestAudience(draft) === 'customer' ? draft.createdById : undefined}
@@ -1049,32 +1049,32 @@ export function RequestWorkspace(props: Props) {
             }
           >
             <RequestProjects record={draft} actor={props.currentActor} />
-            {returnNotice && (
+            {localize(returnNotice && (
               <section className={`sr-panel sr-ops-panel${draft.status === '已取消' && isInternal(props.currentActor.role) ? ' sr-customer-visible-panel' : ''}`} role="status">
                 <div className="sr-ops-heading">
                   <div>
                     <div className="sr-panel-title-with-visibility">
-                      <h3>{returnNotice.title}</h3>
-                      {draft.status === '已取消' && isInternal(props.currentActor.role) && <CustomerVisibleBadge />}
+                      <h3>{localize(returnNotice.title)}</h3>
+                      {localize(draft.status === '已取消' && isInternal(props.currentActor.role) && <CustomerVisibleBadge />)}
                     </div>
                     <p className="whitespace-pre-wrap break-words">
-                      {returnNotice.reason}
+                      {localize(returnNotice.reason)}
                     </p>
                   </div>
                 </div>
               </section>
-            )}
+            ))}
             <section
               className={`sr-panel${isInternal(props.currentRole) ? ' sr-customer-visible-panel' : ''}`}
             >
               <div className="sr-panel-heading">
                 <div className="sr-panel-title-with-visibility">
-                  <h3>基本信息</h3>
-                  {isInternal(props.currentRole) && <CustomerVisibleBadge />}
+                  <h3>{localize("基本信息")}</h3>
+                  {localize(isInternal(props.currentRole) && <CustomerVisibleBadge />)}
                 </div>
-                {!readonly && <Button type="button" disabled={busy} onClick={() => {
+                {localize(!readonly && <Button type="button" disabled={busy} onClick={() => {
                   basicOriginal.current = structuredClone(draft); setBasicEditing(structuredClone(draft)); setError('');
-                }}>编辑基本信息</Button>}
+                }}>{localize("编辑基本信息")}</Button>)}
               </div>
               <RequestBasicInfo fields={[
                 { id: 'title', label: applicationLabel('title', '申请主题'), value: draft.title },
@@ -1100,45 +1100,45 @@ export function RequestWorkspace(props: Props) {
             >
               <div className="sr-panel-heading">
                 <div className="sr-panel-title-with-visibility">
-                  <h3 id="sr-system-heading">系统信息</h3>
-                  {isInternal(props.currentRole) && <CustomerVisibleBadge />}
+                  <h3 id="sr-system-heading">{localize("系统信息")}</h3>
+                  {localize(isInternal(props.currentRole) && <CustomerVisibleBadge />)}
                 </div>
               </div>
               <dl className="sr-system-info">
                 <div>
-                  <dt>创建站点</dt>
-                  <dd>{requestAudience(draft) === 'customer' ? '客户中心' : '内部系统'}</dd>
+                  <dt>{localize("创建站点")}</dt>
+                  <dd>{localize(requestAudience(draft) === 'customer' ? '客户中心' : '内部系统')}</dd>
                 </div>
                 <div>
-                  <dt>创建时间</dt>
-                  <dd>{dateLabel(draft.createdAt)}</dd>
+                  <dt>{localize("创建时间")}</dt>
+                  <dd>{localize(dateLabel(draft.createdAt))}</dd>
                 </div>
                 <div>
-                  <dt>更新时间</dt>
-                  <dd>{dateLabel(draft.updatedAt)}</dd>
+                  <dt>{localize("更新时间")}</dt>
+                  <dd>{localize(dateLabel(draft.updatedAt))}</dd>
                 </div>
                 <div>
-                  <dt>提交时间</dt>
+                  <dt>{localize("提交时间")}</dt>
                   <dd>
-                    {draft.submittedAt
+                    {localize(draft.submittedAt
                       ? dateLabel(draft.submittedAt)
-                      : '未提交'}
+                      : '未提交')}
                   </dd>
                 </div>
                 <div>
-                  <dt>创建人</dt>
+                  <dt>{localize("创建人")}</dt>
                   <dd>
-                    {draft.createdBy ?? draft.owner ?? '—'}
+                    {localize(draft.createdBy ?? draft.owner ?? '—')}
                   </dd>
                 </div>
               </dl>
             </section>
           </RequestOperationsTabs>
         </>
-      )}
+      ))}
 
-      {conversion && <RequestDeliveryConversion busy={busy} onConfirm={() => void confirmDeliveryConversion()} onClose={() => setConversion(null)} />}
-      {draft && materialItem &&
+      {localize(conversion && <RequestDeliveryConversion busy={busy} onConfirm={() => void confirmDeliveryConversion()} onClose={() => setConversion(null)} />)}
+      {localize(draft && materialItem &&
         materialRequirement &&
         (isInternal(props.currentRole) || requestMaterialsCustomerVisible(draft)) && (
           <RequestMaterialDialog
@@ -1154,14 +1154,14 @@ export function RequestWorkspace(props: Props) {
             onClose={() => setMaterialTarget(null)}
             onSave={(material) => saveItemMaterials(materialItem.id, material)}
           />
-        )}
-      {canCreate && createOpen && creation && <Dialog open onOpenChange={open => { if (!open) closeCreateDialog(); }}>
+        ))}
+      {localize(canCreate && createOpen && creation && <Dialog open onOpenChange={open => { if (!open) closeCreateDialog(); }}>
         <DialogContent className="request-basic-dialog" showCloseButton={!busy} aria-describedby={undefined}>
-          <DialogHeader><DialogTitle>新建服务请求</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{localize("新建服务请求")}</DialogTitle></DialogHeader>
           <form id="request-create-basic-form" onSubmit={event => { event.preventDefault(); void createDraft(); }}>
           <fieldset className="sr-form-grid" disabled={busy}>
             <label htmlFor="sr-create-title">
-              {applicationLabel('title', '申请主题')} <em>*</em>
+              {localize(applicationLabel('title', '申请主题'))} <em>*</em>
               <Input
                 id="sr-create-title"
                 required
@@ -1170,17 +1170,17 @@ export function RequestWorkspace(props: Props) {
                 onChange={(e) => {
                   updateCreation({ title: e.target.value });
                 }}
-                placeholder="例如：生产环境新装与巡检"
+                placeholder={localize("例如：生产环境新装与巡检")}
               />
             </label>
             <label htmlFor="sr-create-request-type">
-              {applicationLabel('requestType', '申请类型')} <em>*</em>
+              {localize(applicationLabel('requestType', '申请类型'))} <em>*</em>
               <select id="sr-create-request-type" required value={creation.requestType ?? ''} onChange={event => updateCreation({ requestType: event.target.value as RequestType })}>
-                <option value="" disabled>请选择申请类型</option>
-                {requestTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                <option value="" disabled>{localize("请选择申请类型")}</option>
+                {localize(requestTypes.map(type => <option key={type} value={type}>{localize(type)}</option>))}
               </select>
             </label>
-            {requestAudience(creation) === 'customer' ? <label htmlFor="sr-create-customer-readonly">
+            {localize(requestAudience(creation) === 'customer' ? <label htmlFor="sr-create-customer-readonly">
               <RequestCustomerLabel />
               <Input id="sr-create-customer-readonly" className="sr-readonly-customer" readOnly value={props.customers.find(customer => customer.id === createCustomer)?.name ?? createCustomer} />
             </label> : (
@@ -1194,51 +1194,50 @@ export function RequestWorkspace(props: Props) {
                     changeCreationCustomer(e.target.value);
                   }}
                 >
-                  <option value="">请选择客户</option>
-                  {props.customers
+                  <option value="">{localize("请选择客户")}</option>
+                  {localize(props.customers
                     .filter((c) => c.status === '启用')
                     .map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name}
+                        {localize(c.name)}
                       </option>
-                    ))}
+                    )))}
                 </select>
               </label>
-            )}
-            <DateField id="sr-create-expected-date" label={applicationLabel('expectedServiceDate', '期望服务日期')} required value={creation.expectedServiceDate ?? ''} uncertain={creation.expectedServiceDateUncertain === true} onUncertain={() => updateCreation({ expectedServiceDate: '', expectedServiceDateUncertain: true })} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate, expectedServiceDateUncertain: false })} />
-            <label className="sr-span">{applicationLabel('description', '申请说明')}（选填）
-              <textarea rows={3} value={creation.description} onChange={event => updateCreation({ description: event.target.value })} placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。" />
+            ))}
+            <DateField id="sr-create-expected-date" label={localize(applicationLabel('expectedServiceDate', '期望服务日期'))} required value={creation.expectedServiceDate ?? ''} uncertain={creation.expectedServiceDateUncertain === true} onUncertain={() => updateCreation({ expectedServiceDate: '', expectedServiceDateUncertain: true })} disabled={busy} onChange={expectedServiceDate => updateCreation({ expectedServiceDate, expectedServiceDateUncertain: false })} />
+            <label className="sr-span">{localize(applicationLabel('description', '申请说明'))}{localize("（选填）")}<textarea rows={3} value={creation.description} onChange={event => updateCreation({ description: event.target.value })} placeholder={localize("说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。")} />
             </label>
-            {applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{field.name}</div><RequestFieldControl field={field} value={creation.customValues?.[field.id] ?? ''} disabled={busy} onChange={value => updateCreation({ customValues: { ...creation.customValues, [field.id]: value } })} /></div>)}
+            {localize(applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{localize(field.name)}</div><RequestFieldControl field={field} value={creation.customValues?.[field.id] ?? ''} disabled={busy} onChange={value => updateCreation({ customValues: { ...creation.customValues, [field.id]: value } })} /></div>))}
           </fieldset>
-            {error && <p className="sr-error" role="alert">{error}</p>}
+            {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}
           </form>
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={busy} onClick={closeCreateDialog}>取消</Button>
-            <Button type="submit" form="request-create-basic-form" disabled={!ready || busy || !canCreate}>{busy ? '正在保存…' : '创建草稿'}</Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={closeCreateDialog}>{localize("取消")}</Button>
+            <Button type="submit" form="request-create-basic-form" disabled={!ready || busy || !canCreate}>{localize(busy ? '正在保存…' : '创建草稿')}</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>}
-      {basicEditing && <Dialog open onOpenChange={open => { if (!open) closeBasicDialog(); }}>
+      </Dialog>)}
+      {localize(basicEditing && <Dialog open onOpenChange={open => { if (!open) closeBasicDialog(); }}>
         <DialogContent className="request-basic-dialog" showCloseButton={!busy} aria-describedby={undefined}>
-          <DialogHeader><DialogTitle>编辑基本信息</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{localize("编辑基本信息")}</DialogTitle></DialogHeader>
           <form id="request-edit-basic-form" onSubmit={event => { event.preventDefault(); void saveBasicInfo(); }}>
               <fieldset disabled={readonly || busy} className="sr-form-grid">
                 <label htmlFor="sr-title">
-                  {applicationLabel('title', '申请主题')} <em>*</em>
+                  {localize(applicationLabel('title', '申请主题'))} <em>*</em>
                   <Input
                     id="sr-title"
                     required
                     value={basicEditing.title}
                     onChange={(e) => updateBasic({ title: e.target.value })}
-                    placeholder="例如：生产环境新装与巡检"
+                    placeholder={localize("例如：生产环境新装与巡检")}
                   />
                 </label>
                 <label htmlFor="sr-request-type">
-                  {applicationLabel('requestType', '申请类型')} <em>*</em>
+                  {localize(applicationLabel('requestType', '申请类型'))} <em>*</em>
                   <select id="sr-request-type" required value={requestTypeOf(basicEditing)} onChange={event => updateBasic({ requestType: event.target.value as RequestType })}>
-                    <option value="" disabled>请选择申请类型</option>
-                    {requestTypes.map(type => <option key={type} value={type}>{type}</option>)}
+                    <option value="" disabled>{localize("请选择申请类型")}</option>
+                    {localize(requestTypes.map(type => <option key={type} value={type}>{localize(type)}</option>))}
                   </select>
                 </label>
                 <label htmlFor="sr-customer-readonly">
@@ -1256,7 +1255,7 @@ export function RequestWorkspace(props: Props) {
                 </label>
                 <DateField
                   id="sr-expected-service-date"
-                  label={applicationLabel('expectedServiceDate', '期望服务日期')} required
+                  label={localize(applicationLabel('expectedServiceDate', '期望服务日期'))} required
                   value={basicEditing.expectedServiceDate ?? ''}
                   uncertain={basicEditing.expectedServiceDateUncertain === true}
                   onUncertain={() => updateBasic({ expectedServiceDate: '', expectedServiceDateUncertain: true })}
@@ -1267,55 +1266,54 @@ export function RequestWorkspace(props: Props) {
                   }
                 />
                 <label className="sr-span">
-                  {applicationLabel('description', '申请说明')}（选填）
-                  <textarea
+                  {localize(applicationLabel('description', '申请说明'))}{localize("（选填）")}<textarea
                     value={basicEditing.description}
                     onChange={(e) =>
                       updateBasic({ description: e.target.value })
                     }
-                    placeholder="说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。"
+                    placeholder={localize("说明本次整体目标、业务背景和期望时间。各服务的具体范围请在申请项中填写。")}
                     rows={3}
                   />
                 </label>
-                {applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{field.name}</div><RequestFieldControl field={field} value={basicEditing.customValues?.[field.id] ?? ''} disabled={readonly || busy} onChange={value => updateBasic({ customValues: { ...basicEditing.customValues, [field.id]: value } })} /></div>)}
+                {localize(applicationFields.filter(field => !isSystemApplicationField(field.id)).map(field => <div key={field.id}><div className="sr-help">{localize(field.name)}</div><RequestFieldControl field={field} value={basicEditing.customValues?.[field.id] ?? ''} disabled={readonly || busy} onChange={value => updateBasic({ customValues: { ...basicEditing.customValues, [field.id]: value } })} /></div>))}
               </fieldset>
-            {error && <p className="sr-error" role="alert">{error}</p>}
+            {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}
           </form>
           <DialogFooter>
-            <Button type="button" variant="outline" disabled={busy} onClick={closeBasicDialog}>取消</Button>
-            <Button type="submit" form="request-edit-basic-form" disabled={busy || readonly}>{busy ? '正在保存…' : '保存'}</Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={closeBasicDialog}>{localize("取消")}</Button>
+            <Button type="submit" form="request-edit-basic-form" disabled={busy || readonly}>{localize(busy ? '正在保存…' : '保存')}</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>}
+      </Dialog>)}
 
-      {itemParent && (
+      {localize(itemParent && (
         <Dialog open={addOpen} onOpenChange={open => {
           if (!open && !busy) { setAddOpen(false); setPendingItem(null); setItemError(''); setError(''); }
         }}>
           <DialogContent className="sr-dialog sr-catalog-dialog sr-item-basics-dialog" {...(pendingReadonly && pendingItem ? { 'aria-describedby': undefined } : {})} showCloseButton={!busy}>
             <DialogHeader>
-              <DialogTitle>{pendingReadonly && pendingItem ? '服务项详细信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑服务项' : '添加服务项'}</DialogTitle>
-              {!(pendingReadonly && pendingItem) && <DialogDescription>{pendingItem ? '填写并保存服务项信息，材料可在申请材料区域补充。' : '选择本次申请的服务目录。'}</DialogDescription>}
+              <DialogTitle>{localize(pendingReadonly && pendingItem ? '服务项详细信息' : pendingItem && itemParent.items.some(item => item.id === pendingItem.id) ? '编辑服务项' : '添加服务项')}</DialogTitle>
+              {localize(!(pendingReadonly && pendingItem) && <DialogDescription>{localize(pendingItem ? '填写并保存服务项信息，材料可在申请材料区域补充。' : '选择本次申请的服务目录。')}</DialogDescription>)}
             </DialogHeader>
           <div className="sr-item-dialog-body">
-            {pendingItem ? (
+            {localize(pendingItem ? (
               <>
                 <div className="sr-selected-service">
                   <div>
                     <div className="sr-selected-service-heading">
-                    <strong>{pendingItem.serviceName}</strong>
+                    <strong>{localize(pendingItem.serviceName)}</strong>
                     <p>
-                      {pendingItem.serviceId} · 版本{' '}
-                      {pendingService ? `v${pendingService.version ?? 1}` : '—'}
+                      {localize(pendingItem.serviceId)} {localize(" · 版本")}{localize(' ')}
+                      {localize(pendingService ? `v${pendingService.version ?? 1}` : '—')}
                     </p>
                     </div>
-                    {pendingServiceContent && (
+                    {localize(pendingServiceContent && (
                       <p className="sr-selected-service-content">
-                        服务内容：{pendingServiceContent}
+                        {localize("服务内容：")}{localize(pendingServiceContent)}
                       </p>
-                    )}
+                    ))}
                   </div>
-                  {!itemParent.items.some((i) => i.id === pendingItem.id) && (
+                  {localize(!itemParent.items.some((i) => i.id === pendingItem.id) && (
                     <Button
                       variant="ghost"
                       disabled={busy}
@@ -1324,9 +1322,8 @@ export function RequestWorkspace(props: Props) {
                         setItemError('');
                       }}
                     >
-                      重新选择目录
-                    </Button>
-                  )}
+                      {localize("重新选择目录")}</Button>
+                  ))}
                 </div>
                 <ItemBasicFields
                   value={pendingItem}
@@ -1353,17 +1350,17 @@ export function RequestWorkspace(props: Props) {
             ) : (
               <>
                 <Input
-                  aria-label="搜索可申请服务"
+                  aria-label={localize("搜索可申请服务")}
                   value={catalogQuery}
                   onChange={(e) => setCatalogQuery(e.target.value)}
-                  placeholder="搜索服务名称或编码"
+                  placeholder={localize("搜索服务名称或编码")}
                 />
                 <div className="sr-catalog-options">
-                  {availableServices
+                  {localize(availableServices
                     .filter(
                       (s) =>
                         s.status === '已启用' &&
-                        (s.id + ' ' + s.name)
+                        (s.id + ' ' + s.name + ' ' + localize(s.name))
                           .toLowerCase()
                           .includes(catalogQuery.toLowerCase()),
                     )
@@ -1371,40 +1368,39 @@ export function RequestWorkspace(props: Props) {
                       <div key={service.id}>
                         <FileText size={20} />
                         <div>
-                          <strong>{service.name}</strong>
+                          <strong>{localize(service.name)}</strong>
                           <p>
-                            {service.id} · {service.category}
+                            {localize(service.id)} · {localize(service.category)}
                           </p>
-                          {service.description?.trim() && (
+                          {localize(service.description?.trim() && (
                             <p className="sr-catalog-service-description">
-                              {service.description}
+                              {localize(service.description)}
                             </p>
-                          )}
+                          ))}
                         </div>
                         <Button
                           variant="outline"
                           disabled={busy || !ready}
                           onClick={() => selectItemService(service)}
                         >
-                          选择
-                        </Button>
+                          {localize("选择")}</Button>
                       </div>
-                    ))}
-                  {!availableServices.some(
+                    )))}
+                  {localize(!availableServices.some(
                     (s) =>
                       s.status === '已启用' &&
-                      (s.id + ' ' + s.name)
+                      (s.id + ' ' + s.name + ' ' + localize(s.name))
                         .toLowerCase()
                         .includes(catalogQuery.toLowerCase()),
-                  ) && <p className="sr-empty">没有匹配的已启用服务。</p>}
+                  ) && <p className="sr-empty">{localize("没有匹配的已启用服务。")}</p>)}
                 </div>
               </>
-            )}
-            {(itemError || error) && (
+            ))}
+            {localize((itemError || error) && (
               <p className="sr-error" role="alert">
-                {itemError || error}
+                {localize(itemError || error)}
               </p>
-            )}
+            ))}
           </div>
             <DialogFooter>
             <Button
@@ -1416,18 +1412,18 @@ export function RequestWorkspace(props: Props) {
                 setItemError('');
               }}
             >
-              {pendingReadonly ? '关闭' : '取消'}
+              {localize(pendingReadonly ? '关闭' : '取消')}
             </Button>
-            {pendingItem && !pendingReadonly && (
+            {localize(pendingItem && !pendingReadonly && (
               <Button disabled={busy} onClick={() => void savePendingItem()}>
                 <Save size={15} />
-                {busy ? '正在保存…' : '保存服务项'}
+                {localize(busy ? '正在保存…' : '保存服务项')}
               </Button>
-            )}
+            ))}
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      )}
+      ))}
 
       <Dialog
         open={!!removeId}
@@ -1437,24 +1433,22 @@ export function RequestWorkspace(props: Props) {
       >
         <DialogContent className="sr-dialog">
           <DialogHeader>
-            <DialogTitle>移除此服务项？</DialogTitle>
+            <DialogTitle>{localize("移除此服务项？")}</DialogTitle>
             <DialogDescription>
-              该服务项及其独立材料将从请求中移除，其他服务项和仍被使用的共用材料将保留。
-            </DialogDescription>
+              {localize("该服务项及其独立材料将从请求中移除，其他服务项和仍被使用的共用材料将保留。")}</DialogDescription>
           </DialogHeader>
-          {error && (
+          {localize(error && (
             <p role="alert" className="sr-error">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => setRemoveId(null)}
             >
-              保留服务项
-            </Button>
+              {localize("保留服务项")}</Button>
             <Button
               variant="destructive"
               disabled={busy || itemsReadonly}
@@ -1473,13 +1467,12 @@ export function RequestWorkspace(props: Props) {
                   setRemoveId(null);
               }}
             >
-              确认移除
-            </Button>
+              {localize("确认移除")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {projectOpen && draft && (
+      {localize(projectOpen && draft && (
         <RequestProjectDialog
           objects={props.businessObjects}
           saveError={error}
@@ -1490,33 +1483,33 @@ export function RequestWorkspace(props: Props) {
           save={persist}
           close={() => setProjectOpen(false)}
         />
-      )}
+      ))}
 
       <Dialog open={cancelOpen} onOpenChange={open => { if (!busy) setCancelOpen(open); }}>
         <DialogContent className="sr-ops-dialog" showCloseButton={!busy}>
           <DialogHeader>
-            <DialogTitle>取消服务请求</DialogTitle>
-            <DialogDescription>取消后将释放已冻结额度，相关特殊审批失效，保留申请、评估及操作历史。此请求将结束，如需继续服务请新建请求。</DialogDescription>
+            <DialogTitle>{localize("取消服务请求")}</DialogTitle>
+            <DialogDescription>{localize("取消后将释放已冻结额度，相关特殊审批失效，保留申请、评估及操作历史。此请求将结束，如需继续服务请新建请求。")}</DialogDescription>
           </DialogHeader>
           <div className="sr-confirmation-preview">
             <section className="sr-customer-visible-panel">
               <div className="sr-confirmation-note-label">
-                <label htmlFor="request-cancellation-reason" className="sr-ops-field"><span>取消原因 <em aria-hidden="true">*</em></span></label>
+                <label htmlFor="request-cancellation-reason" className="sr-ops-field"><span>{localize("取消原因")}<em aria-hidden="true">*</em></span></label>
                 <CustomerVisibleBadge id="request-cancellation-reason-hint" />
               </div>
-              <Textarea id="request-cancellation-reason" required aria-describedby="request-cancellation-reason-hint" value={cancelReason} disabled={busy} onChange={event => setCancelReason(event.target.value)} rows={3} placeholder="请说明取消原因" />
+              <Textarea id="request-cancellation-reason" required aria-describedby="request-cancellation-reason-hint" value={cancelReason} disabled={busy} onChange={event => setCancelReason(event.target.value)} rows={3} placeholder={localize("请说明取消原因")} />
             </section>
           </div>
-          {error && <p className="sr-error" role="alert">{error}</p>}
+          {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}
           <DialogFooter>
-            <Button variant="outline" disabled={busy} onClick={() => setCancelOpen(false)}>暂不取消</Button>
+            <Button variant="outline" disabled={busy} onClick={() => setCancelOpen(false)}>{localize("暂不取消")}</Button>
             <Button variant="destructive" disabled={busy || !cancelReason.trim()} onClick={async () => {
               if (!draft || busy || saveLock.current) return;
               setError('');
               try {
                 if (await persist(cancelRequest(draft, props.currentActor, props.users, cancelReason), '服务请求已取消')) setCancelOpen(false);
               } catch (issue) { setError(issue instanceof Error ? issue.message : '取消失败，请重试。'); }
-            }}>{busy ? '正在取消…' : '确认取消'}</Button>
+            }}>{localize(busy ? '正在取消…' : '确认取消')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1528,34 +1521,32 @@ export function RequestWorkspace(props: Props) {
       >
         <DialogContent className="sr-ops-dialog" showCloseButton={!busy}>
           <DialogHeader>
-            <DialogTitle>退回草稿</DialogTitle>
+            <DialogTitle>{localize("退回草稿")}</DialogTitle>
             <DialogDescription>
-              退回后可修改申请信息和材料；已冻结资产将释放，相关特批失效，评估历史保留。
-            </DialogDescription>
+              {localize("退回后可修改申请信息和材料；已冻结资产将释放，相关特批失效，评估历史保留。")}</DialogDescription>
           </DialogHeader>
           <label className="sr-ops-field">
-            <span>退回原因 <RequiredMark /></span>
+            <span>{localize("退回原因")}<RequiredMark /></span>
             <Textarea
               value={returnDraftReason}
               disabled={busy}
               onChange={(event) => setReturnDraftReason(event.target.value)}
               rows={3}
-              placeholder="说明需要补充或修改的内容"
+              placeholder={localize("说明需要补充或修改的内容")}
             />
           </label>
-          {error && (
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => setReturnDraftOpen(false)}
             >
-              取消
-            </Button>
+              {localize("取消")}</Button>
             <Button
               disabled={busy || !returnDraftReason.trim()}
               onClick={async () => {
@@ -1583,8 +1574,7 @@ export function RequestWorkspace(props: Props) {
                 }
               }}
             >
-              确认退回草稿
-            </Button>
+              {localize("确认退回草稿")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1596,26 +1586,23 @@ export function RequestWorkspace(props: Props) {
       >
         <DialogContent className="sr-dialog">
           <DialogHeader>
-            <DialogTitle>确认提交服务请求</DialogTitle>
+            <DialogTitle>{localize("确认提交服务请求")}</DialogTitle>
             <DialogDescription>
-              共 {draft?.items.length}{' '}
-              个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX
-              核查材料、服务范围和依据。
-            </DialogDescription>
+              {localize("共")}{localize(draft?.items.length)}{localize(' ')}
+              {localize("个申请项。提交后进入“待评估”，本版申请内容将锁定，由 SmartX 核查材料、服务范围和依据。")}</DialogDescription>
           </DialogHeader>
-          {error && (
+          {localize(error && (
             <p role="alert" className="sr-error">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => setSubmitOpen(false)}
             >
-              继续检查
-            </Button>
+              {localize("继续检查")}</Button>
             <Button
               disabled={busy}
               onClick={async () => {
@@ -1647,8 +1634,7 @@ export function RequestWorkspace(props: Props) {
                 }
               }}
             >
-              确认提交
-            </Button>
+              {localize("确认提交")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1677,6 +1663,7 @@ function ItemBasicFields({
   busy: boolean;
   update: (patch: Partial<RequestItem>) => void;
 }) {
+  const { localize } = useI18n();
   const fields = useContext(RequestFieldsContext);
   const methodField = fields.find((field) => field.id === 'method');
   const formOrder = requestFormOrder(value.config);
@@ -1689,7 +1676,7 @@ function ItemBasicFields({
   return (
     <div className="sr-basic-fields">
       <section className="sr-sheet-section">
-        <h3>服务需求</h3>
+        <h3>{localize("服务需求")}</h3>
         <fieldset
           disabled={readonly || busy}
           className="sr-form-grid sr-live-fields"
@@ -1710,8 +1697,8 @@ function ItemBasicFields({
               if (key === 'method')
                 return (
                   <label>
-                    {methodField?.name ?? '服务方式'} <em>*</em>
-                    {methodField && methodField.type !== 'single' ? (
+                    {localize(methodField?.name ?? '服务方式')} <em>*</em>
+                    {localize(methodField && methodField.type !== 'single' ? (
                       <RequestFieldControl
                         disabled={readonly || busy}
                         field={methodField}
@@ -1738,36 +1725,35 @@ function ItemBasicFields({
                           })
                         }
                       >
-                        <option value="">请选择</option>
-                        {value.method &&
+                        <option value="">{localize("请选择")}</option>
+                        {localize(value.method &&
                           !methodOptions.includes(value.method) && (
                             <option disabled value={value.method}>
-                              {value.method}（已停用）
-                            </option>
-                          )}
-                        {methodOptions.map((m) => (
-                          <option key={m}>{m}</option>
-                        ))}
+                              {localize(value.method)}{localize("（已停用）")}</option>
+                          ))}
+                        {localize(methodOptions.map((m) => (
+                          <option value={m} key={m}>{localize(m)}</option>
+                        )))}
                       </select>
-                    )}
+                    ))}
                   </label>
                 );
               if (key === 'description')
                 return (
                   <label>
-                    {fields.find((field) => field.id === 'description')?.name ??
-                      '需求说明'}{' '}
-                    {value.config.basicFields?.description?.required !==
+                    {localize(fields.find((field) => field.id === 'description')?.name ??
+                      '需求说明')}{localize(' ')}
+                    {localize(value.config.basicFields?.description?.required !==
                     false ? (
                       <em>*</em>
                     ) : (
-                      <small>选填</small>
-                    )}
+                      <small>{localize("选填")}</small>
+                    ))}
                     <textarea
                       rows={4}
                       value={value.description}
                       onChange={(e) => update({ description: e.target.value })}
-                      placeholder="说明本项服务的目标、范围和期望结果，环境细节可在材料中补充。"
+                      placeholder={localize("说明本项服务的目标、范围和期望结果，环境细节可在材料中补充。")}
                     />
                   </label>
                 );
@@ -1775,26 +1761,24 @@ function ItemBasicFields({
                 return (
                   <section className="sr-sheet-section">
                     <h3>
-                      {fields.find((field) => field.id === 'businessObjects')
-                        ?.name ?? '业务对象'}{' '}
+                      {localize(fields.find((field) => field.id === 'businessObjects')
+                        ?.name ?? '业务对象')}{localize(' ')}
                       <span>
-                        {value.config.basicFields?.businessObjects?.required
+                        {localize(value.config.basicFields?.businessObjects?.required
                           ? '必填'
-                          : '选填'}{' '}
-                        · 可多选
-                      </span>
+                          : '选填')}{localize(' ')}
+                        {localize("· 可多选")}</span>
                     </h3>
-                    {value.config.basicFields?.businessObjects?.required && (
+                    {localize(value.config.basicFields?.businessObjects?.required && (
                       <p className="sr-help">
-                        请至少关联一个当前客户的业务对象。
-                      </p>
-                    )}
+                        {localize("请至少关联一个当前客户的业务对象。")}</p>
+                    ))}
                     <fieldset
                       disabled={readonly || busy}
                       className="sr-object-options"
                     >
-                      <ul aria-label="可关联的业务对象">
-                        {(readonly
+                      <ul aria-label={localize("可关联的业务对象")}>
+                        {localize((readonly
                           ? savedItemBusinessObjects(value)
                           : objects
                               .filter(
@@ -1841,60 +1825,57 @@ function ItemBasicFields({
                                 />
                                 <span className="sr-object-copy">
                                   <span className="sr-object-name">
-                                    {o.name}
+                                    {localize(o.name)}
                                     <small>
                                       （
-                                      {recorded
+                                      {localize(recorded
                                         ? `${o.nodeCount} 节点`
-                                        : '申请时数量未记录'}
+                                        : '申请时数量未记录')}
                                       ）
                                     </small>
                                   </span>
-                                  {entitlement && (
+                                  {localize(entitlement && (
                                     <span
                                       className="sr-object-entitlement"
                                       data-insufficient={
                                         entitlement.insufficient || undefined
                                       }
                                     >
-                                      <span title="可用权益 / 集群节点数">
-                                        {entitlement.name}（
-                                        {entitlement.available ?? '未维护'}/
-                                        {entitlement.required}）
+                                      <span title={localize("可用权益 / 集群节点数")}>
+                                        {localize(entitlement.name)}（
+                                        {localize(entitlement.available ?? '未维护')}/
+                                        {localize(entitlement.required)}）
                                       </span>
-                                      {entitlement.insufficient && (
+                                      {localize(entitlement.insufficient && (
                                         <span className="sr-object-entitlement-warning">
-                                          权益不足，可继续申请
-                                        </span>
-                                      )}
-                                      {entitlement.available === undefined && (
+                                          {localize("权益不足，可继续申请")}</span>
+                                      ))}
+                                      {localize(entitlement.available === undefined && (
                                         <span className="sr-help">
-                                          权益数量未维护，可继续申请
-                                        </span>
-                                      )}
+                                          {localize("权益数量未维护，可继续申请")}</span>
+                                      ))}
                                     </span>
-                                  )}
+                                  ))}
                                   <span className="sr-object-sn">
-                                    序列号：{o.sn?.trim() || '未填写'}
+                                    {localize("序列号：")}{localize(o.sn?.trim() || '未填写')}
                                   </span>
-                                  {!readonly && o.status !== '启用' && (
+                                  {localize(!readonly && o.status !== '启用' && (
                                     <span className="sr-missing">
-                                      已停用，请取消关联
-                                    </span>
-                                  )}
+                                      {localize("已停用，请取消关联")}</span>
+                                  ))}
                                 </span>
                               </label>
                             </li>
                           );
-                        })}
+                        }))}
                       </ul>
-                      {!objects.length && (
+                      {localize(!objects.length && (
                         <p className="sr-help">
-                          {customerId
+                          {localize(customerId
                             ? '该客户暂时没有可关联的业务对象。'
-                            : '请先在申请单中选择客户。'}
+                            : '请先在申请单中选择客户。')}
                         </p>
-                      )}
+                      ))}
                     </fieldset>
                   </section>
                 );
@@ -1916,19 +1897,19 @@ function ItemBasicFields({
               return (
                 <div className="request-field-input" key={key}>
                   <span>
-                    {label}{' '}
-                    {!requestFieldIsRequired(
+                    {localize(label)}{localize(' ')}
+                    {localize(!requestFieldIsRequired(
                       value.config,
                       key,
                       value.method,
                       value.values,
                     ) ? (
-                      <small>选填</small>
+                      <small>{localize("选填")}</small>
                     ) : (
                       <em>*</em>
-                    )}
+                    ))}
                   </span>
-                  {key !== 'nodes' && field ? (
+                  {localize(key !== 'nodes' && field ? (
                     <RequestFieldControl
                       disabled={readonly || busy}
                       field={field}
@@ -1949,14 +1930,14 @@ function ItemBasicFields({
                           values: { ...value.values, [key]: e.target.value },
                         })
                       }
-                      aria-label={label}
+                      aria-label={localize(label)}
                       placeholder={
-                        key === 'nodes'
+                        localize(key === 'nodes'
                           ? '填写本项涉及的节点数'
-                          : `填写${label}`
+                          : `填写${label}`)
                       }
                     />
-                  )}
+                  ))}
                 </div>
               );
             }}
@@ -1978,6 +1959,7 @@ export function RequestCatalogSettings({
   readonly?: boolean;
   audience?: CatalogFormAudience;
 }) {
+  const { localize } = useI18n();
   const writable = !readonly && canManageCatalog(actor);
   const configLabel = audience === 'internal' ? '内部申请' : audience === 'partner' ? '合作伙伴中心申请' : '客户中心申请';
   const requestFields = useContext(RequestFieldsContext);
@@ -2010,10 +1992,10 @@ export function RequestCatalogSettings({
   return (
     <section className="detail-card detail-card--wide sr-config-card">
       <div className="sr-panel-heading">
-        <h3>{configLabel}表单</h3>
+        <h3>{localize(configLabel)}{localize("表单")}</h3>
         <Button
           variant="outline"
-          aria-label={`${writable ? '配置' : '查看'}${configLabel}表单`}
+          aria-label={localize(`${writable ? '配置' : '查看'}${configLabel}表单`)}
           disabled={!ready}
           onClick={() => {
             setEditing(configForEditing(config, requestFields));
@@ -2022,32 +2004,30 @@ export function RequestCatalogSettings({
           }}
         >
           <Settings2 size={15} />
-          {writable ? '配置表单' : '查看表单'}
+          {localize(writable ? '配置表单' : '查看表单')}
         </Button>
       </div>
       <p>
-        服务项字段：
-        {config.fields
+        {localize("服务项字段：")}{localize(config.fields
           .map(
             (fieldId) =>
               requestFields.find((field) => field.id === fieldId)?.name ??
               fieldLabels[fieldId] ??
               fieldId,
           )
-          .join('、') || '无额外必填参数'}
+          .join('、') || '无额外必填参数')}
       </p>
       <p>
-        材料：
-        {config.materials
+        {localize("材料：")}{localize(config.materials
           .map((m) => `${m.name}（${m.required ? '必填' : '选填'}）`)
-          .join('、') || '无'}
+          .join('、') || '无')}
       </p>
-      {saved && <output className="sr-complete">申请配置已保存到本机</output>}
-      {error && (
+      {localize(saved && <output className="sr-complete">{localize("申请配置已保存到本机")}</output>)}
+      {localize(error && (
         <p role="alert" className="sr-error">
-          {error}
+          {localize(error)}
         </p>
-      )}
+      ))}
       <Sheet
         open={open}
         onOpenChange={(next) => {
@@ -2056,23 +2036,23 @@ export function RequestCatalogSettings({
       >
         <SheetContent className="sr-item-sheet rf-fullscreen">
           <SheetHeader>
-            <SheetTitle>{writable ? '配置' : '查看'}{configLabel}</SheetTitle>
+            <SheetTitle>{localize(writable ? '配置' : '查看')}{localize(configLabel)}</SheetTitle>
             <SheetDescription>
-              {service.name}{writable ? ' · 保存后用于新添加的申请项；不影响已创建项目。' : ''}
+              {localize(service.name)}{localize(writable ? ' · 保存后用于新添加的申请项；不影响已创建项目。' : '')}
             </SheetDescription>
           </SheetHeader>
           <RequestFormBuilder service={service} config={editing} fields={requestFields} products={products} busy={busy} readonly={!writable} update={next => { if (writable) setEditing(next); }} />
-          {error && <p role="alert" className="sr-error" style={{ margin: '8px 24px' }}>{error}</p>}
+          {localize(error && <p role="alert" className="sr-error" style={{ margin: '8px 24px' }}>{localize(error)}</p>)}
           <SheetFooter className="sr-sheet-footer">
-            {writable && <span>模板文件仅保存在本机</span>}
+            {localize(writable && <span>{localize("模板文件仅保存在本机")}</span>)}
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => setOpen(false)}
             >
-              {writable ? '取消' : '关闭'}
+              {localize(writable ? '取消' : '关闭')}
             </Button>
-            {writable && <Button
+            {localize(writable && <Button
               disabled={busy}
               onClick={async () => {
                 if (!writable) return;
@@ -2165,8 +2145,8 @@ export function RequestCatalogSettings({
                 }
               }}
             >
-              {busy ? '正在保存…' : '保存配置'}
-            </Button>}
+              {localize(busy ? '正在保存…' : '保存配置')}
+            </Button>)}
           </SheetFooter>
         </SheetContent>
       </Sheet>

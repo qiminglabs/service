@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,6 +76,7 @@ export function ServiceMailTemplateSettings({
 }: {
   actor: OperationActor;
 }) {
+  const { localize } = useI18n();
   const [data, setData] = useState<ServiceMailTemplateData>();
   const [draft, setDraft] = useState<ServiceMailTemplate | null>(null);
   const [previewOnly, setPreviewOnly] = useState(false);
@@ -129,7 +132,7 @@ export function ServiceMailTemplateSettings({
       (!previewOnly &&
         draft &&
         JSON.stringify(draft) !== baseline.current &&
-        !window.confirm('模板尚未保存，确定放弃修改？'))
+        !window.confirm(localize('模板尚未保存，确定放弃修改？')))
     )
       return;
     setDraft(null);
@@ -188,87 +191,85 @@ export function ServiceMailTemplateSettings({
     <div className="service-mail-settings">
       <div className="submission-rules-toolbar">
         <Input
-          aria-label="搜索邮件模板"
-          placeholder="搜索模板名称"
+          aria-label={localize("搜索邮件模板")}
+          placeholder={localize("搜索模板名称")}
           value={search}
           onChange={(event) => setSearch(event.target.value)}
         />
       </div>
-      {error && (
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && (
-        <output className="provider-settings-feedback">{notice}</output>
-      )}
+      ))}
+      {localize(notice && (
+        <output className="provider-settings-feedback">{localize(notice)}</output>
+      ))}
       <div className="table-scroll">
         <table className="reference-table app-list-table">
           <thead>
             <tr>
-              <th>模板名称</th>
-              <th>使用场景</th>
-              <th>版本</th>
-              <th>修改时间</th>
-              <th>修改人</th>
-              <th data-list-actions>操作</th>
+              <th>{localize("模板名称")}</th>
+              <th>{localize("使用场景")}</th>
+              <th>{localize("版本")}</th>
+              <th>{localize("修改时间")}</th>
+              <th>{localize("修改人")}</th>
+              <th data-list-actions>{localize("操作")}</th>
             </tr>
           </thead>
           <tbody>
-            {data?.config.templates
+            {localize(data?.config.templates
               .filter((template) =>
                 mailTemplateNames[template.id].includes(search.trim()),
               )
               .map((template) => (
                 <tr key={template.id}>
                   <td>
-                    <strong>{mailTemplateNames[template.id]}</strong>
+                    <strong>{localize(mailTemplateNames[template.id])}</strong>
                   </td>
-                  <td>{mailTemplateUses[template.id]}</td>
-                  <td>v{template.version}</td>
+                  <td>{localize(mailTemplateUses[template.id])}</td>
+                  <td>v{localize(template.version)}</td>
                   <td>
-                    {template.updatedAt
+                    {localize(template.updatedAt
                       ? new Date(template.updatedAt).toLocaleString('zh-CN', {
                           hour12: false,
                         })
-                      : '—'}
+                      : '—')}
                   </td>
-                  <td>{template.updatedBy}</td>
+                  <td>{localize(template.updatedBy)}</td>
                   <td>
                     <div className="service-mail-actions">
                       <Button
                         variant="ghost"
-                        aria-label={`编辑${mailTemplateNames[template.id]}`}
+                        aria-label={localize(`编辑${mailTemplateNames[template.id]}`)}
                         disabled={!allowed}
                         onClick={() => open(template, false)}
                       >
-                        编辑模板
-                      </Button>
+                        {localize("编辑模板")}</Button>
                       <Button
                         variant="ghost"
-                        aria-label={`预览${mailTemplateNames[template.id]}`}
+                        aria-label={localize(`预览${mailTemplateNames[template.id]}`)}
                         onClick={() => open(template, true)}
                       >
-                        预览
-                      </Button>
+                        {localize("预览")}</Button>
                     </div>
                   </td>
                 </tr>
-              ))}
-            {(!data ||
+              )))}
+            {localize((!data ||
               !data.config.templates.some((template) =>
                 mailTemplateNames[template.id].includes(search.trim()),
               )) && (
               <tr>
                 <td colSpan={6} className="routing-empty">
-                  {data
+                  {localize(data
                     ? '无匹配模板'
                     : error
                       ? '模板读取失败'
-                      : '正在读取模板…'}
+                      : '正在读取模板…')}
                 </td>
               </tr>
-            )}
+            ))}
           </tbody>
         </table>
       </div>
@@ -285,17 +286,17 @@ export function ServiceMailTemplateSettings({
         >
           <DialogHeader>
             <DialogTitle>
-              {previewOnly ? '预览' : '编辑'}
-              {draft && mailTemplateNames[draft.id]}
+              {localize(previewOnly ? '预览' : '编辑')}
+              {localize(draft && mailTemplateNames[draft.id])}
             </DialogTitle>
           </DialogHeader>
-          {draft && report && (
+          {localize(draft && report && (
             <div className="service-mail-template-layout">
-              {!previewOnly && (
+              {localize(!previewOnly && (
                 <div className="service-mail-template-fields">
                   <div className="service-mail-variables">
-                    <span>插入字段</span>
-                    {mailTemplateVariables.map((variable) => (
+                    <span>{localize("插入字段")}</span>
+                    {localize(mailTemplateVariables.map((variable) => (
                       <Button
                         type="button"
                         key={variable}
@@ -304,11 +305,11 @@ export function ServiceMailTemplateSettings({
                         disabled={busy}
                         onClick={() => insert(variable)}
                       >
-                        {variable}
+                        {localize(variable)}
                       </Button>
-                    ))}
+                    )))}
                   </div>
-                  {mailTemplateFields
+                  {localize(mailTemplateFields
                     .filter(
                       (field) =>
                         (field.key !== 'confirmationNotice' ||
@@ -354,10 +355,10 @@ export function ServiceMailTemplateSettings({
                           htmlFor={props.id}
                         >
                           <span>
-                            {field.label}
-                            {field.required && <em> *</em>}
+                            {localize(field.label)}
+                            {localize(field.required && <em> *</em>)}
                           </span>
-                          {singleLine ? (
+                          {localize(singleLine ? (
                             <Input
                               {...props}
                               ref={(node) => {
@@ -377,29 +378,29 @@ export function ServiceMailTemplateSettings({
                                 if (node) controls.current[field.key] = node;
                               }}
                             />
-                          )}
+                          ))}
                         </label>
                       );
-                    })}
+                    }))}
                 </div>
-              )}
+              ))}
               <div className="service-mail-template-preview">
-                <h3>邮件预览 · 示例数据</h3>
+                <h3>{localize("邮件预览 · 示例数据")}</h3>
                 <p className="service-mail-preview-subject">
-                  <strong>主题：</strong>
-                  {report.subject}
+                  <strong>{localize("主题：")}</strong>
+                  {localize(report.subject)}
                 </p>
                 <ReportPreview report={report} projectName="示例服务项目" />
               </div>
             </div>
-          )}
-          {formError && (
+          ))}
+          {localize(formError && (
             <p className="sr-error" role="alert">
-              {formError}
+              {localize(formError)}
             </p>
-          )}
+          ))}
           <DialogFooter>
-            {!previewOnly && draft && (
+            {localize(!previewOnly && draft && (
               <Button
                 variant="ghost"
                 disabled={busy}
@@ -414,17 +415,16 @@ export function ServiceMailTemplateSettings({
                   setFormError('');
                 }}
               >
-                恢复默认
-              </Button>
-            )}
+                {localize("恢复默认")}</Button>
+            ))}
             <Button variant="outline" disabled={busy} onClick={close}>
-              {previewOnly ? '关闭' : '取消'}
+              {localize(previewOnly ? '关闭' : '取消')}
             </Button>
-            {!previewOnly && (
+            {localize(!previewOnly && (
               <Button disabled={busy || !allowed} onClick={() => void save()}>
-                {busy ? '保存中…' : '保存模板'}
+                {localize(busy ? '保存中…' : '保存模板')}
               </Button>
-            )}
+            ))}
           </DialogFooter>
         </DialogContent>
       </Dialog>

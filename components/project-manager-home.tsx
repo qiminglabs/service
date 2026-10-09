@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -69,6 +71,7 @@ export function ProjectManagerHome({
   directory,
   onOpen,
 }: Props) {
+  const { localize } = useI18n();
   const [projects, setProjects] = useState<ServiceProjectRecord[]>([]);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [reviewContext, setReviewContext] = useState<ProjectDashboardContext>();
@@ -217,12 +220,12 @@ export function ProjectManagerHome({
       .getElementById('pm-projects')
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-  if (loading) return <output className="pm-home">正在读取工作台…</output>;
+  if (loading) return <output className="pm-home">{localize("正在读取工作台…")}</output>;
   if (error)
     return (
       <div className="pm-home">
         <p role="alert" className="sr-error">
-          {error}
+          {localize(error)}
         </p>
       </div>
     );
@@ -230,7 +233,7 @@ export function ProjectManagerHome({
     <div className="pm-home">
       <TooltipProvider delay={120}>
         <div className="pm-metrics">
-          {[
+          {localize([
             {
               label: '在管项目',
               value: live.length,
@@ -272,11 +275,11 @@ export function ProjectManagerHome({
             <div className="pm-metric" key={card.label}>
               <div className="pm-metric-top">
                 <div className="pm-metric-label">
-                  <span>{card.label}</span>
+                  <span>{localize(card.label)}</span>
                   <Tooltip>
                     <TooltipTrigger
                       className="pm-metric-info"
-                      aria-label={`${card.label}统计说明`}
+                      aria-label={localize(`${card.label}统计说明`)}
                     >
                       <CircleAlert size={15} aria-hidden="true" />
                     </TooltipTrigger>
@@ -285,8 +288,8 @@ export function ProjectManagerHome({
                       side="bottom"
                       align="start"
                     >
-                      <strong>{card.label}</strong>
-                      <p>{card.note}</p>
+                      <strong>{localize(card.label)}</strong>
+                      <p>{localize(card.note)}</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -299,17 +302,17 @@ export function ProjectManagerHome({
               <button
                 type="button"
                 className="pm-metric-action"
-                aria-label={`查看${card.label}：${card.value}项`}
+                aria-label={localize(`查看${card.label}：${card.value}项`)}
                 onClick={card.action}
               >
                 <strong>
-                  {card.value}
-                  <small>项</small>
+                  {localize(card.value)}
+                  <small>{localize("项")}</small>
                 </strong>
                 <ArrowUpRight size={15} aria-hidden="true" />
               </button>
             </div>
-          ))}
+          )))}
         </div>
       </TooltipProvider>
       <div className="pm-columns">
@@ -319,19 +322,19 @@ export function ProjectManagerHome({
       <section className="pm-panel" id="pm-projects">
         <div className="pm-panel-heading">
           <h2>
-            项目进展 <span>{shownProjects.length}</span>
+            {localize("项目进展")}<span>{localize(shownProjects.length)}</span>
           </h2>
           <button
             type="button"
             className="pm-link"
             onClick={() => onOpen('projects')}
           >
-            全部服务项目 <ArrowUpRight size={15} />
+            {localize("全部服务项目")}<ArrowUpRight size={15} />
           </button>
         </div>
         <div className="pm-project-toolbar">
           <div className="pm-filters">
-            {[
+            {localize([
               '全部在管',
               '待启动',
               '进行中',
@@ -347,13 +350,13 @@ export function ProjectManagerHome({
                 key={value}
                 onClick={() => selectProjectFilter(value)}
               >
-                {value}
+                {localize(value)}
               </button>
-            ))}
+            )))}
           </div>
           <input
-            aria-label="搜索项目"
-            placeholder="搜索项目 / 客户"
+            aria-label={localize("搜索项目")}
+            placeholder={localize("搜索项目 / 客户")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -366,18 +369,18 @@ export function ProjectManagerHome({
           <table className="pm-table">
             <thead>
               <tr>
-                <th>项目 / 客户</th>
-                <th>项目经理</th>
-                <th>状态</th>
-                <th>步骤完成进度</th>
-                <th>计划完成</th>
+                <th>{localize("项目 / 客户")}</th>
+                <th>{localize("项目经理")}</th>
+                <th>{localize("状态")}</th>
+                <th>{localize("步骤完成进度")}</th>
+                <th>{localize("计划完成")}</th>
                 <th>
-                  <span className="sr-only">操作</span>
+                  <span className="sr-only">{localize("操作")}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {shownProjects.map((project) => {
+              {localize(shownProjects.map((project) => {
                 const progress = projectProgress(project);
                 return (
                   <tr key={project.id}>
@@ -387,35 +390,35 @@ export function ProjectManagerHome({
                         className="pm-project-name"
                         onClick={() => onOpen('projects', project.id)}
                       >
-                        {project.name}
+                        {localize(project.name)}
                       </button>
-                      <small>{customerName(project.customerId)}</small>
+                      <small>{localize(customerName(project.customerId))}</small>
                     </td>
                     <td>
-                      {project.collaborators?.internal
+                      {localize(project.collaborators?.internal
                         ?.filter((person) =>
                           person.assignmentRoles?.includes('项目经理'),
                         )
                         .map((person) => person.name)
-                        .join('、') || '未指派'}
+                        .join('、') || '未指派')}
                     </td>
                     <td>
                       <span className="pm-tag" data-status={project.status}>
-                        {project.status}
+                        {localize(project.status)}
                       </span>
                     </td>
                     <td>
                       <div
                         className="pm-progress"
-                        title="已完成或跳过的步骤／总步骤"
+                        title={localize("已完成或跳过的步骤／总步骤")}
                       >
                         <progress
-                          aria-label={`${project.name}已完成或跳过 ${progress.completed} 步／共 ${progress.total} 步`}
+                          aria-label={localize(`${project.name}已完成或跳过 ${progress.completed} 步／共 ${progress.total} 步`)}
                           value={progress.percent}
                           max={100}
                         />
                         <span>
-                          {progress.completed}/{progress.total}
+                          {localize(progress.completed)}/{localize(progress.total)}
                         </span>
                       </div>
                     </td>
@@ -424,8 +427,8 @@ export function ProjectManagerHome({
                         projectOverdue(project, today) ? 'pm-danger' : ''
                       }
                     >
-                      {project.plannedCompletionDate || '未设置'}
-                      {projectOverdue(project, today) && <small>已逾期</small>}
+                      {localize(project.plannedCompletionDate || '未设置')}
+                      {localize(projectOverdue(project, today) && <small>{localize("已逾期")}</small>)}
                     </td>
                     <td>
                       <button
@@ -433,25 +436,25 @@ export function ProjectManagerHome({
                         className="pm-link"
                         onClick={() => onOpen('projects', project.id)}
                       >
-                        查看
-                      </button>
+                        {localize("查看")}</button>
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
-          {!shownProjects.length && <Empty text="暂无符合条件的项目" />}
+          {localize(!shownProjects.length && <Empty text="暂无符合条件的项目" />)}
         </div>
       </section>
     </div>
   );
 }
 function Empty({ text }: { text: string }) {
+  const { localize } = useI18n();
   return (
     <div className="pm-empty">
       <CheckCheck size={24} />
-      <span>{text}</span>
+      <span>{localize(text)}</span>
     </div>
   );
 }

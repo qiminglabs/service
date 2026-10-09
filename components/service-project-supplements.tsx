@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 /* eslint-disable jsx-a11y/prefer-tag-over-role -- The mention popup keeps focus in the text editor and uses its keyboard-controlled listbox. */
 import { useEffect, useId, useRef, useState } from 'react';
 import { AtSign, Paperclip, FileText } from 'lucide-react';
@@ -78,6 +80,7 @@ export function ProjectSupplementsPanel({
   editable: boolean;
   emptyMessage?: string;
 }) {
+  const { localize } = useI18n();
   const [comment, setComment] = useState('');
   const [files, setFiles] = useState<StoredFile[]>([]);
   const [externalVisible, setExternalVisible] = useState(
@@ -149,11 +152,11 @@ export function ProjectSupplementsPanel({
     <section className="sr-panel sr-ops-panel">
       <div className="sr-ops-heading">
         <div>
-          <h3>补充信息</h3>
+          <h3>{localize("补充信息")}</h3>
         </div>
       </div>
       <div className="sr-supplements-body">
-        {editable ? (
+        {localize(editable ? (
           <div className="sr-supplement-composer">
             <div className="sr-mention-composer">
               <Popover
@@ -165,8 +168,8 @@ export function ProjectSupplementsPanel({
               >
                 <Textarea
                   ref={commentInput}
-                  aria-label="补充说明或评论"
-                  placeholder="填写补充说明或评论，输入 @ 选择协作人，也可仅上传附件"
+                  aria-label={localize("补充说明或评论")}
+                  placeholder={localize("填写补充说明或评论，输入 @ 选择协作人，也可仅上传附件")}
                   value={comment}
                   aria-autocomplete="list"
                   aria-controls={query ? listId : undefined}
@@ -228,17 +231,16 @@ export function ProjectSupplementsPanel({
                       className="sr-mention-picker"
                       initialFocus={false}
                       finalFocus={false}
-                      aria-label="@协作人"
+                      aria-label={localize("@协作人")}
                     >
                       <p>
-                        @协作人
-                      </p>
+                        {localize("@协作人")}</p>
                       <div
                         role="listbox"
                         id={listId}
-                        aria-label="可 @ 的协作人"
+                        aria-label={localize("可 @ 的协作人")}
                       >
-                        {matches.map((user, index) => (
+                        {localize(matches.map((user, index) => (
                           <button
                             type="button"
                             role="option"
@@ -258,41 +260,39 @@ export function ProjectSupplementsPanel({
                               ? customers.find(customer => customer.id === record.customerId)?.name
                               : users.find(person => person.id === user.id)?.companyName ?? internalProjectProvider.name)} />
                           </button>
-                        ))}
+                        )))}
                       </div>
-                      {!matches.length && (
+                      {localize(!matches.length && (
                         <span className="sr-mention-empty">
-                          没有匹配的可选用户
-                        </span>
-                      )}
+                          {localize("没有匹配的可选用户")}</span>
+                      ))}
                     </PopoverPrimitive.Popup>
                   </PopoverPrimitive.Positioner>
                 </PopoverPrimitive.Portal>
               </Popover>
             </div>
-            {files.length > 0 && (
+            {localize(files.length > 0 && (
               <div className="sr-supplement-files">
-                {files.map((file) => (
+                {localize(files.map((file) => (
                   <div className="sr-supplement-file" key={file.id}>
                     <FileText size={16} aria-hidden="true" />
-                    <span title={file.name}>{file.name}</span>
-                    <small>{(file.size / 1024).toFixed(1)} KB</small>
+                    <span title={localize(file.name)}>{localize(file.name)}</span>
+                    <small>{localize((file.size / 1024).toFixed(1))} KB</small>
                     <Button
                       variant="ghost"
                       disabled={disabled}
-                      aria-label={`移除 ${file.name}`}
+                      aria-label={localize(`移除 ${file.name}`)}
                       onClick={() =>
                         setFiles((old) =>
                           old.filter((item) => item.id !== file.id),
                         )
                       }
                     >
-                      移除
-                    </Button>
+                      {localize("移除")}</Button>
                   </div>
-                ))}
+                )))}
               </div>
-            )}
+            ))}
             <div className="sr-supplement-toolbar">
               <div className="sr-supplement-upload">
                 <Button
@@ -301,12 +301,11 @@ export function ProjectSupplementsPanel({
                   onClick={() => uploadInput.current?.click()}
                 >
                   <Paperclip size={16} />
-                  上传附件
-                </Button>
+                  {localize("上传附件")}</Button>
                 <Button
                   variant="ghost"
                   disabled={disabled}
-                  aria-label="@协作人"
+                  aria-label={localize("@协作人")}
                   onClick={() => {
                     const input = commentInput.current;
                     const start = input?.selectionStart ?? comment.length,
@@ -326,13 +325,12 @@ export function ProjectSupplementsPanel({
                   }}
                 >
                   <AtSign size={16} />
-                  协作人
-                </Button>
-                <span>单文件不超过 20 MB</span>
+                  {localize("协作人")}</Button>
+                <span>{localize("单文件不超过 20 MB")}</span>
                 <input
                   ref={uploadInput}
                   hidden
-                  aria-label="上传补充资料附件"
+                  aria-label={localize("上传补充资料附件")}
                   type="file"
                   multiple
                   accept={meetingAttachmentAccept}
@@ -351,26 +349,26 @@ export function ProjectSupplementsPanel({
                 />
               </div>
               <div className="sr-supplement-actions">
-                {isInternal(actor.role) && (
+                {localize(isInternal(actor.role) && (
                   <label
                     className="sr-supplement-visibility"
                     htmlFor={`${listId}-visibility`}
                   >
-                    <span>可见范围</span>
+                    <span>{localize("可见范围")}</span>
                     <NativeSelect
                       id={`${listId}-visibility`}
-                      aria-label="补充资料可见范围"
+                      aria-label={localize("补充资料可见范围")}
                       value={externalVisible ? 'public' : 'internal'}
                       disabled={disabled}
                       onChange={(event) =>
                         setExternalVisible(event.target.value === 'public')
                       }
                     >
-                      <option value="internal">仅内部可见</option>
-                      <option value="public">客户可见</option>
+                      <option value="internal">{localize("仅内部可见")}</option>
+                      <option value="public">{localize("客户可见")}</option>
                     </NativeSelect>
                   </label>
-                )}
+                ))}
                 <Button
                   className="sr-supplement-publish"
                   disabled={disabled || (!comment.trim() && !files.length)}
@@ -403,49 +401,48 @@ export function ProjectSupplementsPanel({
                     }
                   }}
                 >
-                  {working ? '发布中…' : '发布'}
+                  {localize(working ? '发布中…' : '发布')}
                 </Button>
               </div>
             </div>
-            {error && (
+            {localize(error && (
               <p role="alert" className="sr-error">
-                {error}
+                {localize(error)}
               </p>
-            )}
+            ))}
           </div>
-        ) : null}
+        ) : null)}
         <div className="sr-supplement-records">
-          {[...items].reverse().map((item) => (
+          {localize([...items].reverse().map((item) => (
             <article key={item.id} className="sr-assessment-plan">
               <div className="sr-assessment-round-title">
-                <strong>{item.author}</strong>
+                <strong>{localize(item.author)}</strong>
                 <time className="sr-help" dateTime={item.at}>
-                  {new Date(item.at).toLocaleString('zh-CN', { hour12: false })}
+                  {localize(new Date(item.at).toLocaleString('zh-CN', { hour12: false }))}
                 </time>
-                {isInternal(actor.role) &&
+                {localize(isInternal(actor.role) &&
                   (item.externalVisible ? (
                     <CustomerVisibleBadge />
                   ) : (
-                    <span className="sr-assessment-badge">仅内部可见</span>
-                  ))}
+                    <span className="sr-assessment-badge">{localize("仅内部可见")}</span>
+                  )))}
               </div>
-              {item.comment && (
+              {localize(item.comment && (
                 <p className="whitespace-pre-wrap break-words my-3">
-                  {renderMentionText(item.comment, item.mentions)}
+                  {localize(renderMentionText(item.comment, item.mentions))}
                 </p>
-              )}
-              {item.files.map((file) => (
+              ))}
+              {localize(item.files.map((file) => (
                 <div key={file.id} className="sr-supplement-file">
                   <FileText size={16} aria-hidden="true" />
-                  <span title={file.name}>{file.name}</span>
+                  <span title={localize(file.name)}>{localize(file.name)}</span>
                   <Button variant="ghost" onClick={() => downloadFile(file)}>
-                    下载
-                  </Button>
+                    {localize("下载")}</Button>
                 </div>
-              ))}
+              )))}
             </article>
-          ))}
-          {!items.length && <p className="sr-help">{emptyMessage}</p>}
+          )))}
+          {localize(!items.length && <p className="sr-help">{localize(emptyMessage)}</p>)}
         </div>
       </div>
     </section>

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -62,6 +64,7 @@ export function WorkOrderChangeAction({
   services = [],
   compact = false,
 }: Props & { order?: ServiceWorkOrder; services?: CatalogService[]; compact?: boolean }) {
+  const { localize } = useI18n();
   const [open, setOpen] = useState(false);
   const [serviceId, setServiceId] = useState('');
   const [choosing, setChoosing] = useState(true);
@@ -163,7 +166,7 @@ export function WorkOrderChangeAction({
           loadVersion.current += 1;
         }}
       >
-        {order ? compact ? '取消' : '取消工单' : '新建工单'}
+        {localize(order ? compact ? '取消' : '取消工单' : '新建工单')}
       </Button>
       <Dialog
         open={open}
@@ -183,23 +186,23 @@ export function WorkOrderChangeAction({
           showCloseButton={!saving}
         >
           <DialogHeader>
-            <DialogTitle>{order ? '取消工单' : '新建工单'}</DialogTitle>
-            {order && <DialogDescription>取消后不可恢复，已录入的执行记录将保留。</DialogDescription>}
-            {!order && (
+            <DialogTitle>{localize(order ? '取消工单' : '新建工单')}</DialogTitle>
+            {localize(order && <DialogDescription>{localize("取消后不可恢复，已录入的执行记录将保留。")}</DialogDescription>)}
+            {localize(!order && (
               <DialogDescription>
-                {choosing ? '选择服务目录' : '填写工单信息'}
+                {localize(choosing ? '选择服务目录' : '填写工单信息')}
               </DialogDescription>
-            )}
+            ))}
           </DialogHeader>
-          {order ? (
+          {localize(order ? (
             <div className="wo-assignment-form wo-change-form">
               <p>
-                {order.item.serviceName} · {order.id}
+                {localize(order.item.serviceName)} · {localize(order.id)}
               </p>
               <label>
-                取消原因 <em>*</em>
+                {localize("取消原因")}<em>*</em>
                 <Textarea
-                  aria-label="取消原因"
+                  aria-label={localize("取消原因")}
                   required
                   maxLength={2000}
                   value={reason}
@@ -210,44 +213,43 @@ export function WorkOrderChangeAction({
             </div>
           ) : (
             <div className="sr-item-dialog-body">
-              {choosing ? (
+              {localize(choosing ? (
                 <>
                   <Input
-                    aria-label="搜索可创建工单的服务目录"
-                    placeholder="搜索服务名称或编码"
+                    aria-label={localize("搜索可创建工单的服务目录")}
+                    placeholder={localize("搜索服务名称或编码")}
                     value={query}
                     disabled={loading || saving}
                     onChange={(event) => setQuery(event.target.value)}
                   />
                   <div className="sr-catalog-options">
-                    {matches.map((service) => (
+                    {localize(matches.map((service) => (
                       <div key={service.id}>
                         <FileText size={20} aria-hidden="true" />
                         <div>
-                          <strong>{service.name}</strong>
+                          <strong>{localize(service.name)}</strong>
                           <p>
-                            {service.id} · {service.category}
+                            {localize(service.id)} · {localize(service.category)}
                           </p>
-                          {service.description?.trim() && (
+                          {localize(service.description?.trim() && (
                             <p className="sr-catalog-service-description">
-                              {service.description}
+                              {localize(service.description)}
                             </p>
-                          )}
+                          ))}
                         </div>
                         <Button
                           variant="outline"
                           disabled={loading || saving}
                           onClick={() => void selectService(service)}
                         >
-                          选择
-                        </Button>
+                          {localize("选择")}</Button>
                       </div>
+                    )))}
+                    {localize(!matches.length && (
+                      <p className="sr-empty">{localize("没有匹配的已启用服务。")}</p>
                     ))}
-                    {!matches.length && (
-                      <p className="sr-empty">没有匹配的已启用服务。</p>
-                    )}
                   </div>
-                  {loading && <output>加载中…</output>}
+                  {localize(loading && <output>{localize("加载中…")}</output>)}
                 </>
               ) : (
                 item &&
@@ -256,16 +258,16 @@ export function WorkOrderChangeAction({
                     <div className="sr-selected-service">
                       <div>
                         <div className="sr-selected-service-heading">
-                          <strong>{item.serviceName}</strong>
+                          <strong>{localize(item.serviceName)}</strong>
                           <p>
-                            {item.serviceId} · 版本 v{service?.version ?? 1}
+                            {localize(item.serviceId)} {localize(" · 版本 v")}{localize(service?.version ?? 1)}
                           </p>
                         </div>
-                        {service?.description?.trim() && (
+                        {localize(service?.description?.trim() && (
                           <p className="sr-selected-service-content">
-                            服务内容：{service.description}
+                            {localize("服务内容：")}{localize(service.description)}
                           </p>
-                        )}
+                        ))}
                       </div>
                       <Button
                         variant="ghost"
@@ -275,8 +277,7 @@ export function WorkOrderChangeAction({
                           setError('');
                         }}
                       >
-                        重新选择目录
-                      </Button>
+                        {localize("重新选择目录")}</Button>
                     </div>
                     <ProjectItemBasicFields
                       value={item}
@@ -298,14 +299,14 @@ export function WorkOrderChangeAction({
                     />
                   </>
                 )
-              )}
+              ))}
             </div>
-          )}
-          {error && (
+          ))}
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
@@ -315,16 +316,16 @@ export function WorkOrderChangeAction({
                 loadVersion.current += 1;
               }}
             >
-              {order ? '返回' : '取消'}
+              {localize(order ? '返回' : '取消')}
             </Button>
-            {(order || !choosing) && (
+            {localize((order || !choosing) && (
               <Button
                 disabled={saving || loading || (order ? !reason.trim() : !item)}
                 onClick={() => void submit()}
               >
-                {saving ? '保存中…' : order ? '确认取消' : '创建工单'}
+                {localize(saving ? '保存中…' : order ? '确认取消' : '创建工单')}
               </Button>
-            )}
+            ))}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -334,13 +335,14 @@ export function WorkOrderChangeAction({
 export function SubmitProjectReviewButton(
   props: Props & { beforeSubmit?: () => boolean; onValidationError: (message: string) => void },
 ) {
+  const { localize } = useI18n();
   const lock = useRef(false);
   if (!canSubmitProjectReview(props.project, props.actor)) return null;
   const issue = projectReviewIssue(props.project);
   return (
       <Button
         disabled={props.busy || !!issue}
-        title={issue ?? undefined}
+        title={localize(issue ?? undefined)}
         onClick={async () => {
           if (lock.current) return;
           props.onValidationError('');
@@ -368,12 +370,12 @@ export function SubmitProjectReviewButton(
           }
         }}
       >
-        提交复核
-      </Button>
+        {localize("提交复核")}</Button>
   );
 }
 
 export function ReturnProjectReviewButton(props: Props) {
+  const { localize } = useI18n();
   const [open, setOpen] = useState(false), [reason, setReason] = useState(''), [error, setError] = useState('');
   const lock = useRef(false);
   if (!canReturnProjectReview(props.project, props.actor)) return null;
@@ -387,19 +389,20 @@ export function ReturnProjectReviewButton(props: Props) {
     finally { lock.current = false; props.onBusy(false); }
   }
   return <>
-    <Button variant="outline" disabled={props.busy} onClick={() => { setOpen(true); setReason(''); setError(''); }}>退回执行</Button>
+    <Button variant="outline" disabled={props.busy} onClick={() => { setOpen(true); setReason(''); setError(''); }}>{localize("退回执行")}</Button>
     <Dialog open={open} onOpenChange={value => { if (!props.busy) setOpen(value); }}><DialogContent showCloseButton={!props.busy}>
-      <DialogHeader><DialogTitle>退回执行</DialogTitle><DialogDescription>{props.project.name}</DialogDescription></DialogHeader>
+      <DialogHeader><DialogTitle>{localize("退回执行")}</DialogTitle><DialogDescription>{localize(props.project.name)}</DialogDescription></DialogHeader>
       <div className="sr-ops-form">
-        <label className="sr-ops-field"><span>退回原因 <RequiredMark /></span><Textarea aria-label="退回原因" required maxLength={2000} disabled={props.busy} value={reason} onChange={event => setReason(event.target.value)} /></label>
-        {error && <p className="sr-error" role="alert">{error}</p>}
+        <label className="sr-ops-field"><span>{localize("退回原因")}<RequiredMark /></span><Textarea aria-label={localize("退回原因")} required maxLength={2000} disabled={props.busy} value={reason} onChange={event => setReason(event.target.value)} /></label>
+        {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}
       </div>
-      <DialogFooter><Button variant="outline" disabled={props.busy} onClick={() => setOpen(false)}>取消</Button><Button disabled={props.busy || !reason.trim()} onClick={() => void submit()}>确认退回</Button></DialogFooter>
+      <DialogFooter><Button variant="outline" disabled={props.busy} onClick={() => setOpen(false)}>{localize("取消")}</Button><Button disabled={props.busy || !reason.trim()} onClick={() => void submit()}>{localize("确认退回")}</Button></DialogFooter>
     </DialogContent></Dialog>
   </>;
 }
 
 export function WorkOrderSuspensionAction(props: Props & { order: ServiceWorkOrder }) {
+  const { localize } = useI18n();
   const lock = useRef(false);
   const [error, setError] = useState('');
   const resume = props.order.status === '已暂停';
@@ -413,5 +416,5 @@ export function WorkOrderSuspensionAction(props: Props & { order: ServiceWorkOrd
     } catch (cause) { setError(cause instanceof Error ? cause.message : '操作失败，请重试。'); }
     finally { lock.current = false; props.onBusy(false); }
   }
-  return <><Button variant="outline" size="sm" disabled={props.busy} onClick={() => void save()}>{resume ? '恢复' : '暂停'}</Button>{error && <span className="sr-error" role="alert">{error}</span>}</>;
+  return <><Button variant="outline" size="sm" disabled={props.busy} onClick={() => void save()}>{localize(resume ? '恢复' : '暂停')}</Button>{localize(error && <span className="sr-error" role="alert">{localize(error)}</span>)}</>;
 }

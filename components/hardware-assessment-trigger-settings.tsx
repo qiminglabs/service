@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -35,6 +37,7 @@ export function HardwareAssessmentTriggerSettings({
   ready: boolean;
   onSaved: (config: RoutingConfig) => void;
 }) {
+  const { localize } = useI18n();
   const trigger = parseHardwareAssessmentTrigger(config.hardware.trigger);
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
@@ -56,16 +59,16 @@ export function HardwareAssessmentTriggerSettings({
   );
   return (
     <>
-      <section className="routing-default" aria-label="硬件评估触发条件">
+      <section className="routing-default" aria-label={localize("硬件评估触发条件")}>
         <div>
-          <strong>触发条件</strong>
+          <strong>{localize("触发条件")}</strong>
           <p className="sr-help">
-            {trigger.enabled
+            {localize(trigger.enabled
               ? `服务项包含任一：${trigger.serviceIds.map(name).join('、')}`
-              : '已关闭，不自动增加硬件产品经理评估。'}
+              : '已关闭，不自动增加硬件产品经理评估。')}
           </p>
         </div>
-        {canManageRouting(actor) && (
+        {localize(canManageRouting(actor) && (
           <Button
             variant="outline"
             disabled={!ready || busy}
@@ -78,9 +81,8 @@ export function HardwareAssessmentTriggerSettings({
               setOpen(true);
             }}
           >
-            配置触发条件
-          </Button>
-        )}
+            {localize("配置触发条件")}</Button>
+        ))}
       </section>
       <Dialog
         open={open}
@@ -90,7 +92,7 @@ export function HardwareAssessmentTriggerSettings({
       >
         <DialogContent className="routing-trigger-dialog">
           <DialogHeader>
-            <DialogTitle>硬件评估触发条件</DialogTitle>
+            <DialogTitle>{localize("硬件评估触发条件")}</DialogTitle>
           </DialogHeader>
           <label
             htmlFor="hardware-trigger-enabled"
@@ -102,22 +104,20 @@ export function HardwareAssessmentTriggerSettings({
               onCheckedChange={(checked) => setEnabled(checked === true)}
               disabled={busy}
             />
-            启用硬件产品经理评估
-          </label>
+            {localize("启用硬件产品经理评估")}</label>
           <div className="submission-rule-field">
-            <span>触发服务项{enabled && <em> *</em>}</span>
+            <span>{localize("触发服务项")}{localize(enabled && <em> *</em>)}</span>
             <p className="sr-help">
-              申请包含任一所选服务项时，增加硬件产品经理评估。
-            </p>
+              {localize("申请包含任一所选服务项时，增加硬件产品经理评估。")}</p>
             <Input
-              aria-label="搜索触发服务项"
-              placeholder="搜索服务目录"
+              aria-label={localize("搜索触发服务项")}
+              placeholder={localize("搜索服务目录")}
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               disabled={busy || !enabled}
             />
-            <div className="routing-trigger-options" aria-label="服务目录选项">
-              {[
+            <div className="routing-trigger-options" aria-label={localize("服务目录选项")}>
+              {localize([
                 ...missing.map((id) => ({ id, name: `${id}（已不存在）` })),
                 ...options,
               ].map((service) => (
@@ -141,31 +141,29 @@ export function HardwareAssessmentTriggerSettings({
                       )
                     }
                   />
-                  <span>{service.name}</span>
+                  <span>{localize(service.name)}</span>
                 </label>
+              )))}
+              {localize(!options.length && !missing.length && (
+                <p className="sr-help">{localize("没有匹配的服务项。")}</p>
               ))}
-              {!options.length && !missing.length && (
-                <p className="sr-help">没有匹配的服务项。</p>
-              )}
             </div>
             <small className="sr-help">
-              已选择 {selected.length}{' '}
-              项。保存后对新提交申请生效；已有请求可在分配预览中应用当前配置。
-            </small>
+              {localize("已选择")}{localize(selected.length)}{localize(' ')}
+              {localize("项。保存后对新提交申请生效；已有请求可在分配预览中应用当前配置。")}</small>
           </div>
-          {error && (
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => setOpen(false)}
             >
-              取消
-            </Button>
+              {localize("取消")}</Button>
             <Button
               disabled={busy || (enabled && !selected.length)}
               onClick={async () => {
@@ -201,8 +199,7 @@ export function HardwareAssessmentTriggerSettings({
                 }
               }}
             >
-              保存触发条件
-            </Button>
+              {localize("保存触发条件")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { canActForUser } from '@/lib/demo-permissions';
 import { requestTypeOf } from '@/lib/request-types';
@@ -80,6 +82,7 @@ type Props = {
 const stamp = (s: string) =>
   new Date(s).toLocaleString('zh-CN', { hour12: false });
 function Tag({ children }: { children: string }) {
+  const { localize } = useI18n();
   const tone = ['有效', '已通过', '已结束'].includes(children)
     ? 'green'
     : ['待审批', '待核对', '已预约', '进行中'].includes(children)
@@ -89,7 +92,7 @@ function Tag({ children }: { children: string }) {
         : 'muted';
   return (
     <span className="sr-badge" data-tone={tone}>
-      {children}
+      {localize(children)}
     </span>
   );
 }
@@ -102,11 +105,12 @@ function Empty({
   title: string;
   detail: string;
 }) {
+  const { localize } = useI18n();
   return (
     <div className="sr-ops-empty">
-      {icon}
-      <h4>{title}</h4>
-      <p>{detail}</p>
+      {localize(icon)}
+      <h4>{localize(title)}</h4>
+      <p>{localize(detail)}</p>
     </div>
   );
 }
@@ -119,21 +123,23 @@ function Field({
   required?: boolean;
   children: ReactNode;
 }) {
+  const { localize } = useI18n();
   return (
     <label className="sr-ops-field">
       <span>
-        {title}
-        {required && <em> *</em>}
+        {localize(title)}
+        {localize(required && <em> *</em>)}
       </span>
-      {children}
+      {localize(children)}
     </label>
   );
 }
 function Summary({ label, value }: { label: string; value: ReactNode }) {
+  const { localize } = useI18n();
   return (
     <span>
-      <small>{label}</small>
-      <strong>{value}</strong>
+      <small>{localize(label)}</small>
+      <strong>{localize(value)}</strong>
     </span>
   );
 }
@@ -154,6 +160,7 @@ export function RequestOperationsTabs({
   children,
   sidebar,
 }: Props) {
+  const { localize } = useI18n();
   const [tab, setTab] = useState('overview');
   const [dialog, setDialog] = useState<'meeting' | 'meeting-notify' | 'worklog' | null>(null);
   const [error, setError] = useState('');
@@ -224,25 +231,25 @@ export function RequestOperationsTabs({
         <TabsList
           variant="line"
           className="sr-ops-tab-list"
-          aria-label="服务请求工作区"
+          aria-label={localize("服务请求工作区")}
         >
-          {shownTabs.map(([value, label, count]) => (
+          {localize(shownTabs.map(([value, label, count]) => (
             <TabsTrigger key={value} value={value} data-assistant-tab={label}>
-              {label}
-              {count !== null && count > 0 && <span>{count}</span>}
+              {localize(label)}
+              {localize(count !== null && count > 0 && <span>{localize(count)}</span>)}
             </TabsTrigger>
-          ))}
+          )))}
         </TabsList>
-        {error && !dialog && (
+        {localize(error && !dialog && (
           <p role="alert" className="sr-error">
-            {error}
+            {localize(error)}
           </p>
-        )}
+        ))}
         <div className="sr-detail-layout">
           <div className="sr-detail-main">
             <TabsContent value="overview">
-              {!isInternal(role) && requestTypeOf(record) !== '技术评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />}
-              {children}
+              {localize(!isInternal(role) && requestTypeOf(record) !== '技术评估' && <RequestCustomerConfirmation record={record} actor={actor} customerId={customerId} busy={busy} save={save} validationFailures={validationFailures} />)}
+              {localize(children)}
             </TabsContent>
             <TabsContent value="supplements">
               <RequestSupplements directory={mentionDirectory} customers={customers} contacts={contacts} users={users} key={`${record.id}:${actor.id}`} record={record} actor={actor} customerId={customerId} busy={busy} save={save} />
@@ -251,7 +258,7 @@ export function RequestOperationsTabs({
               <section className="sr-panel sr-ops-panel">
                 <div className="sr-ops-heading">
                   <div>
-                    <h3>会议</h3>
+                    <h3>{localize("会议")}</h3>
                   </div>
                   <Button
                     disabled={!editable || record.status === '草稿'}
@@ -261,29 +268,27 @@ export function RequestOperationsTabs({
                     }}
                   >
                     <Video size={16} />
-                    预约会议
-                  </Button>
+                    {localize("预约会议")}</Button>
                 </div>
                 <div className="sr-meeting-integration">
                   <Video size={18} />
                   <div>
                     <strong>
-                      腾讯会议 <Tag>本地模拟</Tag>
+                      {localize("腾讯会议")}<Tag>{localize("本地模拟")}</Tag>
                     </strong>
                     <p>
-                      尚未连接腾讯会议。此处不创建真实会议、不通知参会人；支持预约会议、查看转写及上传会议附件。
-                    </p>
+                      {localize("尚未连接腾讯会议。此处不创建真实会议、不通知参会人；支持预约会议、查看转写及上传会议附件。")}</p>
                   </div>
                 </div>
-                {!ops.meetings.length ? (
+                {localize(!ops.meetings.length ? (
                   <Empty
                     icon={<Video />}
-                    title="还没有会议"
+                    title={localize("还没有会议")}
                     detail="预约会议后，会议记录将与当前请求关联。"
                   />
                 ) : (
                   <div className="sr-ops-records">
-                    {ops.meetings.map((m) => (
+                    {localize(ops.meetings.map((m) => (
                       <article key={m.id} className="sr-ops-record">
                         <div className="sr-ops-record-main">
                           <h4>
@@ -294,28 +299,27 @@ export function RequestOperationsTabs({
                                 launch('meeting');
                               }}
                             >
-                              {m.title}
+                              {localize(m.title)}
                             </button>
-                            <Tag>{m.status}</Tag>
+                            <Tag>{localize(m.status)}</Tag>
                           </h4>
                           <p>
-                            {m.scheduledDate
+                            {localize(m.scheduledDate
                               ? `${m.scheduledDate} ${m.scheduledTime} · ${m.durationMinutes} 分钟`
-                              : stamp(m.createdAt)}{' '}
-                            · 主持人 {m.host}
+                              : stamp(m.createdAt))}{localize(' ')}
+                            {localize("· 主持人")}{localize(m.host)}
                           </p>
                           <small>
-                            附件 {meetingAttachments(m).length} 个 ·{' '}
-                            {m.status === '已结束'
+                            {localize("附件")}{localize(meetingAttachments(m).length)} {localize(" 个 ·")}{localize(' ')}
+                            {localize(m.status === '已结束'
                               ? meetingTranscript(m).example
                                 ? '示例转写'
                                 : '已有转写'
-                              : '暂无转写'}{' '}
-                            · 本地模拟
-                          </small>
+                              : '暂无转写')}{localize(' ')}
+                            {localize("· 本地模拟")}</small>
                         </div>
                         <div className="sr-meeting-actions">
-                          {m.status !== '已结束' && (
+                          {localize(m.status !== '已结束' && (
                             <Button
                               variant="outline"
                               disabled={!editable || !isInternal(role) || record.status === '草稿'}
@@ -324,9 +328,8 @@ export function RequestOperationsTabs({
                                 launch('meeting-notify');
                               }}
                             >
-                              发送通知
-                            </Button>
-                          )}
+                              {localize("发送通知")}</Button>
+                          ))}
                           <Button
                             variant="outline"
                             onClick={() => {
@@ -334,26 +337,26 @@ export function RequestOperationsTabs({
                               launch('meeting');
                             }}
                           >
-                            {m.status === '已预约'
+                            {localize(m.status === '已预约'
                               ? '查看预约'
                               : m.status === '进行中'
                                 ? '进入模拟会议'
-                                : '查看会议资料'}
+                                : '查看会议资料')}
                             <Play size={14} />
                           </Button>
                         </div>
                       </article>
-                    ))}
+                    )))}
                   </div>
-                )}
+                ))}
               </section>
             </TabsContent>
             <TabsContent value="worklogs">
               <section className="sr-panel sr-ops-panel">
                 <div className="sr-ops-heading">
                   <div>
-                    <h3>工时</h3>
-                    <p>记录内部协作人的实际投入，不等于客户计费人天。</p>
+                    <h3>{localize("工时")}</h3>
+                    <p>{localize("记录内部协作人的实际投入，不等于客户计费人天。")}</p>
                   </div>
                   <Button
                     disabled={!canLog}
@@ -364,28 +367,26 @@ export function RequestOperationsTabs({
                     }}
                   >
                     <Plus size={16} />
-                    录入工时
-                  </Button>
+                    {localize("录入工时")}</Button>
                 </div>
                 <div className="sr-ops-summary">
                   <Summary
-                    label="累计投入"
+                    label={localize("累计投入")}
                     value={`${formatWorklogHours(activeLogs.reduce((s, w) => s + w.hours, 0))} 小时`}
                   />
                   <Summary
-                    label="参与成员"
+                    label={localize("参与成员")}
                     value={`${new Set(activeLogs.map((w) => w.userId)).size} 人`}
                   />
                 </div>
-                {!canLog && !closed && (
+                {localize(!canLog && !closed && (
                   <p className="sr-ops-hint">
-                    项目经理可直接录入工时，其他人员需先加入右侧“内部协作人”。
-                  </p>
-                )}
-                {!ops.worklogs.length ? (
+                    {localize("项目经理可直接录入工时，其他人员需先加入右侧“内部协作人”。")}</p>
+                ))}
+                {localize(!ops.worklogs.length ? (
                   <Empty
                     icon={<Clock3 />}
-                    title="暂无内部工时"
+                    title={localize("暂无内部工时")}
                     detail="支持记录需求调研、技术评估、会议沟通等投入。"
                   />
                 ) : (
@@ -401,48 +402,47 @@ export function RequestOperationsTabs({
                       </colgroup>
                       <thead>
                         <tr>
-                          <th>姓名</th>
-                          <th>工作日期 / 时间</th>
-                          <th>工作内容</th>
-                          <th>工时</th>
-                          <th>类型</th>
-                          <th data-list-actions>操作</th>
+                          <th>{localize("姓名")}</th>
+                          <th>{localize("工作日期 / 时间")}</th>
+                          <th>{localize("工作内容")}</th>
+                          <th>{localize("工时")}</th>
+                          <th>{localize("类型")}</th>
+                          <th data-list-actions>{localize("操作")}</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {ops.worklogs.map((w) => (
+                        {localize(ops.worklogs.map((w) => (
                           <tr key={w.id}>
-                            <td>{w.userName}</td>
+                            <td>{localize(w.userName)}</td>
                             <td>
-                              {w.date}
-                              {w.startTime && w.endTime && (
+                              {localize(w.date)}
+                              {localize(w.startTime && w.endTime && (
                                 <small>
-                                  {w.startTime}–{w.endTime}
+                                  {localize(w.startTime)}–{localize(w.endTime)}
                                 </small>
-                              )}
+                              ))}
                             </td>
                             <td className="sr-ops-cell-wrap">
-                              {w.description}
+                              {localize(w.description)}
                             </td>
                             <td>
-                              {w.voidedAt ? (
+                              {localize(w.voidedAt ? (
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger className="sr-worklog-void-badge">
-                                      已作废
-                                    </TooltipTrigger>
+                                      {localize("已作废")}</TooltipTrigger>
                                     <TooltipContent className="whitespace-pre-wrap break-words">
-                                      作废原因：{w.voidReason || '未填写'}
+                                      {localize("作废原因：")}{localize(w.voidReason || '未填写')}
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
                               ) : (
                                 `${formatWorklogHours(w.hours)} 小时`
-                              )}
+                              ))}
                             </td>
-                            <td>{w.category}</td>
+                            <td>{localize(w.category)}</td>
                             <td>
-                              {!w.voidedAt &&
+                              {localize(!w.voidedAt &&
                               canActForUser(actor, w.userId) &&
                               editable ? (
                                 <>
@@ -454,8 +454,7 @@ export function RequestOperationsTabs({
                                       launch('worklog');
                                     }}
                                   >
-                                    编辑
-                                  </Button>
+                                    {localize("编辑")}</Button>
                                   <Button
                                     variant="ghost"
                                     onClick={() => {
@@ -464,19 +463,18 @@ export function RequestOperationsTabs({
                                       launch('worklog');
                                     }}
                                   >
-                                    作废
-                                  </Button>
+                                    {localize("作废")}</Button>
                                 </>
                               ) : (
                                 '—'
-                              )}
+                              ))}
                             </td>
                           </tr>
-                        ))}
+                        )))}
                       </tbody>
                     </table>
                   </div>
-                )}
+                ))}
               </section>
             </TabsContent>
             <TabsContent value="evaluations">
@@ -493,17 +491,17 @@ export function RequestOperationsTabs({
               />
             </TabsContent>
             <TabsContent value="activity">
-              <section className="sr-panel sr-ops-panel" aria-label="活动">
+              <section className="sr-panel sr-ops-panel" aria-label={localize("活动")}>
                 <div className="sr-ops-heading">
                   <div>
-                    <h3>活动</h3>
+                    <h3>{localize("活动")}</h3>
                   </div>
                   <NativeSelect
-                    aria-label="活动类型"
+                    aria-label={localize("活动类型")}
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                   >
-                    {[
+                    {localize([
                       '全部',
                       '受理',
                       '审批',
@@ -514,12 +512,12 @@ export function RequestOperationsTabs({
                       '服务依据',
                       '提交',
                     ].map((f) => (
-                      <option key={f}>{f}</option>
-                    ))}
+                      <option value={f} key={f}>{localize(f)}</option>
+                    )))}
                   </NativeSelect>
                 </div>
                 <ol className="sr-activity-list">
-                  {activities
+                  {localize(activities
                     .filter((a) => filter === '全部' || a.category === filter)
                     .map((a) => (
                       <li key={a.id}>
@@ -528,30 +526,30 @@ export function RequestOperationsTabs({
                         </span>
                         <div>
                           <h4>
-                            {a.title === '核定人天' ? '人天核定' : a.title === '关联服务依据' ? '服务依据关联' : a.title}
-                            <small>{a.category}</small>
+                            {localize(a.title === '核定人天' ? '人天核定' : a.title === '关联服务依据' ? '服务依据关联' : a.title)}
+                            <small>{localize(a.category)}</small>
                           </h4>
-                          <p>{a.detail}</p>
+                          <p>{localize(a.detail)}</p>
                           <span>
-                            {a.actor} · {stamp(a.at)}
+                            {localize(a.actor)} · {localize(stamp(a.at))}
                           </span>
                         </div>
                       </li>
-                    ))}
+                    )))}
                 </ol>
-                {!activities.some(
+                {localize(!activities.some(
                   (a) => filter === '全部' || a.category === filter,
                 ) && (
                   <Empty
                     icon={<History />}
-                    title="暂无相关活动"
+                    title={localize("暂无相关活动")}
                     detail="完成操作后，系统自动记录操作人、时间和处理意见。"
                   />
-                )}
+                ))}
               </section>
             </TabsContent>
           </div>
-          {sidebar}
+          {localize(sidebar)}
         </div>
       </Tabs>
       <Dialog
@@ -567,7 +565,7 @@ export function RequestOperationsTabs({
           className={`sr-ops-dialog ${dialog === 'meeting' && meeting ? 'sr-ops-dialog--wide' : ''}`}
           showCloseButton={!busy}
         >
-          {dialog === 'meeting' && (
+          {localize(dialog === 'meeting' && (
             <MeetingForm
               key={`${actor.id}:${actor.role}:${meeting?.id ?? 'new'}`}
               meeting={
@@ -582,8 +580,8 @@ export function RequestOperationsTabs({
               run={run}
               close={() => setDialog(null)}
             />
-          )}
-          {dialog === 'meeting-notify' && meeting && (
+          ))}
+          {localize(dialog === 'meeting-notify' && meeting && (
             <MeetingNotificationForm
               key={`${record.id}:${actor.id}:${actor.role}:${meeting.id}`}
               meeting={ops.meetings.find((m) => m.id === meeting.id) ?? meeting}
@@ -595,8 +593,8 @@ export function RequestOperationsTabs({
               run={run}
               close={() => setDialog(null)}
             />
-          )}
-          {dialog === 'worklog' && (
+          ))}
+          {localize(dialog === 'worklog' && (
             <WorklogForm
               key={`${actor.id}:${actor.role}:${worklog?.id ?? 'new'}:${voidWorklog}`}
               voiding={voidWorklog}
@@ -607,7 +605,7 @@ export function RequestOperationsTabs({
               run={run}
               close={() => setDialog(null)}
             />
-          )}
+          ))}
         </DialogContent>
       </Dialog>
     </div>
@@ -622,9 +620,10 @@ type FormActions = {
   close: () => void;
 };
 function ErrorText({ error }: { error: string }) {
+  const { localize } = useI18n();
   return error ? (
     <p className="sr-error" role="alert">
-      {error}
+      {localize(error)}
     </p>
   ) : null;
 }
@@ -637,6 +636,7 @@ function WorklogForm({
   run,
   close,
 }: FormActions & { log: RequestWorklog | null; voiding: boolean }) {
+  const { localize } = useI18n();
   const [date, setDate] = useState(log?.date ?? localDate());
   const [startTime, setStartTime] = useState(log?.startTime ?? '');
   const [endTime, setEndTime] = useState(log?.endTime ?? '');
@@ -649,20 +649,20 @@ function WorklogForm({
     <>
       <DialogHeader>
         <DialogTitle>
-          {voiding ? '作废工时' : log ? '编辑内部工时' : '录入内部工时'}
+          {localize(voiding ? '作废工时' : log ? '编辑内部工时' : '录入内部工时')}
         </DialogTitle>
         <DialogDescription>
-          {voiding && log
+          {localize(voiding && log
             ? `${log.date} · ${formatWorklogHours(log.hours)} 小时；作废后保留原记录，不计入汇总。`
-            : `录入人：${log?.userName ?? actor.name}。按起止时间计算分钟数，自动换算为投入小时。`}
+            : `录入人：${log?.userName ?? actor.name}。按起止时间计算分钟数，自动换算为投入小时。`)}
         </DialogDescription>
       </DialogHeader>
       <div className="sr-ops-form">
-        {!voiding && (
+        {localize(!voiding && (
           <>
             <DateField
               id="sr-work-date"
-              label="日期"
+              label={localize("日期")}
               required
               value={date}
               onChange={setDate}
@@ -671,7 +671,7 @@ function WorklogForm({
             <div className="sr-ops-form-row">
               <TimeField
                 id="sr-work-start"
-                label="起始时间"
+                label={localize("起始时间")}
                 required
                 value={startTime}
                 onChange={setStartTime}
@@ -679,7 +679,7 @@ function WorklogForm({
               />
               <TimeField
                 id="sr-work-end"
-                label="终止时间"
+                label={localize("终止时间")}
                 required
                 value={endTime}
                 onChange={setEndTime}
@@ -687,13 +687,13 @@ function WorklogForm({
               />
             </div>
             <div className="sr-ops-form-row">
-              <Field title="工作类型" required>
+              <Field title={localize("工作类型")} required>
                 <NativeSelect
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   disabled={disabled}
                 >
-                  {[
+                  {localize([
                     '需求调研',
                     '技术评估',
                     '会议沟通',
@@ -701,14 +701,14 @@ function WorklogForm({
                     '项目协调',
                     '其他',
                   ].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
+                    <option value={c} key={c}>{localize(c)}</option>
+                  )))}
                 </NativeSelect>
               </Field>
             </div>
           </>
-        )}
-        <Field title={voiding ? '作废原因' : '工作内容'} required>
+        ))}
+        <Field title={localize(voiding ? '作废原因' : '工作内容')} required>
           <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -716,22 +716,21 @@ function WorklogForm({
             rows={4}
           />
         </Field>
-        {!voiding && (
-          <Field title="投入小时（自动计算）">
+        {localize(!voiding && (
+          <Field title={localize("投入小时（自动计算）")}>
             <Input
-              aria-label="投入小时（自动计算）"
+              aria-label={localize("投入小时（自动计算）")}
               value={hours === null ? '' : formatWorklogHours(hours)}
               readOnly
-              placeholder="选择有效起止时间后自动计算"
+              placeholder={localize("选择有效起止时间后自动计算")}
             />
           </Field>
-        )}
+        ))}
         <ErrorText error={error} />
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={close} disabled={disabled}>
-          取消
-        </Button>
+          {localize("取消")}</Button>
         <Button
           disabled={disabled}
           onClick={async () => {
@@ -754,7 +753,7 @@ function WorklogForm({
               close();
           }}
         >
-          {voiding ? '确认作废' : '保存工时'}
+          {localize(voiding ? '确认作废' : '保存工时')}
         </Button>
       </DialogFooter>
     </>
@@ -769,6 +768,7 @@ function MeetingNotificationForm({
   run,
   close,
 }: FormActions & { meeting: RequestMeeting; record: ServiceRequest }) {
+  const { localize } = useI18n();
   const [selected, setSelected] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const inFlight = useRef(false);
@@ -795,14 +795,14 @@ function MeetingNotificationForm({
       }
     }}>
       <DialogHeader>
-        <DialogTitle>发送通知</DialogTitle>
-        <DialogDescription>{meeting.title} · 选择当前请求的协作人</DialogDescription>
+        <DialogTitle>{localize("发送通知")}</DialogTitle>
+        <DialogDescription>{localize(meeting.title)} {localize(" · 选择当前请求的协作人")}</DialogDescription>
       </DialogHeader>
       <div className="sr-ops-form">
-        {groups.map((group) => (
+        {localize(groups.map((group) => (
           <fieldset className="sr-meeting-recipient-group" key={group.key} disabled={disabled || sending}>
-            <legend>{group.label}</legend>
-            {group.people.length ? group.people.map((person) => {
+            <legend>{localize(group.label)}</legend>
+            {localize(group.people.length ? group.people.map((person) => {
               const key = `${group.key}:${person.id}`;
               return (
                 <label key={key} className="sr-meeting-recipient">
@@ -813,19 +813,19 @@ function MeetingNotificationForm({
                       ? [...new Set([...ids, key])]
                       : ids.filter((id) => id !== key))}
                   />
-                  <span>{person.name}</span>
+                  <span>{localize(person.name)}</span>
                 </label>
               );
-            }) : <p className="sr-help">暂无{group.label}</p>}
+            }) : <p className="sr-help">{localize("暂无")}{localize(group.label)}</p>)}
           </fieldset>
-        ))}
-        <p className="sr-help">已选择 {selected.length} 人，将发送站内和邮件通知。</p>
+        )))}
+        <p className="sr-help">{localize("已选择")}{localize(selected.length)} {localize(" 人，将发送站内和邮件通知。")}</p>
         <ErrorText error={error} />
       </div>
       <DialogFooter>
-        <Button type="button" variant="outline" disabled={sending} onClick={close}>取消</Button>
+        <Button type="button" variant="outline" disabled={sending} onClick={close}>{localize("取消")}</Button>
         <Button type="submit" disabled={disabled || sending || !selected.length}>
-          {sending ? '发送中…' : '发送'}
+          {localize(sending ? '发送中…' : '发送')}
         </Button>
       </DialogFooter>
     </form>
@@ -841,6 +841,7 @@ function MeetingForm({
   run,
   close,
 }: FormActions & { meeting: RequestMeeting | null; record: ServiceRequest }) {
+  const { localize } = useI18n();
   const [title, setTitle] = useState(record.title + ' · 需求沟通');
   const [scheduledDate, setScheduledDate] = useState(localDate());
   const [scheduledTime, setScheduledTime] = useState('');
@@ -855,18 +856,17 @@ function MeetingForm({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{meeting ? meeting.title : '预约会议'}</DialogTitle>
+        <DialogTitle>{localize(meeting ? meeting.title : '预约会议')}</DialogTitle>
         <DialogDescription>
-          腾讯会议 · 本地模拟
-          {meeting
+          {localize("腾讯会议 · 本地模拟")}{localize(meeting
             ? ` · ${meeting.host} · ${stamp(meeting.createdAt)}`
-            : '。不会向腾讯会议创建会议或发送邀请。'}
+            : '。不会向腾讯会议创建会议或发送邀请。')}
         </DialogDescription>
       </DialogHeader>
       <div className="sr-ops-form">
-        {!meeting ? (
+        {localize(!meeting ? (
           <>
-            <Field title="会议主题" required>
+            <Field title={localize("会议主题")} required>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -875,122 +875,120 @@ function MeetingForm({
             </Field>
             <div className="sr-ops-form-row">
               <DateField
-                label="预约日期"
+                label={localize("预约日期")}
                 required
                 value={scheduledDate}
                 onChange={setScheduledDate}
                 disabled={disabled}
               />
               <TimeField
-                label="开始时间"
+                label={localize("开始时间")}
                 required
                 value={scheduledTime}
                 onChange={setScheduledTime}
                 disabled={disabled}
               />
             </div>
-            <Field title="会议时长" required>
+            <Field title={localize("会议时长")} required>
               <NativeSelect
                 value={String(durationMinutes)}
                 onChange={(e) => setDurationMinutes(Number(e.target.value))}
                 disabled={disabled}
               >
-                {[15, 30, 45, 60, 90, 120, 180, 240].map((minutes) => (
+                {localize([15, 30, 45, 60, 90, 120, 180, 240].map((minutes) => (
                   <option key={minutes} value={minutes}>
-                    {minutes} 分钟
-                  </option>
-                ))}
+                    {localize(minutes)} {localize(" 分钟")}</option>
+                )))}
               </NativeSelect>
             </Field>
           </>
         ) : (
           <>
-            {meeting.status === '已预约' ? (
+            {localize(meeting.status === '已预约' ? (
               <dl className="sr-ops-details">
                 <div>
-                  <dt>预约日期</dt>
-                  <dd>{meeting.scheduledDate}</dd>
+                  <dt>{localize("预约日期")}</dt>
+                  <dd>{localize(meeting.scheduledDate)}</dd>
                 </div>
                 <div>
-                  <dt>开始时间</dt>
-                  <dd>{meeting.scheduledTime}</dd>
+                  <dt>{localize("开始时间")}</dt>
+                  <dd>{localize(meeting.scheduledTime)}</dd>
                 </div>
                 <div>
-                  <dt>会议时长</dt>
-                  <dd>{meeting.durationMinutes} 分钟</dd>
+                  <dt>{localize("会议时长")}</dt>
+                  <dd>{localize(meeting.durationMinutes)} {localize(" 分钟")}</dd>
                 </div>
               </dl>
             ) : meeting.status === '进行中' ? (
               <div className="sr-meeting-stage">
                 <Video size={32} />
-                <h3>模拟会议进行中</h3>
-                <p>尚未接入腾讯会议 SDK，无实际音视频连接。</p>
+                <h3>{localize("模拟会议进行中")}</h3>
+                <p>{localize("尚未接入腾讯会议 SDK，无实际音视频连接。")}</p>
                 <span>
-                  {meeting.participantNames.join('、') || meeting.host}
+                  {localize(meeting.participantNames.join('、') || meeting.host)}
                 </span>
               </div>
             ) : (
               <>
                 <dl className="sr-meeting-meta">
                   <div>
-                    <dt>会议时间</dt>
+                    <dt>{localize("会议时间")}</dt>
                     <dd>
-                      {stamp(meeting.startedAt ?? meeting.createdAt)}
-                      {meeting.endedAt ? ` — ${stamp(meeting.endedAt)}` : ''}
+                      {localize(stamp(meeting.startedAt ?? meeting.createdAt))}
+                      {localize(meeting.endedAt ? ` — ${stamp(meeting.endedAt)}` : '')}
                     </dd>
                   </div>
                   <div>
-                    <dt>参会人</dt>
+                    <dt>{localize("参会人")}</dt>
                     <dd>
-                      {[
+                      {localize([
                         ...new Set(
                           [meeting.host, ...meeting.participantNames].filter(
                             Boolean,
                           ),
                         ),
-                      ].join('、') || '未记录'}
+                      ].join('、') || '未记录')}
                     </dd>
                   </div>
                 </dl>
                 <section className="sr-meeting-transcript-section">
                   <div className="sr-meeting-section-heading">
-                    <h4>会议转写</h4>
-                    {meetingTranscript(meeting).example && (
-                      <span className="sr-help">模拟示例</span>
-                    )}
+                    <h4>{localize("会议转写")}</h4>
+                    {localize(meetingTranscript(meeting).example && (
+                      <span className="sr-help">{localize("模拟示例")}</span>
+                    ))}
                   </div>
                   <div className="sr-meeting-transcript">
-                    {meetingTranscript(meeting).text}
+                    {localize(meetingTranscript(meeting).text)}
                   </div>
                 </section>
 
               </>
-            )}
+            ))}
                 <section className="sr-meeting-attachments">
                   <div className="sr-meeting-section-heading">
                     <h4>
-                      附件{' '}
+                      {localize("附件")}{localize(' ')}
                       <span className="sr-help">
-                        {meetingAttachments(meeting).length +
-                          pendingFiles.length}
+                        {localize(meetingAttachments(meeting).length +
+                          pendingFiles.length)}
                       </span>
                     </h4>
-                    {canManage && (
+                    {localize(canManage && (
                       <div className="sr-meeting-upload-actions">
-                        <span className="sr-help">单文件不超过 20 MB</span>
+                        <span className="sr-help">{localize("单文件不超过 20 MB")}</span>
                         <Button
                           variant="outline"
                           onClick={() => attachmentInput.current?.click()}
                         >
-                          上传附件
-                        </Button>
+                          {localize("上传附件")}</Button>
                         <input
                           ref={attachmentInput}
                           type="file"
                           multiple
                           hidden
                           accept={meetingAttachmentAccept}
-                          aria-label="上传会议附件"
+                          aria-label={localize("上传会议附件")}
                           disabled={disabled}
                           onChange={(event) => {
                             const files = Array.from(
@@ -1009,32 +1007,31 @@ function MeetingForm({
                           }}
                         />
                       </div>
-                    )}
+                    ))}
                   </div>
-                  {meetingAttachments(meeting).length || pendingFiles.length ? (
+                  {localize(meetingAttachments(meeting).length || pendingFiles.length ? (
                     <ul className="sr-meeting-file-list">
-                      {meetingAttachments(meeting).map((file) => (
+                      {localize(meetingAttachments(meeting).map((file) => (
                         <li key={file.id}>
                           <span
                             className="sr-meeting-file-name"
-                            title={file.name}
+                            title={localize(file.name)}
                           >
-                            {file.name}
+                            {localize(file.name)}
                           </span>
-                          <small>{(file.size / 1024).toFixed(1)} KB</small>
+                          <small>{localize((file.size / 1024).toFixed(1))} KB</small>
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => downloadFile(file)}
                           >
-                            下载
-                          </Button>
-                          {canManage && (
+                            {localize("下载")}</Button>
+                          {localize(canManage && (
                             <Button
                               size="sm"
                               variant="ghost"
                               disabled={disabled}
-                              aria-label={`删除附件 ${file.name}`}
+                              aria-label={localize(`删除附件 ${file.name}`)}
                               onClick={() =>
                                 void run({
                                   type: 'meeting-attachment-delete',
@@ -1043,21 +1040,20 @@ function MeetingForm({
                                 })
                               }
                             >
-                              删除
-                            </Button>
-                          )}
+                              {localize("删除")}</Button>
+                          ))}
                         </li>
-                      ))}
-                      {pendingFiles.map((file) => (
+                      )))}
+                      {localize(pendingFiles.map((file) => (
                         <li key={file.id}>
                           <span
                             className="sr-meeting-file-name"
-                            title={file.name}
+                            title={localize(file.name)}
                           >
-                            {file.name}
+                            {localize(file.name)}
                           </span>
                           <small>
-                            待保存 · {(file.size / 1024).toFixed(1)} KB
+                            {localize("待保存 ·")}{localize((file.size / 1024).toFixed(1))} KB
                           </small>
                           <Button
                             size="sm"
@@ -1069,24 +1065,22 @@ function MeetingForm({
                               )
                             }
                           >
-                            移除
-                          </Button>
+                            {localize("移除")}</Button>
                         </li>
-                      ))}
+                      )))}
                     </ul>
                   ) : (
-                    <p className="sr-help">暂无附件</p>
-                  )}
+                    <p className="sr-help">{localize("暂无附件")}</p>
+                  ))}
                 </section>
           </>
-        )}
+        ))}
         <ErrorText error={uploadError || error} />
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={close}>
-          关闭
-        </Button>
-        {!meeting && (
+          {localize("关闭")}</Button>
+        {localize(!meeting && (
           <Button
             disabled={disabled}
             onClick={async () => {
@@ -1102,24 +1096,21 @@ function MeetingForm({
                 close();
             }}
           >
-            预约会议
-          </Button>
-        )}
-        {canManage && record.status !== '草稿' && meeting?.status === '已预约' && (
+            {localize("预约会议")}</Button>
+        ))}
+        {localize(canManage && record.status !== '草稿' && meeting?.status === '已预约' && (
           <Button
             onClick={() => void run({ type: 'meeting-start', id: meeting.id })}
           >
-            开始模拟会议
-          </Button>
-        )}
-        {canManage && record.status !== '草稿' && meeting?.status === '进行中' && (
+            {localize("开始模拟会议")}</Button>
+        ))}
+        {localize(canManage && record.status !== '草稿' && meeting?.status === '进行中' && (
           <Button
             onClick={() => void run({ type: 'meeting-end', id: meeting.id })}
           >
-            结束模拟会议
-          </Button>
-        )}
-        {canManage &&
+            {localize("结束模拟会议")}</Button>
+        ))}
+        {localize(canManage &&
           meeting &&
           pendingFiles.length > 0 && (
             <Button
@@ -1137,9 +1128,8 @@ function MeetingForm({
                 }
               }}
             >
-              保存附件
-            </Button>
-          )}
+              {localize("保存附件")}</Button>
+          ))}
       </DialogFooter>
     </>
   );

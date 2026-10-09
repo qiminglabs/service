@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import type { ValidationFailure } from '@/lib/submission-validation';
 import { useEffect, useRef, useState } from 'react';
@@ -19,6 +21,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
   validationFailures?: ValidationFailure[];
 }) {
+  const { localize } = useI18n();
   const [mode, setMode] = useState<'accept' | 'reject' | null>(null);
   useEffect(() => { if (validationFailures?.length) setMode(null); }, [validationFailures]);
   const [reason, setReason] = useState('');
@@ -49,39 +52,39 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
   return <section className="sr-panel sr-ops-panel">
     <div className="sr-ops-heading">
       <div>
-        <h3>{canDecide ? '服务请求待确认' : '已确认服务请求'}</h3>
-        <p>{canDecide ? '请核对申请信息及预计消耗资产后，确认或拒绝本次服务请求。' : '请求已进入后续受理流程。'}</p>
+        <h3>{localize(canDecide ? '服务请求待确认' : '已确认服务请求')}</h3>
+        <p>{localize(canDecide ? '请核对申请信息及预计消耗资产后，确认或拒绝本次服务请求。' : '请求已进入后续受理流程。')}</p>
       </div>
-      {canDecide && <div className="flex gap-2">
-        <Button variant="outline" disabled={disabled} onClick={() => { setReason(''); setError(''); setMode('reject'); }}>拒绝</Button>
-        <Button disabled={disabled} onClick={() => { setError(''); setMode('accept'); }}>确认</Button>
-      </div>}
+      {localize(canDecide && <div className="flex gap-2">
+        <Button variant="outline" disabled={disabled} onClick={() => { setReason(''); setError(''); setMode('reject'); }}>{localize("拒绝")}</Button>
+        <Button disabled={disabled} onClick={() => { setError(''); setMode('accept'); }}>{localize("确认")}</Button>
+      </div>)}
     </div>
-    {confirmation && <div className="sr-customer-confirmation-body">
+    {localize(confirmation && <div className="sr-customer-confirmation-body">
       <section className="sr-customer-confirmation-assets">
-      <h4 className="mb-3 font-medium">预计消耗资产</h4>
-      {allocations.length || entitlements.length ? <div className="sr-assessment-allocations">{entitlements.map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
-        <span>{allocation.name} · {entitlementLabel(allocation.kind)}</span><strong>{allocation.quantity}</strong>
-      </div>)}{allocations.map(asset => <div key={asset.assetId}>
-        <span>{asset.name} <small>{asset.assetId}</small></span><strong>{formatDays(asset.days)} 人天</strong>
-      </div>)}</div> : <p className="sr-help">本次不消耗客户资产。</p>}
+      <h4 className="mb-3 font-medium">{localize("预计消耗资产")}</h4>
+      {localize(allocations.length || entitlements.length ? <div className="sr-assessment-allocations">{localize(entitlements.map(allocation => <div key={`${allocation.itemId}:${allocation.objectId}:${allocation.kind}`}>
+        <span>{localize(allocation.name)} · {localize(entitlementLabel(allocation.kind))}</span><strong>{localize(allocation.quantity)}</strong>
+      </div>))}{localize(allocations.map(asset => <div key={asset.assetId}>
+        <span>{localize(asset.name)} <small>{localize(asset.assetId)}</small></span><strong>{localize(formatDays(asset.days))} {localize(" 人天")}</strong>
+      </div>))}</div> : <p className="sr-help">{localize("本次不消耗客户资产。")}</p>)}
       </section>
-      {confirmation.externalNote && <section className="sr-customer-confirmation-note">
-        <h4 className="mb-3 font-medium">说明</h4>
-        <p className="whitespace-pre-wrap break-words">{confirmation.externalNote}</p>
-      </section>}
-    </div>}
+      {localize(confirmation.externalNote && <section className="sr-customer-confirmation-note">
+        <h4 className="mb-3 font-medium">{localize("说明")}</h4>
+        <p className="whitespace-pre-wrap break-words">{localize(confirmation.externalNote)}</p>
+      </section>)}
+    </div>)}
     <Dialog open={!!mode} onOpenChange={open => { if (!open && !disabled) setMode(null); }}>
       <DialogContent showCloseButton={!disabled}>
         <DialogHeader>
-          <DialogTitle>{mode === 'accept' ? '确认服务请求' : '拒绝服务请求'}</DialogTitle>
-          <DialogDescription>{mode === 'accept' ? `确认“${record.title}”后，请求将进入待受理。` : '拒绝后退回客户确认步骤，项目经理将根据原因处理后重新发起确认。'}</DialogDescription>
+          <DialogTitle>{localize(mode === 'accept' ? '确认服务请求' : '拒绝服务请求')}</DialogTitle>
+          <DialogDescription>{localize(mode === 'accept' ? `确认“${record.title}”后，请求将进入待受理。` : '拒绝后退回客户确认步骤，项目经理将根据原因处理后重新发起确认。')}</DialogDescription>
         </DialogHeader>
-        {mode === 'reject' && <label className="sr-ops-field"><span>拒绝原因（必填）</span><Textarea value={reason} onChange={event => setReason(event.target.value)} disabled={disabled} placeholder="请说明拒绝原因" /></label>}
-        {error && <p className="sr-error" role="alert">{error}</p>}
+        {localize(mode === 'reject' && <label className="sr-ops-field"><span>{localize("拒绝原因（必填）")}</span><Textarea value={reason} onChange={event => setReason(event.target.value)} disabled={disabled} placeholder={localize("请说明拒绝原因")} /></label>)}
+        {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}
         <DialogFooter>
-          <Button variant="outline" disabled={disabled} onClick={() => setMode(null)}>取消</Button>
-          <Button disabled={disabled || (mode === 'reject' && !reason.trim())} onClick={() => void submit()}>{working ? '提交中…' : mode === 'accept' ? '确认' : '确认拒绝'}</Button>
+          <Button variant="outline" disabled={disabled} onClick={() => setMode(null)}>{localize("取消")}</Button>
+          <Button disabled={disabled || (mode === 'reject' && !reason.trim())} onClick={() => void submit()}>{localize(working ? '提交中…' : mode === 'accept' ? '确认' : '确认拒绝')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

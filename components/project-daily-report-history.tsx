@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { ConfirmationMailNotice } from '@/components/confirmation-mail-notice';
 import { type ConfirmationMail } from '@/lib/project-confirmation-notice';
 import type { ProjectConfirmation } from '@/lib/service-project-review';
@@ -41,26 +43,27 @@ export function ReportPreview({
   };
   projectName: string;
 }) {
+  const { localize } = useI18n();
   if (report.kind === 'project' && report.projectDocument)
     return (
-      <article className="daily-report-paper" aria-label="项目报告邮件预览">
+      <article className="daily-report-paper" aria-label={localize("项目报告邮件预览")}>
         <header>
-          <span className="daily-report-eyebrow">项目报告</span>
-          <h3>{projectName}</h3>
+          <span className="daily-report-eyebrow">{localize("项目报告")}</span>
+          <h3>{localize(projectName)}</h3>
           <p>
             <CalendarDays size={14} />
-            {dailyReportDate(report.date)}
+            {localize(dailyReportDate(report.date))}
           </p>
         </header>
         <div className="daily-report-paper-body">
-          {report.greeting && <p>{report.greeting}：</p>}
-          {report.projectDocument?.richText ? (
+          {localize(report.greeting && <p>{localize(report.greeting)}：</p>)}
+          {localize(report.projectDocument?.richText ? (
             <ReportBody body={report.projectDocument.richText as ReportNode} />
           ) : (
             <p className="whitespace-pre-wrap">
-              {report.projectDocument?.content || '选择模板后填写项目报告正文'}
+              {localize(report.projectDocument?.content || '选择模板后填写项目报告正文')}
             </p>
-          )}
+          ))}
           <ProjectReportFilesSection files={report.projectFiles ?? []} />
         </div>
       </article>
@@ -75,41 +78,41 @@ export function ReportPreview({
     ['服务项目编号', report.projectId || report.serviceNumber],
   ];
   return (
-    <article className="daily-report-paper" aria-label="日报正文预览">
+    <article className="daily-report-paper" aria-label={localize("日报正文预览")}>
       <header>
-        <span className="daily-report-eyebrow">{template.title}</span>
-        <h3>{projectName}</h3>
+        <span className="daily-report-eyebrow">{localize(template.title)}</span>
+        <h3>{localize(projectName)}</h3>
         <p>
           <CalendarDays size={14} />
-          {dailyReportDate(report.date)}
+          {localize(dailyReportDate(report.date))}
         </p>
       </header>
       <div className="daily-report-paper-body">
-        <p>{report.greeting || '客户称呼'}：</p>
-        <p className="whitespace-pre-wrap">{mailText.introduction}</p>
-        <h4>实施信息</h4>
+        <p>{localize(report.greeting || '客户称呼')}：</p>
+        <p className="whitespace-pre-wrap">{localize(mailText.introduction)}</p>
+        <h4>{localize("实施信息")}</h4>
         <dl>
-          {rows.map(([label, value]) => (
+          {localize(rows.map(([label, value]) => (
             <div key={label}>
-              <dt>{label}</dt>
+              <dt>{localize(label)}</dt>
               <dd>
-                {label === '服务项目编号' && value ? (
+                {localize(label === '服务项目编号' && value ? (
                   <a
                     className="daily-report-project-number"
                     href={dailyReportProjectUrl(value)}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    {value}
+                    {localize(value)}
                   </a>
                 ) : (
                   value || '—'
-                )}
+                ))}
               </dd>
             </div>
-          ))}
+          )))}
         </dl>
-        {(
+        {localize((
           [
             [template.workLabel, report.workContent],
             ...(reportHasNextPlan(report)
@@ -118,31 +121,31 @@ export function ReportPreview({
           ] as const
         ).map(([title, content]) => (
           <section key={title}>
-            <h4>{title}</h4>
-            {dailyReportLines(content).length ? (
+            <h4>{localize(title)}</h4>
+            {localize(dailyReportLines(content).length ? (
               <ol>
-                {dailyReportLines(content).map((line, index) => (
-                  <li key={index}>{line}</li>
-                ))}
+                {localize(dailyReportLines(content).map((line, index) => (
+                  <li key={index}>{localize(line)}</li>
+                )))}
               </ol>
             ) : (
-              <p className="daily-report-placeholder">{`待填写${title}`}</p>
-            )}
+              <p className="daily-report-placeholder">{localize(`待填写${title}`)}</p>
+            ))}
           </section>
-        ))}
-        {!!report.projectFiles?.length && (
+        )))}
+        {localize(!!report.projectFiles?.length && (
           <ProjectReportFilesSection
-            title="相关文件"
+            title={localize("相关文件")}
             files={report.projectFiles}
           />
-        )}
-        {report.confirmation && (
+        ))}
+        {localize(report.confirmation && (
           <ConfirmationMailNotice
             confirmation={report.confirmation}
             projectId={report.projectId || report.serviceNumber}
           />
-        )}
-        <footer className="whitespace-pre-wrap">{mailText.closing}</footer>
+        ))}
+        <footer className="whitespace-pre-wrap">{localize(mailText.closing)}</footer>
       </div>
     </article>
   );
@@ -161,6 +164,7 @@ export function DailyReportsPanel({
   action?: ReactNode;
   notice?: string;
 }) {
+  const { localize } = useI18n();
   const [viewingId, setViewingId] = useState('');
   const viewing = records.find((report) => report.id === viewingId);
   const reports = [...records].sort(
@@ -170,48 +174,48 @@ export function DailyReportsPanel({
   return (
     <section
       className={`daily-reports${showCustomerVisibility ? ' sr-customer-visible-panel' : ''}`}
-      aria-label="服务日报"
+      aria-label={localize("服务日报")}
     >
       <div className="daily-report-toolbar">
         <div className="sr-panel-title-with-visibility">
           <h3>
-            服务日报 <span>{reports.length}</span>
+            {localize("服务日报")}<span>{localize(reports.length)}</span>
           </h3>
-          {showCustomerVisibility && <CustomerVisibleBadge />}
+          {localize(showCustomerVisibility && <CustomerVisibleBadge />)}
         </div>
-        {action}
+        {localize(action)}
       </div>
-      {notice && <output className="sr-notice">{notice}</output>}
-      {reports.length ? (
+      {localize(notice && <output className="sr-notice">{localize(notice)}</output>)}
+      {localize(reports.length ? (
         <div className="sr-table-scroll">
           <table
             className="sr-table wo-overview-table daily-report-table"
-            aria-label="服务日报列表"
+            aria-label={localize("服务日报列表")}
           >
             <thead>
               <tr>
-                <th scope="col">报告主题</th>
-                <th scope="col">类型</th>
-                <th scope="col">编写人</th>
-                <th scope="col">状态</th>
-                <th scope="col">报告日期</th>
-                <th scope="col">记录时间</th>
-                <th scope="col">操作</th>
+                <th scope="col">{localize("报告主题")}</th>
+                <th scope="col">{localize("类型")}</th>
+                <th scope="col">{localize("编写人")}</th>
+                <th scope="col">{localize("状态")}</th>
+                <th scope="col">{localize("报告日期")}</th>
+                <th scope="col">{localize("记录时间")}</th>
+                <th scope="col">{localize("操作")}</th>
               </tr>
             </thead>
             <tbody>
-              {reports.map((report) => (
+              {localize(reports.map((report) => (
                 <tr key={report.id}>
                   <td className="daily-report-subject-cell">
-                    <strong>{report.subject}</strong>
+                    <strong>{localize(report.subject)}</strong>
                   </td>
                   <td>
-                    {report.kind === 'project' ? '项目报告' : '每日工作日报'}
+                    {localize(report.kind === 'project' ? '项目报告' : '每日工作日报')}
                   </td>
-                  <td>{report.authorName}</td>
+                  <td>{localize(report.authorName)}</td>
                   <td>
                     <span className="wo-status" data-tone="blue">
-                      {report.confirmation
+                      {localize(report.confirmation
                         ? confirmations.find(
                             (item) => item.id === report.confirmation!.id,
                           )?.invalidatedAt
@@ -219,28 +223,27 @@ export function DailyReportsPanel({
                           : (confirmations.find(
                               (item) => item.id === report.confirmation!.id,
                             )?.state ?? '历史确认')
-                        : '本地发送'}
+                        : '本地发送')}
                     </span>
                   </td>
-                  <td>{report.date}</td>
+                  <td>{localize(report.date)}</td>
                   <td>
-                    {new Date(report.recordedAt).toLocaleString('zh-CN', {
+                    {localize(new Date(report.recordedAt).toLocaleString('zh-CN', {
                       hour12: false,
-                    })}
+                    }))}
                   </td>
                   <td>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setViewingId(report.id)}
-                      aria-label={`查看邮件：${report.subject}`}
+                      aria-label={localize(`查看邮件：${report.subject}`)}
                     >
                       <Eye size={14} />
-                      查看邮件
-                    </Button>
+                      {localize("查看邮件")}</Button>
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>
@@ -249,9 +252,9 @@ export function DailyReportsPanel({
           <div>
             <Mail size={28} />
           </div>
-          <h4>暂无服务日报</h4>
+          <h4>{localize("暂无服务日报")}</h4>
         </div>
-      )}
+      ))}
       <Dialog
         open={!!viewing}
         onOpenChange={(open) => {
@@ -263,26 +266,26 @@ export function DailyReportsPanel({
           aria-describedby={undefined}
         >
           <DialogHeader>
-            <DialogTitle>查看邮件</DialogTitle>
+            <DialogTitle>{localize("查看邮件")}</DialogTitle>
           </DialogHeader>
-          {viewing && (
+          {localize(viewing && (
             <div className="daily-report-compose is-confirm">
               <div className="daily-report-live-preview">
                 <div className="daily-report-preview-label">
-                  {viewing.subject}
+                  {localize(viewing.subject)}
                 </div>
                 <div className="daily-report-confirm-recipients">
                   <p>
-                    <strong>收件人</strong>
-                    {viewing.to || '—'}
+                    <strong>{localize("收件人")}</strong>
+                    {localize(viewing.to || '—')}
                   </p>
-                  {viewing.cc && (
+                  {localize(viewing.cc && (
                     <p>
-                      <strong>抄送</strong>
-                      {viewing.cc}
+                      <strong>{localize("抄送")}</strong>
+                      {localize(viewing.cc)}
                     </p>
-                  )}
-                  <span className="daily-report-status">本地发送</span>
+                  ))}
+                  <span className="daily-report-status">{localize("本地发送")}</span>
                 </div>
                 <ReportPreview
                   report={viewing}
@@ -290,11 +293,10 @@ export function DailyReportsPanel({
                 />
               </div>
             </div>
-          )}
+          ))}
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewingId('')}>
-              关闭
-            </Button>
+              {localize("关闭")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

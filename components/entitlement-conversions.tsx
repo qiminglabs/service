@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +27,7 @@ const recordId = (kind: EntitlementKind) => `entitlement-conversion-${kind}`;
 const dateLabel = (date: string) =>
   new Date(date).toLocaleString('zh-CN', { hour12: false });
 export function EntitlementConversions({ actor }: { actor: string }) {
+  const { localize } = useI18n();
   const [histories, setHistories] = useState<
     Record<EntitlementKind, ConversionVersion[]>
   >({ inspection: [], upgrade: [] });
@@ -108,65 +111,62 @@ export function EntitlementConversions({ actor }: { actor: string }) {
   return (
     <div className="entitlement-conversions">
       <p className="sr-help entitlement-conversion-help">
-        指当权益不足时，补足权益需购买的人天数。
-      </p>
-      {error && (
+        {localize("指当权益不足时，补足权益需购买的人天数。")}</p>
+      {localize(error && (
         <p role="alert" className="sr-error">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && <output className="sr-help">{notice}</output>}
+      ))}
+      {localize(notice && <output className="sr-help">{localize(notice)}</output>)}
       <div className="table-scroll">
         <table className="reference-table app-list-table">
           <thead>
             <tr>
-              <th>权益类型</th>
-              <th>换算系数</th>
-              <th>当前版本</th>
-              <th>修改时间</th>
-              <th>修改人</th>
-              <th data-list-actions>操作</th>
+              <th>{localize("权益类型")}</th>
+              <th>{localize("换算系数")}</th>
+              <th>{localize("当前版本")}</th>
+              <th>{localize("修改时间")}</th>
+              <th>{localize("修改人")}</th>
+              <th data-list-actions>{localize("操作")}</th>
             </tr>
           </thead>
           <tbody>
-            {(Object.keys(entitlementNames) as EntitlementKind[]).map(
+            {localize((Object.keys(entitlementNames) as EntitlementKind[]).map(
               (kind) => {
                 const current = histories[kind].at(-1);
                 return (
                   <tr key={kind}>
                     <td>
-                      <strong>{entitlementNames[kind]}</strong>
+                      <strong>{localize(entitlementNames[kind])}</strong>
                     </td>
                     <td>
-                      {current ? `1 次 = ${current.days} 人天` : '未配置'}
+                      {localize(current ? `1 次 = ${current.days} 人天` : '未配置')}
                     </td>
-                    <td>{current ? `V${current.version}` : '—'}</td>
-                    <td>{current ? dateLabel(current.updatedAt) : '—'}</td>
-                    <td>{current?.updatedBy ?? '—'}</td>
+                    <td>{localize(current ? `V${current.version}` : '—')}</td>
+                    <td>{localize(current ? dateLabel(current.updatedAt) : '—')}</td>
+                    <td>{localize(current?.updatedBy ?? '—')}</td>
                     <td>
                       <Button
                         variant="ghost"
                         disabled={!ready}
                         onClick={() => edit(kind)}
                       >
-                        编辑
-                      </Button>
+                        {localize("编辑")}</Button>
                       <Button
                         variant="ghost"
                         disabled={!current}
                         onClick={() => setHistoryKind(kind)}
                       >
-                        历史版本
-                      </Button>
+                        {localize("历史版本")}</Button>
                     </td>
                   </tr>
                 );
               },
-            )}
+            ))}
           </tbody>
         </table>
       </div>
-      {!ready && !error && <p className="sr-help">正在读取配置…</p>}
+      {localize(!ready && !error && <p className="sr-help">{localize("正在读取配置…")}</p>)}
       <Dialog
         open={editing !== null}
         onOpenChange={(open) => {
@@ -176,11 +176,9 @@ export function EntitlementConversions({ actor }: { actor: string }) {
         <DialogContent className="request-field-dialog">
           <DialogHeader>
             <DialogTitle>
-              编辑{editing ? entitlementNames[editing] : ''}换算系数
-            </DialogTitle>
+              {localize("编辑")}{localize(editing ? entitlementNames[editing] : '')}{localize("换算系数")}</DialogTitle>
             <DialogDescription>
-              保存将生成新版本，历史版本不会被覆盖。
-            </DialogDescription>
+              {localize("保存将生成新版本，历史版本不会被覆盖。")}</DialogDescription>
           </DialogHeader>
           <form
             className="sr-form-grid"
@@ -190,8 +188,7 @@ export function EntitlementConversions({ actor }: { actor: string }) {
             }}
           >
             <label className="sr-span" htmlFor="conversion-days">
-              1 次权益折合人天数
-              <Input
+              {localize("1 次权益折合人天数")}<Input
                 id="conversion-days"
                 type="number"
                 min="0.1"
@@ -201,25 +198,24 @@ export function EntitlementConversions({ actor }: { actor: string }) {
                 disabled={busy}
                 value={days}
                 onChange={(event) => setDays(event.target.value)}
-                placeholder="请输入换算系数"
+                placeholder={localize("请输入换算系数")}
               />
             </label>
             <label className="sr-span">
-              修改备注（选填）
-              <textarea
+              {localize("修改备注（选填）")}<textarea
                 rows={3}
                 maxLength={500}
                 disabled={busy}
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
-                placeholder="记录本次调整原因"
+                placeholder={localize("记录本次调整原因")}
               />
             </label>
-            {formError && (
+            {localize(formError && (
               <p role="alert" className="sr-error sr-span">
-                {formError}
+                {localize(formError)}
               </p>
-            )}
+            ))}
             <DialogFooter className="sr-span">
               <Button
                 type="button"
@@ -227,10 +223,9 @@ export function EntitlementConversions({ actor }: { actor: string }) {
                 disabled={busy}
                 onClick={() => setEditing(null)}
               >
-                取消
-              </Button>
+                {localize("取消")}</Button>
               <Button type="submit" disabled={busy}>
-                {busy ? '正在保存…' : '保存新版本'}
+                {localize(busy ? '正在保存…' : '保存新版本')}
               </Button>
             </DialogFooter>
           </form>
@@ -245,14 +240,12 @@ export function EntitlementConversions({ actor }: { actor: string }) {
         <DialogContent className="request-field-dialog">
           <DialogHeader>
             <DialogTitle>
-              {historyKind ? entitlementNames[historyKind] : ''}历史版本
-            </DialogTitle>
+              {localize(historyKind ? entitlementNames[historyKind] : '')}{localize("历史版本")}</DialogTitle>
             <DialogDescription>
-              按修改时间倒序展示，最新版本为当前配置。
-            </DialogDescription>
+              {localize("按修改时间倒序展示，最新版本为当前配置。")}</DialogDescription>
           </DialogHeader>
           <div className="entitlement-history">
-            {historyKind &&
+            {localize(historyKind &&
               [...histories[historyKind]].reverse().map((version, index) => (
                 <article
                   key={version.id}
@@ -260,17 +253,17 @@ export function EntitlementConversions({ actor }: { actor: string }) {
                 >
                   <div>
                     <strong>
-                      V{version.version}
-                      {index === 0 ? ' · 当前版本' : ''}
+                      V{localize(version.version)}
+                      {localize(index === 0 ? ' · 当前版本' : '')}
                     </strong>
-                    <strong>1 次 = {version.days} 人天</strong>
+                    <strong>{localize("1 次 =")}{localize(version.days)} {localize(" 人天")}</strong>
                   </div>
                   <p>
-                    {dateLabel(version.updatedAt)} · {version.updatedBy}
+                    {localize(dateLabel(version.updatedAt))} · {localize(version.updatedBy)}
                   </p>
-                  <p>{version.note || '无修改备注'}</p>
+                  <p>{localize(version.note || '无修改备注')}</p>
                 </article>
-              ))}
+              )))}
           </div>
         </DialogContent>
       </Dialog>

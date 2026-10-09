@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useMemo, useState } from 'react';
 import { CalendarDays, Coffee, Moon, TriangleAlert } from 'lucide-react';
@@ -39,6 +41,7 @@ export function PersonalCalendarDialog({
   onClose,
   onSave,
 }: Props) {
+  const { localize } = useI18n();
   const [revision] = useState(snapshot.data.revision);
   const [kind, setKind] = useState<PersonalCalendarKind>(initialKind);
   const [start, setStart] = useState(entry?.start ?? initialDate);
@@ -108,11 +111,11 @@ export function PersonalCalendarDialog({
       <DialogContent className="eh-calendar-dialog" showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>
-            {removing
+            {localize(removing
               ? '撤销登记'
               : entry
                 ? '编辑调休 / 加班'
-                : '登记调休 / 加班'}
+                : '登记调休 / 加班')}
           </DialogTitle>
         </DialogHeader>
         <form
@@ -122,79 +125,72 @@ export function PersonalCalendarDialog({
           }}
         >
           <fieldset disabled={busy} className="eh-calendar-form">
-            {removing ? (
+            {localize(removing ? (
               <p className="eh-remove-summary">
-                撤销 {entry?.start} 至 {entry?.end} 的
-                {entry?.kind === '调休休息' ? '调休' : '加班'}登记？
-              </p>
+                {localize("撤销")}{localize(entry?.start)} {localize(" 至")}{localize(entry?.end)} {localize(" 的")}{localize(entry?.kind === '调休休息' ? '调休' : '加班')}{localize("登记？")}</p>
             ) : (
               <>
-                <fieldset className="eh-kind-picker" aria-label="登记类型">
+                <fieldset className="eh-kind-picker" aria-label={localize("登记类型")}>
                   <button
                     type="button"
                     aria-pressed={kind === '调休休息'}
                     onClick={() => setKind('调休休息')}
                   >
                     <Coffee size={18} />
-                    调休
-                  </button>
+                    {localize("调休")}</button>
                   <button
                     type="button"
                     aria-pressed={kind === '加班上班'}
                     onClick={() => setKind('加班上班')}
                   >
                     <Moon size={18} />
-                    加班
-                  </button>
+                    {localize("加班")}</button>
                 </fieldset>
                 <div className="eh-date-pair">
                   <DateField
-                    label="开始日期"
+                    label={localize("开始日期")}
                     required
                     value={start}
                     onChange={setStart}
                     disabled={busy}
                   />
                   <DateField
-                    label="结束日期"
+                    label={localize("结束日期")}
                     required
                     value={end}
                     onChange={setEnd}
                     disabled={busy}
                   />
                 </div>
-                {preview && (
+                {localize(preview && (
                   <div className="eh-duration">
                     <CalendarDays size={15} />
-                    全天 · 共 {preview.days} 天
-                  </div>
-                )}
+                    {localize("全天 · 共")}{localize(preview.days)} {localize(" 天")}</div>
+                ))}
                 <label className="eh-note-field">
-                  备注
-                  <textarea
+                  {localize("备注")}<textarea
                     value={note}
                     onChange={(event) => setNote(event.target.value)}
                     maxLength={1000}
                     rows={3}
-                    placeholder="填写事由（选填）"
+                    placeholder={localize("填写事由（选填）")}
                   />
                 </label>
-                {!!preview?.conflicts && (
+                {localize(!!preview?.conflicts && (
                   <output className="eh-conflict">
-                    <TriangleAlert size={16} />与 {preview.conflicts}{' '}
-                    张已排工单重叠，保存后将标记冲突，工单排期保留。
-                  </output>
-                )}
+                    <TriangleAlert size={16} />{localize("与")}{localize(preview.conflicts)}{localize(' ')}
+                    {localize("张已排工单重叠，保存后将标记冲突，工单排期保留。")}</output>
+                ))}
               </>
-            )}
-            {error && (
+            ))}
+            {localize(error && (
               <p className="sr-error" role="alert">
-                {error}
+                {localize(error)}
               </p>
-            )}
+            ))}
           </fieldset>
           <DialogFooter className="eh-dialog-footer">
-            {entry && !removing && (
+            {localize(entry && !removing && (
               <Button
                 type="button"
                 variant="ghost"
@@ -202,19 +198,17 @@ export function PersonalCalendarDialog({
                 disabled={busy}
                 onClick={() => setRemoving(true)}
               >
-                撤销登记
-              </Button>
-            )}
+                {localize("撤销登记")}</Button>
+            ))}
             <Button
               type="button"
               variant="outline"
               disabled={busy}
               onClick={() => (removing ? setRemoving(false) : onClose())}
             >
-              取消
-            </Button>
+              {localize("取消")}</Button>
             <Button type="submit" disabled={busy || (!removing && !preview)}>
-              {busy ? '保存中…' : removing ? '确认撤销' : '保存登记'}
+              {localize(busy ? '保存中…' : removing ? '确认撤销' : '保存登记')}
             </Button>
           </DialogFooter>
         </form>

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -34,6 +36,7 @@ export function ServiceExecutionFormSettings({
 }: {
   actor: OperationActor;
 }) {
+  const { localize } = useI18n();
   const [library, setLibrary] = useState<ExecutionFormLibrary>();
   const [draft, setDraft] = useState<ExecutionForm>();
   const [dirty, setDirty] = useState(false),
@@ -113,7 +116,7 @@ export function ServiceExecutionFormSettings({
   }
   return (
     <div className="execution-form-settings">
-      {draft ? (
+      {localize(draft ? (
         <>
           <header className="approval-editor-header">
             <Button
@@ -122,21 +125,18 @@ export function ServiceExecutionFormSettings({
               onClick={() => (dirty ? setBack(true) : setDraft(undefined))}
             >
               <ArrowLeft size={16} />
-              返回表单列表
-            </Button>
+              {localize("返回表单列表")}</Button>
             <div className="approval-toolbar-actions">
               <Button variant="outline" onClick={() => setPreview(draft)}>
-                预览表单
-              </Button>
+                {localize("预览表单")}</Button>
               <Button disabled={disabled || !dirty} onClick={saveDraft}>
                 <Save size={16} />
-                保存表单
-              </Button>
+                {localize("保存表单")}</Button>
             </div>
           </header>
           <div className="service-flow-metadata">
             <label className="approval-field">
-              <span>表单名称 <RequiredMark /></span>
+              <span>{localize("表单名称")}<RequiredMark /></span>
               <Input
                 required
                 maxLength={120}
@@ -148,7 +148,7 @@ export function ServiceExecutionFormSettings({
               />
             </label>
             <label className="approval-field">
-              <span>表单说明</span>
+              <span>{localize("表单说明")}</span>
               <Input
                 maxLength={4000}
                 disabled={disabled}
@@ -159,11 +159,11 @@ export function ServiceExecutionFormSettings({
               />
             </label>
           </div>
-          {error && (
+          {localize(error && (
             <p role="alert" className="sr-error">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <ExecutionFormBuilder
             key={draft.id}
             form={draft}
@@ -176,8 +176,8 @@ export function ServiceExecutionFormSettings({
           <div className="submission-rules-toolbar">
             <Input
               className="execution-form-search"
-              aria-label="搜索服务步骤表单"
-              placeholder="搜索表单名称"
+              aria-label={localize("搜索服务步骤表单")}
+              placeholder={localize("搜索表单名称")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -191,48 +191,47 @@ export function ServiceExecutionFormSettings({
                 }}
               >
                 <Plus size={16} />
-                创建表单
-              </Button>
+                {localize("创建表单")}</Button>
             </div>
           </div>
-          {error && (
+          {localize(error && (
             <p role="alert" className="sr-error">
-              {error}
+              {localize(error)}
             </p>
-          )}
-          {notice && (
+          ))}
+          {localize(notice && (
             <p role="status" className="submission-rule-notice">
-              {notice}
+              {localize(notice)}
             </p>
-          )}
+          ))}
           <div className="table-scroll">
             <table className="reference-table app-list-table">
               <thead>
                 <tr>
-                  <th>表单名称</th>
-                  <th>说明</th>
-                  <th>布局字段</th>
-                  <th>修改时间</th>
-                  <th>修改人</th>
-                  <th data-list-actions>操作</th>
+                  <th>{localize("表单名称")}</th>
+                  <th>{localize("说明")}</th>
+                  <th>{localize("布局字段")}</th>
+                  <th>{localize("修改时间")}</th>
+                  <th>{localize("修改人")}</th>
+                  <th data-list-actions>{localize("操作")}</th>
                 </tr>
               </thead>
               <tbody>
-                {library?.forms
+                {localize(library?.forms
                   .filter((form) => form.name.includes(query))
                   .map((form) => (
                     <tr key={form.id}>
-                      <td>{form.name}</td>
-                      <td>{form.description || '—'}</td>
-                      <td>{form.layout.order.length}</td>
+                      <td>{localize(form.name)}</td>
+                      <td>{localize(form.description || '—')}</td>
+                      <td>{localize(form.layout.order.length)}</td>
                       <td>
-                        {form.updatedAt
+                        {localize(form.updatedAt
                           ? new Date(form.updatedAt).toLocaleString('zh-CN', {
                               hour12: false,
                             })
-                          : '—'}
+                          : '—')}
                       </td>
-                      <td>{form.updatedBy ?? '—'}</td>
+                      <td>{localize(form.updatedBy ?? '—')}</td>
                       <td>
                         <Button
                           variant="ghost"
@@ -250,14 +249,12 @@ export function ServiceExecutionFormSettings({
                             setError('');
                           }}
                         >
-                          配置表单
-                        </Button>
+                          {localize("配置表单")}</Button>
                         <Button
                           variant="ghost"
                           onClick={() => setPreview(form)}
                         >
-                          预览
-                        </Button>
+                          {localize("预览")}</Button>
                         <Button
                           variant="ghost"
                           disabled={disabled}
@@ -266,42 +263,40 @@ export function ServiceExecutionFormSettings({
                             setError('');
                           }}
                         >
-                          删除
-                        </Button>
+                          {localize("删除")}</Button>
                       </td>
                     </tr>
-                  ))}
-                {!library?.forms.filter((form) => form.name.includes(query))
+                  )))}
+                {localize(!library?.forms.filter((form) => form.name.includes(query))
                   .length && (
                   <tr>
                     <td colSpan={6} className="routing-empty">
-                      {library
+                      {localize(library
                         ? '暂无匹配表单，点击“创建表单”开始配置。'
-                        : '正在读取表单…'}
+                        : '正在读取表单…')}
                     </td>
                   </tr>
-                )}
+                ))}
               </tbody>
             </table>
           </div>
         </>
-      )}
-      {preview && (
+      ))}
+      {localize(preview && (
         <ExecutionFormPreview
           form={preview}
           onClose={() => setPreview(undefined)}
         />
-      )}
+      ))}
       <Dialog open={back} onOpenChange={setBack}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>放弃未保存的表单修改？</DialogTitle>
-            <DialogDescription>返回后将保留上次保存的配置。</DialogDescription>
+            <DialogTitle>{localize("放弃未保存的表单修改？")}</DialogTitle>
+            <DialogDescription>{localize("返回后将保留上次保存的配置。")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBack(false)}>
-              继续编辑
-            </Button>
+              {localize("继续编辑")}</Button>
             <Button
               onClick={() => {
                 setDraft(undefined);
@@ -310,8 +305,7 @@ export function ServiceExecutionFormSettings({
                 setError('');
               }}
             >
-              放弃并返回
-            </Button>
+              {localize("放弃并返回")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -323,24 +317,22 @@ export function ServiceExecutionFormSettings({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>删除表单？</DialogTitle>
+            <DialogTitle>{localize("删除表单？")}</DialogTitle>
             <DialogDescription>
-              删除“{remove?.name}”。已被服务步骤引用的表单不可删除。
-            </DialogDescription>
+              {localize("删除“")}{localize(remove?.name)}{localize("”。已被服务步骤引用的表单不可删除。")}</DialogDescription>
           </DialogHeader>
-          {error && (
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={busy}
               onClick={() => setRemove(undefined)}
             >
-              取消
-            </Button>
+              {localize("取消")}</Button>
             <Button
               variant="destructive"
               disabled={disabled}
@@ -352,8 +344,7 @@ export function ServiceExecutionFormSettings({
                 })
               }
             >
-              删除
-            </Button>
+              {localize("删除")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

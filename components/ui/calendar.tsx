@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import * as React from 'react';
 import {
@@ -29,6 +31,7 @@ function Calendar({
 }: React.ComponentProps<typeof DayPicker> & {
   buttonVariant?: React.ComponentProps<typeof Button>['variant'];
 }) {
+  const { localize } = useI18n();
   const defaultClassNames = getDefaultClassNames();
 
   return (
@@ -178,7 +181,7 @@ function Calendar({
           return (
             <td {...props}>
               <div className="flex size-(--cell-size) items-center justify-center text-center">
-                {children}
+                {localize(children)}
               </div>
             </td>
           );

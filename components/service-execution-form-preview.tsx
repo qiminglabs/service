@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -26,6 +28,7 @@ export function ExecutionFormPreview({
   form: ExecutionForm;
   onClose: () => void;
 }) {
+  const { localize } = useI18n();
   const [values, setValues] = useState<Record<string, string | boolean>>({});
   return (
     <Dialog
@@ -36,12 +39,12 @@ export function ExecutionFormPreview({
     >
       <DialogContent className="submission-rule-dialog service-flow-dialog">
         <DialogHeader>
-          <DialogTitle>{form.name || '未命名表单'} · 预览</DialogTitle>
-          <DialogDescription>试填内容不会保存。</DialogDescription>
+          <DialogTitle>{localize(form.name || '未命名表单')} {localize(" · 预览")}</DialogTitle>
+          <DialogDescription>{localize("试填内容不会保存。")}</DialogDescription>
         </DialogHeader>
         <div className="submission-rule-form">
           <div className="submission-rule-form-body">
-            {form.description && <p className="sr-help">{form.description}</p>}
+            {localize(form.description && <p className="sr-help">{localize(form.description)}</p>)}
             <FormFieldsLayout
               fields={executionFormLayout(form)}
               renderField={(id) => {
@@ -50,8 +53,8 @@ export function ExecutionFormPreview({
                 return (
                   <div className="submission-rule-field">
                     <span>
-                      {field.name}
-                      {field.required && <> <RequiredMark /></>}
+                      {localize(field.name)}
+                      {localize(field.required && <> <RequiredMark /></>)}
                     </span>
                     <ExecutionFieldControl
                       field={field}
@@ -64,14 +67,13 @@ export function ExecutionFormPreview({
                 );
               }}
             />
-            {!form.layout.order.length && (
-              <p className="routing-empty">尚未添加字段。</p>
-            )}
+            {localize(!form.layout.order.length && (
+              <p className="routing-empty">{localize("尚未添加字段。")}</p>
+            ))}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={onClose}>
-              关闭预览
-            </Button>
+              {localize("关闭预览")}</Button>
           </DialogFooter>
         </div>
       </DialogContent>

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useState } from 'react';
 import { Download, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,35 +23,35 @@ export function ProjectReportFilesSection({
   files: ProjectReportFile[];
   title?: string;
 }) {
+  const { localize } = useI18n();
   return (
-    <section className="report-project-files" aria-label={title}>
+    <section className="report-project-files" aria-label={localize(title)}>
       <h3>
-        {title} <span>{files.length}</span>
+        {localize(title)} <span>{localize(files.length)}</span>
       </h3>
-      {files.length ? (
+      {localize(files.length ? (
         <ol>
-          {files.map((item) => (
+          {localize(files.map((item) => (
             <li key={item.id}>
               <div className="report-project-file-title">
                 <FileText size={18} aria-hidden="true" />
-                <strong>{item.file.name}</strong>
+                <strong>{localize(item.file.name)}</strong>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => downloadFile(item.file)}
-                  aria-label={`下载 ${item.file.name}`}
+                  aria-label={localize(`下载 ${item.file.name}`)}
                 >
                   <Download size={14} />
-                  下载
-                </Button>
+                  {localize("下载")}</Button>
               </div>
-              {item.description && <p>{item.description}</p>}
+              {localize(item.description && <p>{localize(item.description)}</p>)}
             </li>
-          ))}
+          )))}
         </ol>
       ) : (
-        <p className="sr-help">暂无{title}</p>
-      )}
+        <p className="sr-help">{localize("暂无")}{localize(title)}</p>
+      ))}
     </section>
   );
 }
@@ -65,6 +67,7 @@ export function ProjectReportFilePicker({
   disabled: boolean;
   onChange: (selections: ProjectReportFileSelection[]) => void;
 }) {
+  const { localize } = useI18n();
   const [query, setQuery] = useState('');
   const available = new Set(items.map((item) => item.id));
   const unavailable = selections.some(
@@ -74,21 +77,20 @@ export function ProjectReportFilePicker({
     `${item.file.name} ${item.serviceName} ${item.stepName}`.includes(query),
   );
   return (
-    <section className="report-file-picker" aria-label="选择客户交付物">
+    <section className="report-file-picker" aria-label={localize("选择客户交付物")}>
       <div className="report-file-picker-toolbar">
         <Input
-          aria-label="搜索客户交付物"
-          placeholder="搜索文件名称、服务或步骤"
+          aria-label={localize("搜索客户交付物")}
+          placeholder={localize("搜索文件名称、服务或步骤")}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-        <span>已选 {selections.length} 个文件</span>
+        <span>{localize("已选")}{localize(selections.length)} {localize(" 个文件")}</span>
       </div>
-      {unavailable && (
+      {localize(unavailable && (
         <div className="report-file-picker-invalid">
           <p className="sr-error" role="alert">
-            部分已选文件不再属于客户交付物。
-          </p>
+            {localize("部分已选文件不再属于客户交付物。")}</p>
           <Button
             variant="outline"
             disabled={disabled}
@@ -98,12 +100,11 @@ export function ProjectReportFilePicker({
               )
             }
           >
-            移除失效文件
-          </Button>
+            {localize("移除失效文件")}</Button>
         </div>
-      )}
+      ))}
       <div className="report-file-picker-list">
-        {visible.map((item) => {
+        {localize(visible.map((item) => {
           const selected = selections.find(
             (selection) => selection.deliverableId === item.id,
           );
@@ -119,7 +120,7 @@ export function ProjectReportFilePicker({
               >
                 <Checkbox
                   id={`report-file-${encodeURIComponent(item.id)}`}
-                  aria-label={`选择 ${item.file.name} · ${item.stepName}`}
+                  aria-label={localize(`选择 ${item.file.name} · ${item.stepName}`)}
                   checked={!!selected}
                   disabled={
                     disabled ||
@@ -139,22 +140,22 @@ export function ProjectReportFilePicker({
                   }
                 />
                 <span>
-                  <strong>{item.file.name}</strong>
+                  <strong>{localize(item.file.name)}</strong>
                   <small>
-                    {item.serviceName} · {item.stepName} ·{' '}
-                    {item.requirementName}
+                    {localize(item.serviceName)} · {localize(item.stepName)} ·{localize(' ')}
+                    {localize(item.requirementName)}
                   </small>
                 </span>
               </label>
-              {selected && (
+              {localize(selected && (
                 <label
                   className="report-file-description"
                   htmlFor={`file-description-${encodeURIComponent(item.id)}`}
                 >
-                  <span>文件说明</span>
+                  <span>{localize("文件说明")}</span>
                   <Textarea
                     id={`file-description-${encodeURIComponent(item.id)}`}
-                    aria-label={`${item.file.name} 文件说明`}
+                    aria-label={localize(`${item.file.name} 文件说明`)}
                     value={selected.description}
                     maxLength={maxProjectReportFileDescription}
                     rows={3}
@@ -170,15 +171,15 @@ export function ProjectReportFilePicker({
                     }
                   />
                 </label>
-              )}
+              ))}
             </section>
           );
-        })}
-        {!visible.length && (
+        }))}
+        {localize(!visible.length && (
           <p className="routing-empty">
-            {items.length ? '暂无匹配的客户交付物' : '暂无客户交付物'}
+            {localize(items.length ? '暂无匹配的客户交付物' : '暂无客户交付物')}
           </p>
-        )}
+        ))}
       </div>
     </section>
   );

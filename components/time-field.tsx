@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { Clock3 } from 'lucide-react';
@@ -29,6 +31,7 @@ export function TimeField({
   disabled?: boolean;
   required?: boolean;
 }) {
+  const { localize } = useI18n();
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const [open, setOpen] = useState(false);
@@ -78,16 +81,16 @@ export function TimeField({
     <div className="sr-service-date-field sr-time-field">
       <label htmlFor={fieldId}>
         <span>
-          {label}
-          {required && (
+          {localize(label)}
+          {localize(required && (
             <>
-              {' '}
+              {localize(' ')}
               <em>*</em>
             </>
-          )}
+          ))}
         </span>
       </label>
-      {readonly ? (
+      {localize(readonly ? (
         <Input id={fieldId} value={value || '未填写'} readOnly />
       ) : (
         <Popover open={open && !disabled} onOpenChange={changeOpen}>
@@ -99,20 +102,20 @@ export function TimeField({
             className="sr-service-date-trigger"
             data-empty={!value || undefined}
           >
-            <span>{value || '请选择时间'}</span>
+            <span>{localize(value || '请选择时间')}</span>
             <Clock3 size={16} aria-hidden="true" />
           </PopoverTrigger>
           <PopoverContent
             ref={panelRef}
             align="start"
             className="sr-time-popover"
-            aria-label={'选择' + label}
+            aria-label={localize('选择' + label)}
           >
             <Input
-              aria-label="直接输入时间"
+              aria-label={localize("直接输入时间")}
               type="text"
               inputMode="text"
-              placeholder="HH:mm，例如 09:30"
+              placeholder={localize("HH:mm，例如 09:30")}
               value={draft}
               disabled={disabled}
               autoComplete="off"
@@ -131,9 +134,9 @@ export function TimeField({
               }}
             />
             <div className="sr-time-columns">
-              {(['小时', '分钟'] as const).map((title, index) => (
+              {localize((['小时', '分钟'] as const).map((title, index) => (
                 <section key={title}>
-                  <h4 id={`${fieldId}-${index}-heading`}>{title}</h4>
+                  <h4 id={`${fieldId}-${index}-heading`}>{localize(title)}</h4>
                   <RadioGroup
                     className="sr-time-options"
                     aria-labelledby={`${fieldId}-${index}-heading`}
@@ -147,7 +150,7 @@ export function TimeField({
                       setError('');
                     }}
                   >
-                    {Array.from({ length: index === 0 ? 24 : 60 }, (_, n) =>
+                    {localize(Array.from({ length: index === 0 ? 24 : 60 }, (_, n) =>
                       String(n).padStart(2, '0'),
                     ).map((part) => (
                       <label
@@ -158,20 +161,20 @@ export function TimeField({
                         <RadioGroupItem
                           value={part}
                           className="sr-time-choice"
-                          aria-label={`${part}${index === 0 ? '时' : '分'}`}
+                          aria-label={localize(`${part}${index === 0 ? '时' : '分'}`)}
                         />
-                        <span aria-hidden="true">{part}</span>
+                        <span aria-hidden="true">{localize(part)}</span>
                       </label>
-                    ))}
+                    )))}
                   </RadioGroup>
                 </section>
-              ))}
+              )))}
             </div>
-            {error && (
+            {localize(error && (
               <p id={fieldId + '-error'} className="sr-time-error" role="alert">
-                {error}
+                {localize(error)}
               </p>
-            )}
+            ))}
             <div className="sr-time-actions">
               <Button
                 type="button"
@@ -179,22 +182,19 @@ export function TimeField({
                 disabled={disabled || (!value && !draft)}
                 onClick={() => commit('')}
               >
-                清空
-              </Button>
+                {localize("清空")}</Button>
               <Button
                 type="button"
                 variant="ghost"
                 onClick={() => changeOpen(false)}
               >
-                取消
-              </Button>
+                {localize("取消")}</Button>
               <Button type="button" disabled={disabled} onClick={confirm}>
-                确定
-              </Button>
+                {localize("确定")}</Button>
             </div>
           </PopoverContent>
         </Popover>
-      )}
+      ))}
     </div>
   );
 }

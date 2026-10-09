@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   Check,
@@ -78,6 +80,7 @@ export function StartProjectButton({
   busy: boolean;
   onSaved: (project: ServiceProjectRecord) => void;
 }) {
+  const { localize } = useI18n();
   const [open, setOpen] = useState(false),
     [saving, setSaving] = useState(false),
     [error, setError] = useState('');
@@ -101,8 +104,7 @@ export function StartProjectButton({
         }}
       >
         <Play size={16} />
-        启动项目
-      </Button>
+        {localize("启动项目")}</Button>
       <Dialog
         open={open}
         onOpenChange={(value) => {
@@ -111,17 +113,16 @@ export function StartProjectButton({
       >
         <DialogContent showCloseButton={!saving}>
           <DialogHeader>
-            <DialogTitle>启动项目并生成工单</DialogTitle>
+            <DialogTitle>{localize("启动项目并生成工单")}</DialogTitle>
             <DialogDescription>
-              启动后将锁定全部服务项，每个服务项生成一张工单，按当前分配规则保存执行流程。请先保存项目信息及服务项修改。
-            </DialogDescription>
+              {localize("启动后将锁定全部服务项，每个服务项生成一张工单，按当前分配规则保存执行流程。请先保存项目信息及服务项修改。")}</DialogDescription>
           </DialogHeader>
-          <p>项目：{project.name}</p>
-          <p>服务项：{project.items?.length ?? 0} 项</p>
+          <p>{localize("项目：")}{localize(project.name)}</p>
+          <p>{localize("服务项：")}{localize(project.items?.length ?? 0)} {localize(" 项")}</p>
           <div className="sr-form-grid" style={{ padding: 0 }}>
             <DateField
               id="start-project-execution-date"
-              label="计划执行日期"
+              label={localize("计划执行日期")}
               required
               value={executionDate}
               readonly={projectFieldReadonly(project, 'expectedServiceDate')}
@@ -130,26 +131,25 @@ export function StartProjectButton({
             />
             <DateField
               id="start-project-completion-date"
-              label="计划完成日期"
+              label={localize("计划完成日期")}
               required
               value={completionDate}
               disabled={saving}
               onChange={setCompletionDate}
             />
           </div>
-          {error && (
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={saving}
               onClick={() => setOpen(false)}
             >
-              取消
-            </Button>
+              {localize("取消")}</Button>
             <Button
               disabled={saving || !project.items?.length}
               onClick={async () => {
@@ -185,7 +185,7 @@ export function StartProjectButton({
                 }
               }}
             >
-              {saving ? '正在生成…' : '启动并生成工单'}
+              {localize(saving ? '正在生成…' : '启动并生成工单')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -220,6 +220,7 @@ export function ServiceWorkOrders({
   onDirty: (dirty: boolean) => void;
   onBusy: (busy: boolean) => void;
 }) {
+  const { localize } = useI18n();
   const dirty = useRef(false);
   const markDirty = (value: boolean) => {
     dirty.current = value;
@@ -227,17 +228,17 @@ export function ServiceWorkOrders({
   };
   const canLeave = () =>
     !dirty.current ||
-    window.confirm('当前步骤有未保存的修改，是否放弃并切换？');
+    window.confirm(localize('当前步骤有未保存的修改，是否放弃并切换？'));
   const orders = project.workOrders ?? [];
   const order = orders.find((order) => order.id === selectedOrderId) ?? orders[0];
   if (!order)
     return (
       <section className="sr-panel wo-empty">
-        <h3>工单</h3>
+        <h3>{localize("工单")}</h3>
         <p>
-          {project.status === '待启动'
+          {localize(project.status === '待启动'
             ? '项目经理启动项目后，将按服务项自动生成工单。'
-            : '该项目暂无工单记录。'}
+            : '该项目暂无工单记录。')}
         </p>
       </section>
     );
@@ -246,8 +247,7 @@ export function ServiceWorkOrders({
       <div className="wo-toolbar">
         <div className="wo-order-switcher">
           <span id="work-order-label" className="wo-switcher-label">
-            当前工单
-          </span>
+            {localize("当前工单")}</span>
           <Select
             value={order.id}
             disabled={busy}
@@ -261,28 +261,28 @@ export function ServiceWorkOrders({
             <SelectTrigger
               aria-labelledby="work-order-label"
               className="wo-order-trigger"
-              title={order.item.serviceName}
+              title={localize(order.item.serviceName)}
             >
               <span className="wo-order-caption">
-                <span className="wo-order-name">{order.item.serviceName}</span>
+                <span className="wo-order-name">{localize(order.item.serviceName)}</span>
               </span>
             </SelectTrigger>
             <SelectContent align="start" alignItemWithTrigger={false}>
-              {orders.map((entry) => (
+              {localize(orders.map((entry) => (
                 <SelectItem
                   key={entry.id}
                   value={entry.id}
-                  label={`${entry.id} · ${entry.item.serviceName}`}
+                  label={localize(`${entry.id} · ${entry.item.serviceName}`)}
                 >
                   <span className="wo-order-option">
-                    <strong>{entry.item.serviceName}</strong>
+                    <strong>{localize(entry.item.serviceName)}</strong>
                     <small>
-                      {entry.id} ·{' '}
-                      {project.status === '已取消' ? '已取消' : entry.status}
+                      {localize(entry.id)} ·{localize(' ')}
+                      {localize(project.status === '已取消' ? '已取消' : entry.status)}
                     </small>
                   </span>
                 </SelectItem>
-              ))}
+              )))}
             </SelectContent>
           </Select>
           <span
@@ -295,18 +295,18 @@ export function ServiceWorkOrders({
                   : 'blue'
             }
           >
-            {project.status === '已取消'
+            {localize(project.status === '已取消'
               ? '已取消'
               : order.status === '进行中'
                 ? '执行中'
-                : order.status}
+                : order.status)}
           </span>
         </div>
         <div className="wo-toolbar-context">
-          <div className="wo-engineers" aria-label="执行工程师">
-            <span>执行工程师</span>
+          <div className="wo-engineers" aria-label={localize("执行工程师")}>
+            <span>{localize("执行工程师")}</span>
             <span>
-              {assignedEngineers(order).map(person => person.name).join('、') || '未指派'}
+              {localize(assignedEngineers(order).map(person => person.name).join('、') || '未指派')}
             </span>
           </div>
         </div>
@@ -353,6 +353,7 @@ function WorkOrderDetail({
   onBusy: (busy: boolean) => void;
   canLeave: () => boolean;
 }) {
+  const { localize } = useI18n();
   const [sections, setSections] = useState<WorkOrderSections>(() => {
     const remembered = sectionMemory[order.id];
     if (remembered) return remembered;
@@ -388,11 +389,10 @@ function WorkOrderDetail({
       <details className="wo-basic wo-basic-info" open={sections.basic} onToggle={event => toggleSection('basic', event.currentTarget.open)}>
         <summary>
           <span>
-            基本信息
-          </span>
+            {localize("基本信息")}</span>
           <span className="wo-basic-toggle">
-            <span className="wo-expand-label">查看详情</span>
-            <span className="wo-collapse-label">收起详情</span>
+            <span className="wo-expand-label">{localize("查看详情")}</span>
+            <span className="wo-collapse-label">{localize("收起详情")}</span>
             <ChevronDown size={15} aria-hidden="true" />
           </span>
         </summary>
@@ -407,43 +407,42 @@ function WorkOrderDetail({
       <details className="wo-basic wo-execution-section" open={sections.execution} onToggle={event => toggleSection('execution', event.currentTarget.open)}>
         <summary>
           <span className="wo-execution-summary">
-            执行信息
-            <span className="wo-execution-progress">
-              <progress value={done} max={order.steps.length || 1} aria-label="工单步骤完成进度" />
-              <span className="wo-execution-count">{done} / {order.steps.length} 完成</span>
+            {localize("执行信息")}<span className="wo-execution-progress">
+              <progress value={done} max={order.steps.length || 1} aria-label={localize("工单步骤完成进度")} />
+              <span className="wo-execution-count">{localize(done)} / {localize(order.steps.length)} {localize(" 完成")}</span>
             </span>
           </span>
-          <span className="wo-basic-toggle"><span className="wo-expand-label">查看详情</span><span className="wo-collapse-label">收起详情</span><ChevronDown size={15} aria-hidden="true" /></span>
+          <span className="wo-basic-toggle"><span className="wo-expand-label">{localize("查看详情")}</span><span className="wo-collapse-label">{localize("收起详情")}</span><ChevronDown size={15} aria-hidden="true" /></span>
         </summary>
         <section className="wo-execution">
-          <aside className="wo-navigation" aria-label="执行步骤">
+          <aside className="wo-navigation" aria-label={localize("执行步骤")}>
             <div className="wo-navigation-inner">
-              <div className="wo-progress"><strong>执行步骤</strong></div>
+              <div className="wo-progress"><strong>{localize("执行步骤")}</strong></div>
               <div className="wo-step-list">
-              {order.steps.map((step, index) => (
+              {localize(order.steps.map((step, index) => (
                 <div key={step.definition.id}>
-                  {step.phaseName &&
+                  {localize(step.phaseName &&
                     (index === 0 ||
                       order.steps[index - 1].phaseName !== step.phaseName) && (
                       <h4 className="wo-phase">
-                        <span>{step.phaseName}</span>
+                        <span>{localize(step.phaseName)}</span>
                         <span>
                           {
-                            order.steps.filter(
+                            localize(order.steps.filter(
                               (entry) =>
                                 entry.phaseName === step.phaseName &&
                                 ['已完成', '已跳过'].includes(entry.status),
-                            ).length
+                            ).length)
                           }
                           /
                           {
-                            order.steps.filter(
+                            localize(order.steps.filter(
                               (entry) => entry.phaseName === step.phaseName,
-                            ).length
+                            ).length)
                           }
                         </span>
                       </h4>
-                    )}
+                    ))}
                   <button
                     type="button"
                     className="wo-step-link"
@@ -451,8 +450,8 @@ function WorkOrderDetail({
                     data-selected={selected?.definition.id === step.definition.id}
                     data-complete={step.status === '已完成'}
                     data-skipped={step.status === '已跳过'}
-                    title={`${step.definition.name} · ${step.status} · ${step.definition.required ? '必做' : '可选'}`}
-                    aria-label={`${index + 1}. ${step.definition.name}，${step.status}，${step.definition.required ? '必做' : '可选'}`}
+                    title={localize(`${step.definition.name} · ${step.status} · ${step.definition.required ? '必做' : '可选'}`)}
+                    aria-label={localize(`${index + 1}. ${step.definition.name}，${step.status}，${step.definition.required ? '必做' : '可选'}`)}
                     onClick={() => {
                       if (step.definition.id !== stepId && canLeave()) {
                         onDirty(false);
@@ -466,24 +465,24 @@ function WorkOrderDetail({
                     }
                   >
                     <span className="wo-step-number">
-                      {step.status === '已完成' ? (
+                      {localize(step.status === '已完成' ? (
                         <Check size={16} />
                       ) : step.status === '已跳过' ? (
                         <Minus size={16} />
                       ) : (
                         index + 1
-                      )}
+                      ))}
                     </span>
                     <span>
-                      <strong>{step.definition.name}</strong>
+                      <strong>{localize(step.definition.name)}</strong>
                     </span>
                   </button>
                 </div>
-              ))}
+              )))}
             </div>
             </div>
           </aside>
-          {selected && (
+          {localize(selected && (
             <WorkStepEditor
               key={`${order.id}:${selected.definition.id}`}
               project={project}
@@ -513,51 +512,51 @@ function WorkOrderDetail({
                 }
               }}
             />
-          )}
+          ))}
         </section>
       </details>
       <details className="wo-basic wo-system" open={sections.system} onToggle={event => toggleSection('system', event.currentTarget.open)}>
-        <summary><span>系统信息</span><span className="wo-basic-toggle"><span className="wo-expand-label">查看详情</span><span className="wo-collapse-label">收起详情</span><ChevronDown size={15} aria-hidden="true" /></span></summary>
+        <summary><span>{localize("系统信息")}</span><span className="wo-basic-toggle"><span className="wo-expand-label">{localize("查看详情")}</span><span className="wo-collapse-label">{localize("收起详情")}</span><ChevronDown size={15} aria-hidden="true" /></span></summary>
         <dl className="sr-system-info">
           <div>
-            <dt>工单编号</dt>
-            <dd>{order.id}</dd>
+            <dt>{localize("工单编号")}</dt>
+            <dd>{localize(order.id)}</dd>
           </div>
           <div>
-            <dt>服务目录</dt>
+            <dt>{localize("服务目录")}</dt>
             <dd>
-              {order.item.serviceName}（{order.item.serviceId}）
+              {localize(order.item.serviceName)}（{localize(order.item.serviceId)}）
             </dd>
           </div>
           <div>
-            <dt>客户</dt>
-            <dd>{order.customerName}</dd>
+            <dt>{localize("客户")}</dt>
+            <dd>{localize(order.customerName)}</dd>
           </div>
           <div>
-            <dt>服务方</dt>
-            <dd>{order.providerName || '未指定'}</dd>
+            <dt>{localize("服务方")}</dt>
+            <dd>{localize(order.providerName || '未指定')}</dd>
           </div>
           <div>
-            <dt>执行流程</dt>
+            <dt>{localize("执行流程")}</dt>
             <dd>
-              {order.flowName} · {order.matchedRuleName || '默认服务流程'}
+              {localize(order.flowName)} · {localize(order.matchedRuleName || '默认服务流程')}
             </dd>
           </div>
           <div>
-            <dt>生成时间</dt>
+            <dt>{localize("生成时间")}</dt>
             <dd>
-              {new Date(order.createdAt).toLocaleString('zh-CN', {
+              {localize(new Date(order.createdAt).toLocaleString('zh-CN', {
                 hour12: false,
-              })}{' '}
-              · {order.createdBy}
+              }))}{localize(' ')}
+              · {localize(order.createdBy)}
             </dd>
           </div>
-          {cancellation && <>
-            <div><dt>取消原因</dt><dd className="whitespace-pre-wrap">{cancellation.reason}</dd></div>
-            <div><dt>取消时间</dt><dd>{new Date(cancellation.at).toLocaleString('zh-CN', { hour12: false })} · {cancellation.actorName}</dd></div>
-          </>}
-          <div><dt>实际执行日期</dt><dd>{order.startedAt ? new Date(order.startedAt).toLocaleDateString('zh-CN') : order.status === '待执行' ? '—' : '未记录'}</dd></div>
-          <div><dt>实际完成日期</dt><dd>{order.completedAt ? new Date(order.completedAt).toLocaleDateString('zh-CN') : order.status === '已完成' ? '未记录' : '—'}</dd></div>
+          {localize(cancellation && <>
+            <div><dt>{localize("取消原因")}</dt><dd className="whitespace-pre-wrap">{localize(cancellation.reason)}</dd></div>
+            <div><dt>{localize("取消时间")}</dt><dd>{localize(new Date(cancellation.at).toLocaleString('zh-CN', { hour12: false }))} · {localize(cancellation.actorName)}</dd></div>
+          </>)}
+          <div><dt>{localize("实际执行日期")}</dt><dd>{localize(order.startedAt ? new Date(order.startedAt).toLocaleDateString('zh-CN') : order.status === '待执行' ? '—' : '未记录')}</dd></div>
+          <div><dt>{localize("实际完成日期")}</dt><dd>{localize(order.completedAt ? new Date(order.completedAt).toLocaleDateString('zh-CN') : order.status === '已完成' ? '未记录' : '—')}</dd></div>
         </dl>
       </details>
     </>
@@ -582,6 +581,7 @@ function WorkStepEditor({
   onDirty: (dirty: boolean) => void;
   onBusy: (busy: boolean) => void;
 }) {
+  const { localize } = useI18n();
   const definition = step.definition;
   const [data, setData] = useState<WorkStepData>(() =>
     structuredClone(step.data),
@@ -687,7 +687,7 @@ function WorkStepEditor({
     <article className="wo-step-editor">
       <header className="wo-step-header">
         <div className="wo-step-title">
-          <h3>{definition.name}</h3>
+          <h3>{localize(definition.name)}</h3>
           <span
             className="wo-status"
             data-tone={
@@ -698,29 +698,29 @@ function WorkStepEditor({
                   : 'blue'
             }
           >
-            {step.status}
+            {localize(step.status)}
           </span>
         </div>
       </header>
-      {(definition.instructions ||
+      {localize((definition.instructions ||
         generalDescription ||
         definition.materials.length > 0) && (
         <details className="wo-guide" open>
           <summary>
             <BookOpen size={20} aria-hidden="true" />
-            <span className="wo-guide-title">执行指引</span>
+            <span className="wo-guide-title">{localize("执行指引")}</span>
             <span className="wo-guide-action">
-              <span className="wo-expand-label">查看指引</span>
-              <span className="wo-collapse-label">收起指引</span>
+              <span className="wo-expand-label">{localize("查看指引")}</span>
+              <span className="wo-collapse-label">{localize("收起指引")}</span>
               <ChevronDown size={16} aria-hidden="true" />
             </span>
           </summary>
           <div className="wo-instructions">
-            {definition.instructions && <p>{definition.instructions}</p>}
-            {generalDescription && <p>{generalDescription}</p>}
-            {definition.materials.map((item) =>
+            {localize(definition.instructions && <p>{localize(definition.instructions)}</p>)}
+            {localize(generalDescription && <p>{localize(generalDescription)}</p>)}
+            {localize(definition.materials.map((item) =>
               item.kind === 'text' ? (
-                <p key={item.id}>{item.content}</p>
+                <p key={item.id}>{localize(item.content)}</p>
               ) : item.kind === 'link' ? (
                 safeStepLink(item.url) && (
                   <a
@@ -729,7 +729,7 @@ function WorkStepEditor({
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    {item.title || item.url} ↗
+                    {localize(item.title || item.url)} ↗
                   </a>
                 )
               ) : (
@@ -747,20 +747,20 @@ function WorkStepEditor({
                   }
                 >
                   <Download size={14} />
-                  {item.name}
+                  {localize(item.name)}
                 </Button>
               ),
-            )}
+            ))}
           </div>
         </details>
-      )}
-      {(form || definition.type === 'combined') && (
+      ))}
+      {localize((form || definition.type === 'combined') && (
         <fieldset disabled={disabled} className="wo-fields">
-          {form && (
+          {localize(form && (
             <>
-              {form.description && (
-                <p className="sr-help">{form.description}</p>
-              )}
+              {localize(form.description && (
+                <p className="sr-help">{localize(form.description)}</p>
+              ))}
               <FormFieldsLayout
                 fields={executionFormLayout(form)}
                 renderField={(id) => {
@@ -768,8 +768,8 @@ function WorkStepEditor({
                   return (
                     <label className="wo-form-field">
                       <span>
-                        {field.name}
-                        {field.required && <em> *</em>}
+                        {localize(field.name)}
+                        {localize(field.required && <em> *</em>)}
                       </span>
                       <ExecutionFieldControl
                         field={field}
@@ -784,41 +784,40 @@ function WorkStepEditor({
                 }}
               />
             </>
-          )}
-          {definition.type === 'combined' && (
+          ))}
+          {localize(definition.type === 'combined' && (
             <label className="wo-form-field">
-              <span>执行说明{definition.recordRequired && <em> *</em>}</span>
+              <span>{localize("执行说明")}{localize(definition.recordRequired && <em> *</em>)}</span>
               <Textarea
                 value={data.description}
                 maxLength={60000}
                 rows={8}
-                placeholder="记录本步骤的执行情况与结果"
+                placeholder={localize("记录本步骤的执行情况与结果")}
                 onChange={(event) =>
                   change({ description: event.target.value })
                 }
               />
             </label>
-          )}
+          ))}
         </fieldset>
-      )}
-      {entries.map((item) => (
+      ))}
+      {localize(entries.map((item) => (
         <section className="wo-deliverable" key={item.id}>
           <div>
             <h4>
-              {item.name}
-              {item.required && <em> *</em>}
+              {localize(item.name)}
+              {localize(item.required && <em> *</em>)}
             </h4>
           </div>
-          {item.instructions && <p>{item.instructions}</p>}
-          {'template' in item && item.template && (
+          {localize(item.instructions && <p>{localize(item.instructions)}</p>)}
+          {localize('template' in item && item.template && (
             <Button
               variant="ghost"
               onClick={() => downloadFile(item.template!)}
             >
               <Download size={14} />
-              下载模板
-            </Button>
-          )}
+              {localize("下载模板")}</Button>
+          ))}
           <FileList
             files={materialFiles(item.id)}
             disabled={disabled}
@@ -829,68 +828,66 @@ function WorkStepEditor({
               )
             }
           />
-          {editable && (
+          {localize(editable && (
             <Button
               variant="outline"
               disabled={disabled}
               onClick={() => setMaterial(item)}
             >
-              {definition.type === 'document' ? '填写 / 上传文档' : '上传文件'}
+              {localize(definition.type === 'document' ? '填写 / 上传文档' : '上传文件')}
             </Button>
-          )}
+          ))}
         </section>
+      )))}
+      {localize(step.skipReason && (
+        <p className="wo-readonly">{localize("跳过原因：")}{localize(step.skipReason)}</p>
       ))}
-      {step.skipReason && (
-        <p className="wo-readonly">跳过原因：{step.skipReason}</p>
-      )}
-      {step.updatedAt && (
+      {localize(step.updatedAt && (
         <p className="sr-help wo-step-updated">
-          {step.updatedBy} ·{' '}
-          {new Date(step.updatedAt).toLocaleString('zh-CN', { hour12: false })}
+          {localize(step.updatedBy)} ·{localize(' ')}
+          {localize(new Date(step.updatedAt).toLocaleString('zh-CN', { hour12: false }))}
         </p>
-      )}
-      {error && (
+      ))}
+      {localize(error && (
         <p className="sr-error" role="alert">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {notice && <output className="sr-success">{notice}</output>}
-      {editable && (
+      ))}
+      {localize(notice && <output className="sr-success">{localize(notice)}</output>)}
+      {localize(editable && (
         <footer className="wo-step-footer">
           <span className="sr-help">
-            {dirty ? '有未保存的修改' : completed ? '' : '完成后自动进入下一步'}
+            {localize(dirty ? '有未保存的修改' : completed ? '' : '完成后自动进入下一步')}
           </span>
           <div>
-            {!completed && !definition.required && (
+            {localize(!completed && !definition.required && (
               <Button
                 variant="ghost"
                 disabled={disabled}
                 onClick={() => setSkipping(true)}
               >
-                跳过
-              </Button>
-            )}
+                {localize("跳过")}</Button>
+            ))}
             <Button
               variant={completed ? 'default' : 'outline'}
               disabled={disabled}
               onClick={() => void submit('save')}
             >
               <Save size={15} />
-              {completed ? '保存修改' : '保存草稿'}
+              {localize(completed ? '保存修改' : '保存草稿')}
             </Button>
-            {!completed && (
+            {localize(!completed && (
               <Button
                 disabled={disabled}
                 onClick={() => void submit('complete')}
               >
                 <Check size={15} />
-                完成此步骤
-              </Button>
-            )}
+                {localize("完成此步骤")}</Button>
+            ))}
           </div>
         </footer>
-      )}
-      {material && (
+      ))}
+      {localize(material && (
         <ServiceStepMaterialPreview
           item={material}
           reportContext={{project,orderId:order.id,customerName:order.customerName}}
@@ -899,7 +896,7 @@ function WorkStepEditor({
           onApply={(files) => updateMaterialFiles(material.id, files)}
           onClose={() => setMaterial(undefined)}
         />
-      )}
+      ))}
       <Dialog
         open={skipping}
         onOpenChange={(value) => {
@@ -908,30 +905,28 @@ function WorkStepEditor({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>跳过可选步骤</DialogTitle>
-            <DialogDescription>请记录本次无需执行的原因。</DialogDescription>
+            <DialogTitle>{localize("跳过可选步骤")}</DialogTitle>
+            <DialogDescription>{localize("请记录本次无需执行的原因。")}</DialogDescription>
           </DialogHeader>
           <Textarea
-            aria-label="跳过原因"
+            aria-label={localize("跳过原因")}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             maxLength={2000}
           />
-          {error && <p className="sr-error">{error}</p>}
+          {localize(error && <p className="sr-error">{localize(error)}</p>)}
           <DialogFooter>
             <Button
               variant="outline"
               disabled={saving}
               onClick={() => setSkipping(false)}
             >
-              取消
-            </Button>
+              {localize("取消")}</Button>
             <Button
               disabled={saving || !reason.trim()}
               onClick={() => void submit('skip')}
             >
-              确认跳过
-            </Button>
+              {localize("确认跳过")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -947,21 +942,20 @@ function FileList({
   disabled: boolean;
   remove: (id: string) => void;
 }) {
+  const { localize } = useI18n();
   return (
     <div className="wo-file-list">
-      {files.map((file) => (
+      {localize(files.map((file) => (
         <div key={file.id}>
-          <span>{file.name}</span>
+          <span>{localize(file.name)}</span>
           <Button variant="ghost" onClick={() => downloadFile(file)}>
-            下载
-          </Button>
-          {!disabled && (
+            {localize("下载")}</Button>
+          {localize(!disabled && (
             <Button variant="ghost" onClick={() => remove(file.id)}>
-              移除
-            </Button>
-          )}
+              {localize("移除")}</Button>
+          ))}
         </div>
-      ))}
+      )))}
     </div>
   );
 }

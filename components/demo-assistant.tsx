@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent } from 'react';
@@ -13,6 +15,7 @@ function readContext(): AssistantContext {
   return normalizeAssistantContext({ page: main?.getAttribute('data-assistant-page'), tab: selected || main?.getAttribute('data-assistant-reference-tab'), status: main?.querySelector('[data-assistant-status]')?.getAttribute('data-assistant-status') });
 }
 export function DemoAssistant() {
+  const { localize, locale } = useI18n();
   const [open, setOpen] = useState(false);
   const [context, setContext] = useState<AssistantContext>({ page: 'requests' });
   const [messages, setMessages] = useState<Message[]>([]);
@@ -99,7 +102,7 @@ export function DemoAssistant() {
       const response = await fetch('/api/assistant', {
         // Preserve the same-origin session when the site is protected by IAP.
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
-        body: JSON.stringify({ question: trimmed, context: snapshot, siteContent, history: previous.slice(-8).map(({ role, content }) => ({ role, content })) }),
+        body: JSON.stringify({ question: trimmed, context: { ...snapshot, ...(locale === 'en' ? { locale: 'en' } : {}) }, siteContent, history: previous.slice(-8).map(({ role, content }) => ({ role, content })) }),
         signal: AbortSignal.any([pending.signal, AbortSignal.timeout(100_000)]),
       });
       const data = await response.json() as { answer?: string; error?: string };
@@ -114,20 +117,20 @@ export function DemoAssistant() {
     } finally { if (controller.current === pending) { controller.current = null; setBusy(false); input.current?.focus(); } }
   }
   return <div ref={floating} className="demo-assistant" style={position} data-dragging={dragging || undefined}>
-    {open && <section id="demo-assistant-panel" className="demo-assistant-panel" role="dialog" aria-modal="false" aria-labelledby="demo-assistant-title" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
-      <header className="demo-assistant-header" {...dragHandlers}><div><strong id="demo-assistant-title">Demo 功能助手</strong></div><div className="demo-assistant-tools"><button type="button" title="清空对话" aria-label="清空对话" onClick={clear}><RotateCcw size={17} /></button><button type="button" aria-label="收起功能助手" onClick={close}><X size={20} /></button></div></header>
-      <div className="demo-assistant-context">当前页面：{assistantPages[context.page]}{context.status ? ` · ${context.status}` : ''}</div>
+    {localize(open && <section id="demo-assistant-panel" className="demo-assistant-panel" role="dialog" aria-modal="false" aria-labelledby="demo-assistant-title" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
+      <header className="demo-assistant-header" {...dragHandlers}><div><strong id="demo-assistant-title">{localize("Demo 功能助手")}</strong></div><div className="demo-assistant-tools"><button type="button" title={localize("清空对话")} aria-label={localize("清空对话")} onClick={clear}><RotateCcw size={17} /></button><button type="button" aria-label={localize("收起功能助手")} onClick={close}><X size={20} /></button></div></header>
+      <div className="demo-assistant-context">{localize("当前页面：")}{localize(assistantPages[context.page])}{localize(context.status ? ` · ${context.status}` : '')}</div>
       <div className="demo-assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-busy={busy}>
-        {!messages.length && <div className="demo-assistant-welcome"><MessageCircle size={28} /><h2>想了解哪个功能？</h2><p>我可以解释为什么、在哪里操作，以及下一步怎么做。</p><div className="demo-assistant-suggestions">{['这个页面可以做什么？', '为什么找不到可申请的服务？', '哪些功能只是本地模拟？'].map(text => <button key={text} disabled={busy} onClick={() => void send(text)}>{text}</button>)}</div></div>}
-        {messages.map((message, index) => <article key={index} className={`demo-assistant-message demo-assistant-message--${message.role}`}><small>{message.role === 'user' ? '你' : '功能助手'} · {message.page}</small><p>{message.content}</p></article>)}
-        {busy && <p className="demo-assistant-pending" role="status">正在查阅 Demo 功能说明…</p>}
-        {error && <p className="demo-assistant-error" role="alert">{error}</p>}<div ref={end} />
+        {localize(!messages.length && <div className="demo-assistant-welcome"><MessageCircle size={28} /><h2>{localize("想了解哪个功能？")}</h2><p>{localize("我可以解释为什么、在哪里操作，以及下一步怎么做。")}</p><div className="demo-assistant-suggestions">{localize(['这个页面可以做什么？', '为什么找不到可申请的服务？', '哪些功能只是本地模拟？'].map(text => <button key={text} disabled={busy} onClick={() => void send(text)}>{localize(text)}</button>))}</div></div>)}
+        {localize(messages.map((message, index) => <article key={index} className={`demo-assistant-message demo-assistant-message--${message.role}`}><small>{localize(message.role === 'user' ? '你' : '功能助手')} · {localize(message.page)}</small><p>{localize(message.content)}</p></article>))}
+        {localize(busy && <p className="demo-assistant-pending" role="status">{localize("正在查阅 Demo 功能说明…")}</p>)}
+        {localize(error && <p className="demo-assistant-error" role="alert">{localize(error)}</p>)}<div ref={end} />
       </div>
       <form className="demo-assistant-compose" onSubmit={event => { event.preventDefault(); void send(); }}>
-        <label className="sr-only" htmlFor="demo-assistant-question">你的功能问题</label><textarea ref={input} id="demo-assistant-question" value={question} onChange={event => setQuestion(event.target.value)} maxLength={1500} rows={2} disabled={busy} placeholder="例如：待确认之后，下一步是什么？" onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !composing.current) { event.preventDefault(); void send(); } }} />
-        <div><button type="submit" disabled={busy || !question.trim()} aria-label="发送问题"><Send size={18} /></button></div>
+        <label className="sr-only" htmlFor="demo-assistant-question">{localize("你的功能问题")}</label><textarea ref={input} id="demo-assistant-question" value={question} onChange={event => setQuestion(event.target.value)} maxLength={1500} rows={2} disabled={busy} placeholder={localize("例如：待确认之后，下一步是什么？")} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && !composing.current) { event.preventDefault(); void send(); } }} />
+        <div><button type="submit" disabled={busy || !question.trim()} aria-label={localize("发送问题")}><Send size={18} /></button></div>
       </form>
-    </section>}
-    <button ref={launcher} className="demo-assistant-launcher" type="button" title="点击打开或收起，拖动调整位置" {...dragHandlers} aria-expanded={open} aria-controls="demo-assistant-panel" onClick={event => { if (event.detail !== 0 && suppressClick.current) { suppressClick.current = false; return; } setOpen(value => !value); }}><MessageCircle size={21} />{open ? '收起助手' : '功能助手'}</button>
+    </section>)}
+    <button ref={launcher} className="demo-assistant-launcher" type="button" title={localize("点击打开或收起，拖动调整位置")} {...dragHandlers} aria-expanded={open} aria-controls="demo-assistant-panel" onClick={event => { if (event.detail !== 0 && suppressClick.current) { suppressClick.current = false; return; } setOpen(value => !value); }}><MessageCircle size={21} />{localize(open ? '收起助手' : '功能助手')}</button>
   </div>;
 }

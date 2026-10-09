@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { useEffect, useId, useRef, useState } from 'react';
 import { AtSign, Paperclip, FileText } from 'lucide-react';
 import { Popover as PopoverPrimitive } from '@base-ui/react/popover';
@@ -20,6 +22,7 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
   record: ServiceRequest; actor: OperationActor; customerId?: string; users: InternalUser[]; contacts?: ContactRef[]; customers?: CustomerRef[]; busy: boolean;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
 }) {
+  const { localize } = useI18n();
   const [comment, setComment] = useState('');
   const [files, setFiles] = useState<StoredFile[]>([]);
   const [externalVisible, setExternalVisible] = useState(!isInternal(actor.role));
@@ -55,12 +58,12 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
     insertSelectedMention(user, query.start, caret);
   }
   return <section className="sr-panel sr-ops-panel">
-    <div className="sr-ops-heading"><div><h3>补充信息</h3></div></div>
+    <div className="sr-ops-heading"><div><h3>{localize("补充信息")}</h3></div></div>
     <div className="sr-supplements-body">
-      {editable ? <div className="sr-supplement-composer">
+      {localize(editable ? <div className="sr-supplement-composer">
         <div className="sr-mention-composer">
           <Popover open={!!query && !disabled} modal={false} onOpenChange={open => { if (!open) setQuery(null); }}>
-          <Textarea ref={commentInput} aria-label="补充说明或评论" placeholder="填写补充说明或评论，输入 @ 选择协作人，也可仅上传附件" value={comment}
+          <Textarea ref={commentInput} aria-label={localize("补充说明或评论")} placeholder={localize("填写补充说明或评论，输入 @ 选择协作人，也可仅上传附件")} value={comment}
             aria-autocomplete="list" aria-controls={query ? listId : undefined} aria-activedescendant={query && matches.length ? `${listId}-${selectedOption}` : undefined}
             onChange={event => updateComment(event.target.value, event.target.selectionStart)}
             onSelect={event => { const position = event.currentTarget.selectionStart; setCaret(position); setQuery(mentionQuery(event.currentTarget.value, position)); }}
@@ -73,28 +76,28 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
             }} disabled={disabled} rows={4} />
           <PopoverPrimitive.Portal>
           <PopoverPrimitive.Positioner anchor={commentInput} positionMethod="fixed" side="bottom" align="start" sideOffset={6} collisionPadding={16} collisionAvoidance={{ side: 'flip', align: 'shift' }} className="sr-mention-positioner">
-          <PopoverPrimitive.Popup className="sr-mention-picker" initialFocus={false} finalFocus={false} aria-label="@协作人">
-            <p>@协作人</p>
-            <div role="listbox" id={listId} aria-label="可 @ 的协作人">
-              {matches.map((user, index) => <button type="button" role="option" aria-selected={index === selectedOption} id={`${listId}-${index}`} key={user.id} ref={index === selectedOption ? activeMention : undefined}
+          <PopoverPrimitive.Popup className="sr-mention-picker" initialFocus={false} finalFocus={false} aria-label={localize("@协作人")}>
+            <p>{localize("@协作人")}</p>
+            <div role="listbox" id={listId} aria-label={localize("可 @ 的协作人")}>
+              {localize(matches.map((user, index) => <button type="button" role="option" aria-selected={index === selectedOption} id={`${listId}-${index}`} key={user.id} ref={index === selectedOption ? activeMention : undefined}
                 onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveOption(index)} onClick={() => chooseMention(user)}>
                 <MentionOptionLabel name={user.name} email={user.email} companyName={user.companyName} />
-              </button>)}
+              </button>))}
             </div>
-            {!matches.length && <span className="sr-mention-empty">没有匹配的可选用户</span>}
+            {localize(!matches.length && <span className="sr-mention-empty">{localize("没有匹配的可选用户")}</span>)}
           </PopoverPrimitive.Popup>
           </PopoverPrimitive.Positioner>
           </PopoverPrimitive.Portal>
           </Popover>
         </div>
-        {files.length > 0 && <div className="sr-supplement-files">{files.map(file => <div className="sr-supplement-file" key={file.id}>
-          <FileText size={16} aria-hidden="true" /><span title={file.name}>{file.name}</span><small>{(file.size / 1024).toFixed(1)} KB</small>
-          <Button variant="ghost" disabled={disabled} aria-label={`移除 ${file.name}`} onClick={() => setFiles(old => old.filter(item => item.id !== file.id))}>移除</Button>
-        </div>)}</div>}
+        {localize(files.length > 0 && <div className="sr-supplement-files">{localize(files.map(file => <div className="sr-supplement-file" key={file.id}>
+          <FileText size={16} aria-hidden="true" /><span title={localize(file.name)}>{localize(file.name)}</span><small>{localize((file.size / 1024).toFixed(1))} KB</small>
+          <Button variant="ghost" disabled={disabled} aria-label={localize(`移除 ${file.name}`)} onClick={() => setFiles(old => old.filter(item => item.id !== file.id))}>{localize("移除")}</Button>
+        </div>))}</div>)}
         <div className="sr-supplement-toolbar">
           <div className="sr-supplement-upload">
-            <Button variant="outline" disabled={disabled} onClick={() => uploadInput.current?.click()}><Paperclip size={16} />上传附件</Button>
-            <Button variant="ghost" disabled={disabled} aria-label="@协作人" onClick={() => {
+            <Button variant="outline" disabled={disabled} onClick={() => uploadInput.current?.click()}><Paperclip size={16} />{localize("上传附件")}</Button>
+            <Button variant="ghost" disabled={disabled} aria-label={localize("@协作人")} onClick={() => {
               const input = commentInput.current;
               const start = input?.selectionStart ?? comment.length, end = input?.selectionEnd ?? start;
               const prefix = start > 0 && !/[\s（(，,。；;]/.test(comment[start - 1]) ? ' @' : '@';
@@ -102,9 +105,9 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
               const position = start + prefix.length;
               updateComment(next, position);
               requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(position, position); });
-            }}><AtSign size={16} />协作人</Button>
-            <span>单文件不超过 20 MB</span>
-            <input ref={uploadInput} hidden aria-label="上传补充资料附件" type="file" multiple accept={meetingAttachmentAccept} disabled={disabled} onChange={event => {
+            }}><AtSign size={16} />{localize("协作人")}</Button>
+            <span>{localize("单文件不超过 20 MB")}</span>
+            <input ref={uploadInput} hidden aria-label={localize("上传补充资料附件")} type="file" multiple accept={meetingAttachmentAccept} disabled={disabled} onChange={event => {
               const selected = Array.from(event.target.files ?? []).map(storedFile);
               event.target.value = '';
               const issue = selected.map(meetingAttachmentIssue).find(Boolean);
@@ -112,7 +115,7 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
             }} />
           </div>
           <div className="sr-supplement-actions">
-          {isInternal(actor.role) && <label className="sr-supplement-visibility"><span>可见范围</span><NativeSelect aria-label="补充资料可见范围" value={externalVisible ? 'public' : 'internal'} disabled={disabled} onChange={event => setExternalVisible(event.target.value === 'public')}><option value="internal">仅内部可见</option><option value="public">客户可见</option></NativeSelect></label>}
+          {localize(isInternal(actor.role) && <label className="sr-supplement-visibility"><span>{localize("可见范围")}</span><NativeSelect aria-label={localize("补充资料可见范围")} value={externalVisible ? 'public' : 'internal'} disabled={disabled} onChange={event => setExternalVisible(event.target.value === 'public')}><option value="internal">{localize("仅内部可见")}</option><option value="public">{localize("客户可见")}</option></NativeSelect></label>)}
         <Button className="sr-supplement-publish" disabled={disabled || (!comment.trim() && !files.length)} onClick={async () => {
           if (disabled || lock.current) return;
           lock.current = true; setWorking(true); setError('');
@@ -125,19 +128,19 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
             else setError('保存失败，填写内容已保留，请重试。');
           } catch (error) { setError(error instanceof Error ? error.message : '发布失败'); }
           finally { lock.current = false; setWorking(false); }
-        }}>{working ? '发布中…' : '发布'}</Button>
+        }}>{localize(working ? '发布中…' : '发布')}</Button>
           </div>
         </div>
-        {error && <p role="alert" className="sr-error">{error}</p>}
+        {localize(error && <p role="alert" className="sr-error">{localize(error)}</p>)}
 
-      </div> : null}
+      </div> : null)}
       <div className="sr-supplement-records">
-        {[...items].reverse().map(item => <article key={item.id} className="sr-assessment-plan">
-          <div className="sr-assessment-round-title"><strong>{item.author}</strong><time className="sr-help" dateTime={item.at}>{new Date(item.at).toLocaleString('zh-CN', { hour12: false })}</time>{isInternal(actor.role) && (item.externalVisible ? <CustomerVisibleBadge /> : <span className="sr-assessment-badge">仅内部可见</span>)}</div>
-          {item.comment && <p className="whitespace-pre-wrap break-words my-3">{renderMentionText(item.comment, item.mentions)}</p>}
-          {item.files.map(file => <div key={file.id} className="sr-supplement-file"><FileText size={16} aria-hidden="true" /><span title={file.name}>{file.name}</span><Button variant="ghost" onClick={() => downloadFile(file)}>下载</Button></div>)}
-        </article>)}
-        {!items.length && <p className="sr-help">暂无补充资料</p>}
+        {localize([...items].reverse().map(item => <article key={item.id} className="sr-assessment-plan">
+          <div className="sr-assessment-round-title"><strong>{localize(item.author)}</strong><time className="sr-help" dateTime={item.at}>{localize(new Date(item.at).toLocaleString('zh-CN', { hour12: false }))}</time>{localize(isInternal(actor.role) && (item.externalVisible ? <CustomerVisibleBadge /> : <span className="sr-assessment-badge">{localize("仅内部可见")}</span>))}</div>
+          {localize(item.comment && <p className="whitespace-pre-wrap break-words my-3">{localize(renderMentionText(item.comment, item.mentions))}</p>)}
+          {localize(item.files.map(file => <div key={file.id} className="sr-supplement-file"><FileText size={16} aria-hidden="true" /><span title={localize(file.name)}>{localize(file.name)}</span><Button variant="ghost" onClick={() => downloadFile(file)}>{localize("下载")}</Button></div>))}
+        </article>))}
+        {localize(!items.length && <p className="sr-help">{localize("暂无补充资料")}</p>)}
       </div>
     </div>
   </section>;

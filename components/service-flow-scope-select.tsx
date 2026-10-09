@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
@@ -15,6 +17,7 @@ export function ServiceFlowScopeSelect({
   dictionary: FlowDictionary;
   onChange: (scope: Scope) => void;
 }) {
+  const { localize } = useI18n();
   const [query, setQuery] = useState('');
   const options = [
     ...value.serviceIds
@@ -31,10 +34,10 @@ export function ServiceFlowScopeSelect({
     <div
       className="submission-rule-field"
       role="group"
-      aria-label="适用服务目录"
+      aria-label={localize("适用服务目录")}
     >
       <label className="submission-rule-field">
-        <span>适用服务目录</span>
+        <span>{localize("适用服务目录")}</span>
         <NativeSelect
           value={value.mode}
           onChange={(event) =>
@@ -44,20 +47,20 @@ export function ServiceFlowScopeSelect({
             })
           }
         >
-          <option value="all">全部服务目录</option>
-          <option value="selected">指定服务目录（可多选）</option>
+          <option value="all">{localize("全部服务目录")}</option>
+          <option value="selected">{localize("指定服务目录（可多选）")}</option>
         </NativeSelect>
       </label>
-      {value.mode === 'selected' && (
+      {localize(value.mode === 'selected' && (
         <>
           <Input
-            aria-label="搜索适用服务目录"
-            placeholder="搜索服务目录名称或编号"
+            aria-label={localize("搜索适用服务目录")}
+            placeholder={localize("搜索服务目录名称或编号")}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
           />
           <div className="service-flow-scope-options">
-            {matches.map((service) => (
+            {localize(matches.map((service) => (
               <label key={service.id}>
                 <input
                   type="checkbox"
@@ -72,32 +75,30 @@ export function ServiceFlowScopeSelect({
                   }
                 />
                 <span>
-                  {service.name}
-                  <small>{service.id}</small>
+                  {localize(service.name)}
+                  <small>{localize(service.id)}</small>
                 </span>
               </label>
-            ))}
-            {!matches.length && <p className="sr-help">没有匹配的服务目录。</p>}
+            )))}
+            {localize(!matches.length && <p className="sr-help">{localize("没有匹配的服务目录。")}</p>)}
           </div>
           <p className="sr-help">
-            已选择 {value.serviceIds.length}{' '}
-            个服务目录。选中任意一个即可进入条件匹配。
-          </p>
-          {!!value.serviceIds.length && (
+            {localize("已选择")}{localize(value.serviceIds.length)}{localize(' ')}
+            {localize("个服务目录。选中任意一个即可进入条件匹配。")}</p>
+          {localize(!!value.serviceIds.length && (
             <p className="sr-help">
-              {value.serviceIds
+              {localize(value.serviceIds
                 .map(
                   (id) =>
                     options.find((service) => service.id === id)?.name ?? id,
                 )
-                .join('、')}
+                .join('、'))}
             </p>
-          )}
+          ))}
         </>
-      )}
+      ))}
       <p className="sr-help">
-        先匹配服务目录，再判断自然语言条件；更改目录范围后需重新测试。
-      </p>
+        {localize("先匹配服务目录，再判断自然语言条件；更改目录范围后需重新测试。")}</p>
     </div>
   );
 }

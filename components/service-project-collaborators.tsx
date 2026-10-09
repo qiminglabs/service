@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useId, useRef, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
@@ -48,6 +50,7 @@ function ProjectCollaboratorCard({
   emptyHint?: string;
   save: (ids: string[]) => Promise<string | null>;
 }) {
+  const { localize } = useI18n();
   const headingId = useId();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
@@ -98,9 +101,9 @@ function ProjectCollaboratorCard({
       >
         <div className="sr-panel-heading">
           <div className="sr-panel-title-with-visibility"><h3 id={headingId}>
-            {title} <span>{value.length}</span>
-          </h3>{showCustomerVisibility && <CustomerVisibleBadge />}</div>
-          {!readonly && (
+            {localize(title)} <span>{localize(value.length)}</span>
+          </h3>{localize(showCustomerVisibility && <CustomerVisibleBadge />)}</div>
+          {localize(!readonly && (
             <DialogTrigger
               render={
                 <Button
@@ -109,17 +112,16 @@ function ProjectCollaboratorCard({
                   disabled={busy || addDisabled}
                 />
               }
-              aria-label={'添加' + title}
+              aria-label={localize('添加' + title)}
             >
               <Plus size={14} />
-              添加
-            </DialogTrigger>
-          )}
+              {localize("添加")}</DialogTrigger>
+          ))}
         </div>
         <div className="sr-internal-body">
-          {value.length ? (
+          {localize(value.length ? (
             <ul className="sr-participants">
-              {value.map((person) => {
+              {localize(value.map((person) => {
                 const current = person;
                 const identityLabels = projectCollaboratorRoleLabels(current.assignmentRoles);
                 return (
@@ -127,23 +129,23 @@ function ProjectCollaboratorCard({
                     <span className="sr-collaborator-copy">
                       <span
                         className="sr-participant-name"
-                        title={current.name}
+                        title={localize(current.name)}
                       >
-                        {current.name}
+                        {localize(current.name)}
                       </span>
-                      <small title={current.details}>{current.details}</small>
+                      <small title={localize(current.details)}>{localize(current.details)}</small>
                     </span>
-                    {identityLabels.length ? (
-                      <span className="sr-help" title={`${identityLabels.join(' · ')}为固定协作人，不允许移除`}>
-                        {identityLabels.join(' · ')}
+                    {localize(identityLabels.length ? (
+                      <span className="sr-help" title={localize(`${identityLabels.join(' · ')}为固定协作人，不允许移除`)}>
+                        {localize(identityLabels.join(' · '))}
                       </span>
-                    ) : null}
-                    {!readonly && !current.assignmentRoles?.length && (
+                    ) : null)}
+                    {localize(!readonly && !current.assignmentRoles?.length && (
                       <Button
                         size="sm"
                         variant="ghost"
                         disabled={busy}
-                        aria-label={'移除' + title + ' ' + current.name}
+                        aria-label={localize('移除' + title + ' ' + current.name)}
                         onClick={() =>
                           void persist(
                             value
@@ -152,32 +154,31 @@ function ProjectCollaboratorCard({
                           )
                         }
                       >
-                        移除
-                      </Button>
-                    )}
+                        {localize("移除")}</Button>
+                    ))}
                   </li>
                 );
-              })}
+              }))}
             </ul>
           ) : (
-            <p className="sr-help">{emptyHint ?? `未添加${title}`}</p>
-          )}
+            <p className="sr-help">{localize(emptyHint ?? `未添加${title}`)}</p>
+          ))}
         </div>
-        {error && !open && (
+        {localize(error && !open && (
           <p className="sr-error" role="alert">
-            {error}
+            {localize(error)}
           </p>
-        )}
+        ))}
       </section>
       <DialogContent className="sr-collaborator-dialog" showCloseButton={!busy}>
         <DialogHeader>
-          <DialogTitle>添加{title}</DialogTitle>
+          <DialogTitle>{localize("添加")}{localize(title)}</DialogTitle>
         </DialogHeader>
         <div className="sr-collaborator-search">
           <Search size={16} aria-hidden="true" />
           <Input
-            aria-label={'搜索' + title}
-            placeholder={placeholder}
+            aria-label={localize('搜索' + title)}
+            placeholder={localize(placeholder)}
             value={query}
             disabled={busy}
             onChange={(event) => setQuery(event.target.value)}
@@ -185,9 +186,9 @@ function ProjectCollaboratorCard({
         </div>
         <div
           className="sr-collaborator-results"
-          aria-label={title + '搜索结果'}
+          aria-label={localize(title + '搜索结果')}
         >
-          {matches.length ? (
+          {localize(matches.length ? (
             matches.map((person) => (
               <label
                 key={person.id}
@@ -208,38 +209,37 @@ function ProjectCollaboratorCard({
                   }
                 />
                 <span className="sr-collaborator-copy">
-                  <span className="sr-participant-name">{person.name}</span>
-                  <small>{person.details}</small>
+                  <span className="sr-participant-name">{localize(person.name)}</span>
+                  <small>{localize(person.details)}</small>
                 </span>
-                {person.disabled ? (
-                  <span className="sr-help">已停用</span>
+                {localize(person.disabled ? (
+                  <span className="sr-help">{localize("已停用")}</span>
                 ) : (
                   selected.has(person.id) && (
-                    <span className="sr-help">已添加</span>
+                    <span className="sr-help">{localize("已添加")}</span>
                   )
-                )}
+                ))}
               </label>
             ))
           ) : (
             <output className="sr-collaborator-empty">
-              {query.trim() ? '没有匹配的搜索结果' : '暂无可添加的协作人'}
+              {localize(query.trim() ? '没有匹配的搜索结果' : '暂无可添加的协作人')}
             </output>
-          )}
+          ))}
         </div>
-        {error && (
+        {localize(error && (
           <p className="sr-error" role="alert">
-            {error}
+            {localize(error)}
           </p>
-        )}
+        ))}
         <DialogFooter className="sr-collaborator-footer">
-          <output>已选择 {additions.length} 人</output>
+          <output>{localize("已选择")}{localize(additions.length)} {localize(" 人")}</output>
           <Button
             variant="outline"
             disabled={busy}
             onClick={() => setOpen(false)}
           >
-            取消
-          </Button>
+            {localize("取消")}</Button>
           <Button
             disabled={busy || !additions.length}
             onClick={() =>
@@ -249,7 +249,7 @@ function ProjectCollaboratorCard({
               )
             }
           >
-            {busy ? '保存中…' : '确认添加'}
+            {localize(busy ? '保存中…' : '确认添加')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -282,14 +282,15 @@ export function ServiceProjectCollaborators({
     ids: string[],
   ) => Promise<string | null>;
 }) {
+  const { localize } = useI18n();
   const options = projectCollaboratorDialogOptions(
     project.customerId,
     directory,
     project.serviceProviderId,
   );
   return (
-    <aside className="sr-collaboration-column" aria-label="项目协作人">
-      {projectCollaboratorGroups.map((group) => (
+    <aside className="sr-collaboration-column" aria-label={localize("项目协作人")}>
+      {localize(projectCollaboratorGroups.map((group) => (
         <ProjectCollaboratorCard
           key={
             group.key === 'customer'
@@ -298,12 +299,12 @@ export function ServiceProjectCollaborators({
                 ? `partner:${project.serviceProviderId ?? ''}`
                 : group.key
           }
-          title={group.title}
+          title={localize(group.title)}
           showCustomerVisibility={showCustomerVisibility && (group.key === 'customer' || (group.key === 'partner' && !!project.serviceProviderId?.startsWith('partner:')))}
           placeholder={
-            group.key === 'internal'
+            localize(group.key === 'internal'
               ? '搜索姓名或邮箱'
-              : '搜索姓名、手机号或邮箱'
+              : '搜索姓名、手机号或邮箱')
           }
           value={(project.collaborators?.[group.key] ?? []).map((person) => {
             if (group.key === 'internal')
@@ -343,7 +344,7 @@ export function ServiceProjectCollaborators({
           readonly={readonly || (group.key === 'internal' && internalReadonly)}
           save={(ids) => save(group.key, ids)}
         />
-      ))}
+      )))}
     </aside>
   );
 }

@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import * as React from 'react';
 import { Combobox as ComboboxPrimitive } from '@base-ui/react';
@@ -24,13 +26,14 @@ function ComboboxTrigger({
   children,
   ...props
 }: ComboboxPrimitive.Trigger.Props) {
+  const { localize } = useI18n();
   return (
     <ComboboxPrimitive.Trigger
       data-slot="combobox-trigger"
       className={cn("[&_svg:not([class*='size-'])]:size-4", className)}
       {...props}
     >
-      {children}
+      {localize(children)}
       <ChevronDownIcon className="text-muted-foreground size-4 pointer-events-none" />
     </ComboboxPrimitive.Trigger>
   );
@@ -60,6 +63,7 @@ function ComboboxInput({
   showTrigger?: boolean;
   showClear?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <InputGroup className={cn('w-auto', className)}>
       <ComboboxPrimitive.Input
@@ -67,7 +71,7 @@ function ComboboxInput({
         {...props}
       />
       <InputGroupAddon align="inline-end">
-        {showTrigger && (
+        {localize(showTrigger && (
           <InputGroupButton
             size="icon-xs"
             variant="ghost"
@@ -76,10 +80,10 @@ function ComboboxInput({
             className="group-has-data-[slot=combobox-clear]/input-group:hidden data-pressed:bg-transparent"
             disabled={disabled}
           />
-        )}
-        {showClear && <ComboboxClear disabled={disabled} />}
+        ))}
+        {localize(showClear && <ComboboxClear disabled={disabled} />)}
       </InputGroupAddon>
-      {children}
+      {localize(children)}
     </InputGroup>
   );
 }
@@ -139,6 +143,7 @@ function ComboboxItem({
   children,
   ...props
 }: ComboboxPrimitive.Item.Props) {
+  const { localize } = useI18n();
   return (
     <ComboboxPrimitive.Item
       data-slot="combobox-item"
@@ -148,7 +153,7 @@ function ComboboxItem({
       )}
       {...props}
     >
-      {children}
+      {localize(children)}
       <ComboboxPrimitive.ItemIndicator
         render={
           <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
@@ -240,6 +245,7 @@ function ComboboxChip({
 }: ComboboxPrimitive.Chip.Props & {
   showRemove?: boolean;
 }) {
+  const { localize } = useI18n();
   return (
     <ComboboxPrimitive.Chip
       data-slot="combobox-chip"
@@ -249,8 +255,8 @@ function ComboboxChip({
       )}
       {...props}
     >
-      {children}
-      {showRemove && (
+      {localize(children)}
+      {localize(showRemove && (
         <ComboboxPrimitive.ChipRemove
           render={<Button variant="ghost" size="icon-xs" />}
           className="-ml-1 opacity-50 hover:opacity-100"
@@ -258,7 +264,7 @@ function ComboboxChip({
         >
           <XIcon className="pointer-events-none" />
         </ComboboxPrimitive.ChipRemove>
-      )}
+      ))}
     </ComboboxPrimitive.Chip>
   );
 }

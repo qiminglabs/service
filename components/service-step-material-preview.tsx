@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import { ReportTemplateComposer } from '@/components/report-template-composer';
 import type { ServiceProjectRecord } from '@/lib/service-projects';
 
@@ -53,6 +55,7 @@ export function ServiceStepMaterialPreview({
   initialFiles?: StoredFile[];
   onApply?: (files: StoredFile[]) => void;
 }) {
+  const { localize } = useI18n();
   const [reportOpen,setReportOpen]=useState(false);
   const [files, setFiles] = useState<StoredFile[]>(() =>
     structuredClone(initialFiles ?? []),
@@ -85,14 +88,14 @@ export function ServiceStepMaterialPreview({
     }
   }
   function back() {
-    if (editor && !window.confirm('返回将放弃当前尚未保存的正文，是否继续？'))
+    if (editor && !window.confirm(localize('返回将放弃当前尚未保存的正文，是否继续？')))
       return;
     setEditor(undefined);
     setEditingId(undefined);
     setError('');
   }
   function close() {
-    if (busy || (editor && !window.confirm('关闭将放弃当前正文，是否继续？')))
+    if (busy || (editor && !window.confirm(localize('关闭将放弃当前正文，是否继续？'))))
       return;
     onClose();
   }
@@ -110,18 +113,17 @@ export function ServiceStepMaterialPreview({
       >
         <DialogHeader className={editor ? 'sr-only' : undefined}>
           <DialogTitle>
-            {item.name || '未命名材料'}
-            {onApply ? '' : ' · 操作预览'}
+            {localize(item.name || '未命名材料')}
+            {localize(onApply ? '' : ' · 操作预览')}
           </DialogTitle>
-          {!onApply && (
+          {localize(!onApply && (
             <DialogDescription>
-              此处用于试用填写方式，预览文件不写入流程配置，关闭后清空。
-            </DialogDescription>
-          )}
+              {localize("此处用于试用填写方式，预览文件不写入流程配置，关闭后清空。")}</DialogDescription>
+          ))}
         </DialogHeader>
         <div className="sr-document-body">
-          {editor ? (
-            <Suspense fallback={<p>正在打开在线文档…</p>}>
+          {localize(editor ? (
+            <Suspense fallback={<p>{localize("正在打开在线文档…")}</p>}>
               <LocalDocumentEditor
                 key={editingId ?? 'new'}
                 value={editor}
@@ -134,29 +136,29 @@ export function ServiceStepMaterialPreview({
             </Suspense>
           ) : (
             <>
-              {onApply && (
+              {localize(onApply && (
                 <div className="sr-material-visibility-notice" role="note">
-                  {item.deliverToCustomer ? (
+                  {localize(item.deliverToCustomer ? (
                     <CustomerVisibleBadge />
                   ) : (
-                    <span className="sr-assessment-badge">仅内部可见</span>
-                  )}
+                    <span className="sr-assessment-badge">{localize("仅内部可见")}</span>
+                  ))}
                   <span>
-                    {item.deliverToCustomer
+                    {localize(item.deliverToCustomer
                       ? '此材料作为客户交付物，上传或在线填写的内容对客户可见。'
-                      : '此材料仅供内部使用，上传或在线填写的内容不对客户展示。'}
+                      : '此材料仅供内部使用，上传或在线填写的内容不对客户展示。')}
                   </span>
                 </div>
-              )}
+              ))}
               <div className="sr-document-instructions">
                 <strong>
-                  {item.required ? '必填' : '选填'}
+                  {localize(item.required ? '必填' : '选填')}
                 </strong>
-                <p>{item.instructions || '暂无填写说明'}</p>
+                <p>{localize(item.instructions || '暂无填写说明')}</p>
               </div>
-              {doc ? (
+              {localize(doc ? (
                 <div className="sr-document-actions">
-                  {doc.reportTemplate ? <Button size="lg" className="sr-document-entry" variant="outline" disabled={!reportContext} onClick={()=>setReportOpen(true)}><FilePenLine size={22}/>{doc.reportTemplate.template.name} · 生成报告</Button> : localTemplate ? (
+                  {localize(doc.reportTemplate ? <Button size="lg" className="sr-document-entry" variant="outline" disabled={!reportContext} onClick={()=>setReportOpen(true)}><FilePenLine size={22}/>{localize(doc.reportTemplate.template.name)} {localize(" · 生成报告")}</Button> : localTemplate ? (
                     <Button
                       size="lg"
                       className="sr-document-entry"
@@ -165,7 +167,7 @@ export function ServiceStepMaterialPreview({
                       onClick={() => void startTemplate()}
                     >
                       <FilePenLine size={22} />
-                      {busy ? '正在读取模板…' : '从模板开始在线填写'}
+                      {localize(busy ? '正在读取模板…' : '从模板开始在线填写')}
                     </Button>
                   ) : validOnlineTemplateUrl(onlineUrl) ? (
                     <Button
@@ -177,14 +179,12 @@ export function ServiceStepMaterialPreview({
                       render={<a href={onlineUrl} target="_blank" rel="noopener noreferrer" />}
                     >
                       <FilePenLine size={22} />
-                      从模板开始在线填写
-                    </Button>
+                      {localize("从模板开始在线填写")}</Button>
                   ) : (
                     <Button size="lg" className="sr-document-entry" variant="outline" disabled>
                       <FilePenLine size={22} />
-                      从模板开始在线填写
-                    </Button>
-                  )}
+                      {localize("从模板开始在线填写")}</Button>
+                  ))}
                   <Button
                     size="lg"
                     className="sr-document-entry"
@@ -197,8 +197,7 @@ export function ServiceStepMaterialPreview({
                     }}
                   >
                     <FilePlus2 size={22} />
-                    从空白开始在线填写
-                  </Button>
+                    {localize("从空白开始在线填写")}</Button>
                   <div className="sr-document-file-actions">
                     <Button
                       size="lg"
@@ -209,23 +208,20 @@ export function ServiceStepMaterialPreview({
                       aria-describedby="step-document-upload-size"
                     >
                       <Upload size={22} />
-                      上传已有文件
-                    </Button>
-                    <p id="step-document-upload-size" className="sr-upload-size-hint">单文件上限 20 MB</p>
+                      {localize("上传已有文件")}</Button>
+                    <p id="step-document-upload-size" className="sr-upload-size-hint">{localize("单文件上限 20 MB")}</p>
                     <div className="sr-document-template-download">
-                      {validOnlineTemplateUrl(onlineUrl) && localTemplate && (
+                      {localize(validOnlineTemplateUrl(onlineUrl) && localTemplate && (
                         <a className="sr-download" href={onlineUrl} target="_blank" rel="noopener noreferrer">
-                          打开在线文档模板
-                        </a>
-                      )}
-                      {doc.template ? (
+                          {localize("打开在线文档模板")}</a>
+                      ))}
+                      {localize(doc.template ? (
                         <Button size="sm" variant="ghost" onClick={() => downloadFile(doc.template!)}>
                           <Download size={14} />
-                          下载模板
-                        </Button>
+                          {localize("下载模板")}</Button>
                       ) : !localTemplate && !validOnlineTemplateUrl(onlineUrl) ? (
-                        <Button size="sm" variant="ghost" disabled>未配置模板</Button>
-                      ) : null}
+                        <Button size="sm" variant="ghost" disabled>{localize("未配置模板")}</Button>
+                      ) : null)}
                     </div>
                   </div>
                 </div>
@@ -233,34 +229,29 @@ export function ServiceStepMaterialPreview({
                 <div className="service-step-preview-actions">
                   <Button variant="outline" disabled={busy} onClick={() => upload.current?.click()}>
                     <Upload size={14} />
-                    上载文件
-                  </Button>
+                    {localize("上载文件")}</Button>
                 </div>
-              )}
-              {doc?.template && !canEditTemplate(doc.template.name) && (
+              ))}
+              {localize(doc?.template && !canEditTemplate(doc.template.name) && (
                 <p className="sr-help">
-                  当前文件模板不支持提取正文，可下载填写后上传，或从空白开始。
-                </p>
-              )}
-              {file && (
+                  {localize("当前文件模板不支持提取正文，可下载填写后上传，或从空白开始。")}</p>
+              ))}
+              {localize(file && (
                 <p className="sr-help">
-                  {file.formats ? `允许格式：${file.formats}` : '文件格式不限'}
-                  ，单个不超过 20 MB。
-                </p>
-              )}
-              {doc && (
+                  {localize(file.formats ? `允许格式：${file.formats}` : '文件格式不限')}
+                  {localize("，单个不超过 20 MB。")}</p>
+              ))}
+              {localize(doc && (
                 <p className="sr-help">
-                  支持多次上传或在线填写多份文档，单个文件不超过 20
-                  MB。外部在线模板将在新页面打开。
-                </p>
-              )}
+                  {localize("支持多次上传或在线填写多份文档，单个文件不超过 20 MB。外部在线模板将在新页面打开。")}</p>
+              ))}
               <input
                 ref={upload}
                 hidden
                 type="file"
                 multiple
                 accept={doc ? fileAccept : file?.formats || undefined}
-                aria-label={doc ? '上载文档' : '上载文件'}
+                aria-label={localize(doc ? '上载文档' : '上载文件')}
                 disabled={busy}
                 onChange={(event) => {
                   const selected = Array.from(event.target.files ?? []);
@@ -294,17 +285,17 @@ export function ServiceStepMaterialPreview({
                   setError('');
                 }}
               />
-              {!!files.length && (
+              {localize(!!files.length && (
                 <section
                   className="service-step-preview-files"
-                  aria-label="预览文件"
+                  aria-label={localize("预览文件")}
                 >
-                  {files.map((value) => (
+                  {localize(files.map((value) => (
                     <div key={value.id}>
                       <span>
-                        {value.name}
+                        {localize(value.name)}
                       </span>
-                      {value.onlineDocument && (
+                      {localize(value.onlineDocument && (
                         <Button
                           variant="ghost"
                           onClick={() => {
@@ -312,15 +303,13 @@ export function ServiceStepMaterialPreview({
                             setEditor(structuredClone(value.onlineDocument!));
                           }}
                         >
-                          在线编辑
-                        </Button>
-                      )}
+                          {localize("在线编辑")}</Button>
+                      ))}
                       <Button
                         variant="ghost"
                         onClick={() => downloadFile(value)}
                       >
-                        下载
-                      </Button>
+                        {localize("下载")}</Button>
                       <Button
                         variant="ghost"
                         onClick={() =>
@@ -329,25 +318,24 @@ export function ServiceStepMaterialPreview({
                           )
                         }
                       >
-                        删除
-                      </Button>
+                        {localize("删除")}</Button>
                     </div>
-                  ))}
+                  )))}
                 </section>
-              )}
+              ))}
             </>
-          )}
-          {error && (
+          ))}
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={busy} onClick={close}>
-            {onApply ? '取消' : '关闭预览'}
+            {localize(onApply ? '取消' : '关闭预览')}
           </Button>
-          {onApply && !editor && (
+          {localize(onApply && !editor && (
             <Button
               disabled={busy}
               onClick={() => {
@@ -355,10 +343,9 @@ export function ServiceStepMaterialPreview({
                 onClose();
               }}
             >
-              保存
-            </Button>
-          )}
-          {editor && (
+              {localize("保存")}</Button>
+          ))}
+          {localize(editor && (
             <Button
               disabled={busy}
               onClick={() => {
@@ -383,9 +370,9 @@ export function ServiceStepMaterialPreview({
                 }
               }}
             >
-              {onApply ? '保存' : '保存至预览'}
+              {localize(onApply ? '保存' : '保存至预览')}
             </Button>
-          )}
+          ))}
         </DialogFooter>
       </DialogContent>
     </Dialog>

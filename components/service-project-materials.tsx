@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useState } from 'react';
 import { RequestMaterialsPanel } from '@/components/request-materials-panel';
@@ -18,20 +20,21 @@ export function ServiceProjectMaterials({ id, customerId, items, actor, readonly
   id: string; customerId: string; items: RequestItem[]; actor: OperationActor;
   readonly: boolean; busy: boolean; save: (change: ProjectItemChange) => Promise<string | null>;
 }) {
+  const { localize } = useI18n();
   const [target, setTarget] = useState<{ itemId: string; requirementId: string } | null>(null);
   const [error, setError] = useState('');
   const record = projectMaterialRecord({ id, customerId, items });
   const group = target ? requestMaterialGroup(record, target.itemId, target.requirementId) : undefined;
   return <>
-    <RequestMaterialsPanel title={title} showCustomerVisibility={showCustomerVisibility} record={record} actor={actor} audience="internal" readonly={readonly} busy={busy} isGroupReadonly={group => group.members.some(member => projectItemReadonly(project, member.item.id, 'materials'))}
+    <RequestMaterialsPanel title={localize(title)} showCustomerVisibility={showCustomerVisibility} record={record} actor={actor} audience="internal" readonly={readonly} busy={busy} isGroupReadonly={group => group.members.some(member => projectItemReadonly(project, member.item.id, 'materials'))}
       onMaterial={value => { setError(''); setTarget(value); }} />
-    {group && <RequestMaterialDialog key={group.key} record={record} actor={actor} item={materialDialogItem(group)}
+    {localize(group && <RequestMaterialDialog key={group.key} record={record} actor={actor} item={materialDialogItem(group)}
       requirement={group.requirement} readonly={readonly || group.members.some(member => projectItemReadonly(project, member.item.id, 'materials'))} busy={busy} error={error} onClose={() => setTarget(null)}
       onSave={async material => {
         const issue = await save({ type: 'materials', id: group.members[0].item.id, material });
         if (issue) { setError(issue); return false; }
         setTarget(null);
         return true;
-      }} />}
+      }} />)}
   </>;
 }

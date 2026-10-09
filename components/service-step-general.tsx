@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { RequiredMark } from '@/components/required-mark';
 
@@ -32,6 +34,7 @@ function GeneralStepPreview({
   step: ServiceFlowStep;
   onClose: () => void;
 }) {
+  const { localize } = useI18n();
   const [description, setDescription] = useState(() =>
     generalStepDescription(step),
   );
@@ -48,14 +51,13 @@ function GeneralStepPreview({
     >
       <DialogContent className="sr-dialog sr-document-dialog">
         <DialogHeader>
-          <DialogTitle>{step.name} · 通用操作预览</DialogTitle>
+          <DialogTitle>{localize(step.name)} {localize(" · 通用操作预览")}</DialogTitle>
           <DialogDescription>
-            说明和附件仅内部使用，不交付客户。预览内容关闭后清空。
-          </DialogDescription>
+            {localize("说明和附件仅内部使用，不交付客户。预览内容关闭后清空。")}</DialogDescription>
         </DialogHeader>
         <div className="sr-document-body service-general-preview">
           <label className="approval-field">
-            <span>说明{step.recordRequired ? <> <RequiredMark /></> : '（选填）'}</span>
+            <span>{localize("说明")}{localize(step.recordRequired ? <> <RequiredMark /></> : '（选填）')}</span>
             <Textarea
               rows={7}
               maxLength={60000}
@@ -66,22 +68,21 @@ function GeneralStepPreview({
                 setNotice('');
                 setError('');
               }}
-              placeholder="请填写本步骤的执行说明"
+              placeholder={localize("请填写本步骤的执行说明")}
             />
           </label>
           <div className="service-flow-step-heading">
-            <strong>附件{step.attachmentRequired ? <> <RequiredMark /></> : '（选填）'}</strong>
+            <strong>{localize("附件")}{localize(step.attachmentRequired ? <> <RequiredMark /></> : '（选填）')}</strong>
             <Button variant="outline" onClick={() => upload.current?.click()}>
               <Upload size={14} />
-              上传附件
-            </Button>
+              {localize("上传附件")}</Button>
           </div>
           <input
             ref={upload}
             hidden
             type="file"
             multiple
-            aria-label="上传通用步骤附件"
+            aria-label={localize("上传通用步骤附件")}
             onChange={(event) => {
               const selected = Array.from(event.target.files ?? []);
               event.target.value = '';
@@ -98,14 +99,13 @@ function GeneralStepPreview({
               setNotice('');
             }}
           />
-          <p className="sr-help">支持多份附件，单个不超过 20 MB。</p>
+          <p className="sr-help">{localize("支持多份附件，单个不超过 20 MB。")}</p>
           <div className="service-step-preview-files">
-            {files.map((file) => (
+            {localize(files.map((file) => (
               <div key={file.id}>
-                <span>{file.name}</span>
+                <span>{localize(file.name)}</span>
                 <Button variant="ghost" onClick={() => downloadFile(file)}>
-                  下载
-                </Button>
+                  {localize("下载")}</Button>
                 <Button
                   variant="ghost"
                   onClick={() => {
@@ -115,26 +115,24 @@ function GeneralStepPreview({
                     setNotice('');
                   }}
                 >
-                  删除
-                </Button>
+                  {localize("删除")}</Button>
               </div>
-            ))}
+            )))}
           </div>
-          {error && (
+          {localize(error && (
             <p className="sr-error" role="alert">
-              {error}
+              {localize(error)}
             </p>
-          )}
-          {notice && (
+          ))}
+          {localize(notice && (
             <p role="status" className="submission-rule-notice">
-              {notice}
+              {localize(notice)}
             </p>
-          )}
+          ))}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            关闭预览
-          </Button>
+            {localize("关闭预览")}</Button>
           <Button
             onClick={() => {
               try {
@@ -147,8 +145,7 @@ function GeneralStepPreview({
               }
             }}
           >
-            校验填写内容
-          </Button>
+            {localize("校验填写内容")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -163,17 +160,18 @@ export function ServiceStepGeneral({
   editable: boolean;
   onChange: (patch: Partial<ServiceFlowStep>) => void;
 }) {
+  const { localize } = useI18n();
   const [preview, setPreview] = useState(false);
   return (
     <div className="service-step-deliverables">
       <label className="approval-field">
-        <span>说明长文本</span>
+        <span>{localize("说明长文本")}</span>
         <Textarea
           rows={5}
           maxLength={60000}
           disabled={!editable}
           value={generalStepDescription(step)}
-          placeholder="可设置说明初始内容，执行时可填写或修改"
+          placeholder={localize("可设置说明初始内容，执行时可填写或修改")}
           onChange={(event) =>
             onChange({ generalDescription: event.target.value })
           }
@@ -188,8 +186,7 @@ export function ServiceStepGeneral({
             onChange({ recordRequired: event.target.checked })
           }
         />
-        说明必填
-      </label>
+        {localize("说明必填")}</label>
       <label className="service-flow-checkbox">
         <input
           type="checkbox"
@@ -199,14 +196,12 @@ export function ServiceStepGeneral({
             onChange({ attachmentRequired: event.target.checked })
           }
         />
-        必须上传附件
-      </label>
+        {localize("必须上传附件")}</label>
       <Button variant="outline" onClick={() => setPreview(true)}>
-        预览通用操作
-      </Button>
-      {preview && (
+        {localize("预览通用操作")}</Button>
+      {localize(preview && (
         <GeneralStepPreview step={step} onClose={() => setPreview(false)} />
-      )}
+      ))}
     </div>
   );
 }

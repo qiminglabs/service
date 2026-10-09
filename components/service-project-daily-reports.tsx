@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { readServiceMailTemplates } from '@/lib/service-mail-template-store';
 import {
@@ -126,6 +128,7 @@ export function ServiceProjectDailyReports({
   onBusy: (busy: boolean) => void;
   onSaved: (project: ServiceProjectRecord) => void;
 }) {
+  const { localize } = useI18n();
   const [open, setOpen] = useState(!!confirmationFlow);
   const [mailConfig, setMailConfig] = useState<ServiceMailConfig>();
   const [choosingKind, setChoosingKind] = useState(false);
@@ -245,7 +248,7 @@ export function ServiceProjectDailyReports({
     if (
       !next &&
       baseline.current !== JSON.stringify(form) &&
-      !window.confirm('日报尚未发送，确定放弃本次编辑？')
+      !window.confirm(localize('日报尚未发送，确定放弃本次编辑？'))
     )
       return;
     setOpen(next);
@@ -300,8 +303,8 @@ export function ServiceProjectDailyReports({
         htmlFor={`daily-report-${key}`}
       >
         <span>
-          {label}
-          {required && <em> *</em>}
+          {localize(label)}
+          {localize(required && <em> *</em>)}
         </span>
         <Input
           id={`daily-report-${key}`}
@@ -311,7 +314,7 @@ export function ServiceProjectDailyReports({
           maxLength={
             key === 'to' || key === 'cc' ? 13000 : key === 'subject' ? 200 : 500
           }
-          placeholder={placeholder}
+          placeholder={localize(placeholder)}
         />
       </label>
     );
@@ -326,26 +329,26 @@ export function ServiceProjectDailyReports({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>发送报告并发起确认</DialogTitle>
+            <DialogTitle>{localize("发送报告并发起确认")}</DialogTitle>
           </DialogHeader>
-          {error ? (
+          {localize(error ? (
             <p role="alert" className="sr-error">
-              {error}
+              {localize(error)}
             </p>
           ) : (
-            <output>正在读取邮件模板…</output>
-          )}
+            <output>{localize("正在读取邮件模板…")}</output>
+          ))}
         </DialogContent>
       </Dialog>
     );
   return (
     <>
-      {!open && !choosingKind && error && (
+      {localize(!open && !choosingKind && error && (
         <p role="alert" className="sr-error">
-          {error}
+          {localize(error)}
         </p>
-      )}
-      {!confirmationFlow && (
+      ))}
+      {localize(!confirmationFlow && (
         <DailyReportsPanel
           reports={dailyReportHistory(
             project.dailyReports ?? [],
@@ -359,30 +362,29 @@ export function ServiceProjectDailyReports({
               className="ct-button ct-button--primary"
               disabled={busy || !canSend}
               title={
-                !canSend
+                localize(!canSend
                   ? ['已完成', '已取消'].includes(project.status)
                     ? '项目已关闭'
                     : '仅本项目执行工程师可发送'
-                  : undefined
+                  : undefined)
               }
               onClick={() => setChoosingKind(true)}
             >
               <Plus size={16} />
-              写日报
-            </Button>
+              {localize("写日报")}</Button>
           }
         />
-      )}
+      ))}
       <Dialog open={choosingKind} onOpenChange={setChoosingKind}>
         <DialogContent className="daily-report-kind-dialog">
           <DialogHeader>
-            <DialogTitle>选择报告类型</DialogTitle>
+            <DialogTitle>{localize("选择报告类型")}</DialogTitle>
           </DialogHeader>
-          {error && (
+          {localize(error && (
             <p role="alert" className="sr-error">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <div className="daily-report-kind-options">
             <Button
               className="daily-report-kind-option"
@@ -391,7 +393,7 @@ export function ServiceProjectDailyReports({
               onClick={() => compose('daily')}
             >
               <CalendarDays size={24} />
-              <strong>每日工作日报</strong>
+              <strong>{localize("每日工作日报")}</strong>
             </Button>
             <Button
               className="daily-report-kind-option"
@@ -400,13 +402,12 @@ export function ServiceProjectDailyReports({
               onClick={() => compose('project')}
             >
               <FileText size={24} />
-              <strong>项目报告</strong>
+              <strong>{localize("项目报告")}</strong>
             </Button>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setChoosingKind(false)}>
-              取消
-            </Button>
+              {localize("取消")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -414,17 +415,17 @@ export function ServiceProjectDailyReports({
         <DialogContent className="daily-report-dialog" showCloseButton={!busy}>
           <DialogHeader>
             <DialogTitle>
-              {confirmationFlow
+              {localize(confirmationFlow
                 ? stage === 'edit'
                   ? '发送报告并发起确认'
                   : '预览客户确认邮件'
-                : `${stage === 'edit' ? '写' : '预览'}${template.title}`}
+                : `${stage === 'edit' ? '写' : '预览'}${template.title}`)}
             </DialogTitle>
           </DialogHeader>
           <div
             className={`daily-report-compose${stage === 'confirm' ? ' is-confirm' : ''}`}
           >
-            {stage === 'edit' && (
+            {localize(stage === 'edit' && (
               <fieldset
                 disabled={busy || !mailConfig}
                 className="daily-report-form"
@@ -432,12 +433,11 @@ export function ServiceProjectDailyReports({
                 <section>
                   <h3>
                     <Mail size={16} />
-                    邮件信息
-                  </h3>
-                  {field('subject', '邮件主题', true)}
+                    {localize("邮件信息")}</h3>
+                  {localize(field('subject', '邮件主题', true))}
                   <DailyReportRecipientField
                     id="daily-report-to"
-                    label="收件人"
+                    label={localize("收件人")}
                     required
                     value={form.to}
                     onChange={(value) => change('to', value)}
@@ -447,48 +447,47 @@ export function ServiceProjectDailyReports({
                   />
                   <DailyReportRecipientField
                     id="daily-report-cc"
-                    label="抄送"
+                    label={localize("抄送")}
                     value={form.cc}
                     onChange={(value) => change('cc', value)}
                     recipients={recipients}
                     defaultGroup="internal"
                     disabled={busy}
                   />
-                  {field('greeting', '客户称呼', true)}
+                  {localize(field('greeting', '客户称呼', true))}
                 </section>
                 <>
                   <section>
                     <h3>
                       <CalendarDays size={16} />
-                      实施信息
-                    </h3>
+                      {localize("实施信息")}</h3>
                     <div className="daily-report-fields">
                       <DateField
                         id="daily-report-date"
-                        label={template.dateLabel}
+                        label={localize(template.dateLabel)}
                         required
                         value={form.date}
                         onChange={(value) => change('date', value)}
                         disabled={busy}
                       />
                       <div className="daily-report-field">
-                        <span>服务项目编号</span>
+                        <span>{localize("服务项目编号")}</span>
                         <a
                           className="daily-report-project-link"
                           href={dailyReportProjectUrl(project.id)}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          {project.id}
+                          {localize(project.id)}
                         </a>
                       </div>
-                      {field('customerEngineers', '客户技术人员', true)}
-                      {field('projectManager', '项目经理')}
-                      {field('engineers', '实施工程师', true)}
+                      {localize(field('customerEngineers', '客户技术人员', true))}
+                      {localize(field('projectManager', '项目经理'))}
+                      {localize(field('engineers', '实施工程师', true))}
                       <div />
                       <TimeField
                         id="daily-report-start"
-                        label="开始时间"
+                        label={localize("开始时间")}
                         required
                         value={form.startTime}
                         onChange={(value) => change('startTime', value)}
@@ -496,7 +495,7 @@ export function ServiceProjectDailyReports({
                       />
                       <TimeField
                         id="daily-report-end"
-                        label="结束时间"
+                        label={localize("结束时间")}
                         required
                         value={form.endTime}
                         onChange={(value) => change('endTime', value)}
@@ -507,14 +506,14 @@ export function ServiceProjectDailyReports({
                   <section>
                     <h3>
                       <FileText size={16} />
-                      {template.contentTitle}
+                      {localize(template.contentTitle)}
                     </h3>
                     <label
                       className="daily-report-field"
                       htmlFor="daily-report-work"
                     >
                       <span>
-                        {template.workLabel} <em>*</em>
+                        {localize(template.workLabel)} <em>*</em>
                       </span>
                       <Textarea
                         id="daily-report-work"
@@ -524,17 +523,17 @@ export function ServiceProjectDailyReports({
                         }
                         rows={5}
                         maxLength={10000}
-                        placeholder={template.workPlaceholder}
+                        placeholder={localize(template.workPlaceholder)}
                         required
                       />
                     </label>
-                    {!confirmationFlow && (
+                    {localize(!confirmationFlow && (
                       <label
                         className="daily-report-field"
                         htmlFor="daily-report-plan"
                       >
                         <span>
-                          后续安排 <em>*</em>
+                          {localize("后续安排")}<em>*</em>
                         </span>
                         <Textarea
                           id="daily-report-plan"
@@ -544,17 +543,16 @@ export function ServiceProjectDailyReports({
                           }
                           rows={4}
                           maxLength={10000}
-                          placeholder="逐行填写后续计划"
+                          placeholder={localize("逐行填写后续计划")}
                           required
                         />
                       </label>
-                    )}
+                    ))}
                   </section>
                   <section className="daily-report-related-files">
                     <h3>
                       <Paperclip size={16} />
-                      相关文件
-                    </h3>
+                      {localize("相关文件")}</h3>
                     <ProjectReportFilePicker
                       items={projectDeliverables(project)}
                       selections={form.relatedFiles ?? []}
@@ -564,34 +562,34 @@ export function ServiceProjectDailyReports({
                         setError('');
                       }}
                     />
-                    {fileIssue && (
+                    {localize(fileIssue && (
                       <p className="sr-error" role="alert">
-                        {fileIssue}
+                        {localize(fileIssue)}
                       </p>
-                    )}
+                    ))}
                   </section>
                 </>
               </fieldset>
-            )}
+            ))}
             <div className="daily-report-live-preview">
               <div className="daily-report-preview-label">
-                {stage === 'edit' ? '邮件预览' : form.subject}
+                {localize(stage === 'edit' ? '邮件预览' : form.subject)}
               </div>
-              {stage === 'confirm' && (
+              {localize(stage === 'confirm' && (
                 <div className="daily-report-confirm-recipients">
                   <p>
-                    <strong>收件人</strong>
-                    {form.to}
+                    <strong>{localize("收件人")}</strong>
+                    {localize(form.to)}
                   </p>
-                  {form.cc && (
+                  {localize(form.cc && (
                     <p>
-                      <strong>抄送</strong>
-                      {form.cc}
+                      <strong>{localize("抄送")}</strong>
+                      {localize(form.cc)}
                     </p>
-                  )}
-                  <span className="daily-report-status">本地发送</span>
+                  ))}
+                  <span className="daily-report-status">{localize("本地发送")}</span>
                 </div>
-              )}
+              ))}
               <ReportPreview
                 report={{
                   ...form,
@@ -611,11 +609,11 @@ export function ServiceProjectDailyReports({
               />
             </div>
           </div>
-          {error && (
+          {localize(error && (
             <p role="alert" className="sr-error">
-              {error}
+              {localize(error)}
             </p>
-          )}
+          ))}
           <DialogFooter>
             <Button
               variant="outline"
@@ -624,10 +622,10 @@ export function ServiceProjectDailyReports({
                 stage === 'confirm' ? setStage('edit') : close(false)
               }
             >
-              {stage === 'confirm' && <ArrowLeft size={14} />}
-              {stage === 'confirm' ? '返回编辑' : '取消'}
+              {localize(stage === 'confirm' && <ArrowLeft size={14} />)}
+              {localize(stage === 'confirm' ? '返回编辑' : '取消')}
             </Button>
-            {stage === 'edit' ? (
+            {localize(stage === 'edit' ? (
               <Button
                 className="ct-button ct-button--primary"
                 disabled={busy || !canSend}
@@ -650,8 +648,7 @@ export function ServiceProjectDailyReports({
                 }}
               >
                 <Eye size={15} />
-                预览
-              </Button>
+                {localize("预览")}</Button>
             ) : (
               <Button
                 className="ct-button ct-button--primary"
@@ -659,13 +656,13 @@ export function ServiceProjectDailyReports({
                 onClick={() => void send()}
               >
                 <Send size={15} />
-                {busy
+                {localize(busy
                   ? '正在发送…'
                   : confirmationFlow
                     ? '发送并发起确认（本地）'
-                    : '确认发送（本地）'}
+                    : '确认发送（本地）')}
               </Button>
-            )}
+            ))}
           </DialogFooter>
         </DialogContent>
       </Dialog>

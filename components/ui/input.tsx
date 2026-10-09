@@ -2,8 +2,10 @@ import * as React from 'react';
 import { Input as InputPrimitive } from '@base-ui/react/input';
 
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n/context';
 
 function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
+  const { localize } = useI18n();
   return (
     <InputPrimitive
       type={type}
@@ -13,6 +15,9 @@ function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
         className,
       )}
       {...props}
+      value={props.readOnly ? localize(props.value) : props.value}
+      placeholder={localize(props.placeholder)}
+      aria-label={localize(props['aria-label'])}
     />
   );
 }

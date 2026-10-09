@@ -1,3 +1,5 @@
+
+import { useI18n } from '@/lib/i18n/context';
 import type { ReactNode } from 'react';
 
 type DisabledVersion = {
@@ -18,27 +20,28 @@ export function DisabledRuleVersions({ versions, targetLabel, showName = false, 
   showName?: boolean;
   ready: boolean;
 }) {
+  const { localize } = useI18n();
   const title = showName ? '条件审批规则（已停用）' : '条件分配规则（已停用）';
-  return <details className="routing-rules disabled-rule-versions" aria-label={title}>
-    <summary className="submission-rules-toolbar"><strong>{title}</strong></summary>
+  return <details className="routing-rules disabled-rule-versions" aria-label={localize(title)}>
+    <summary className="submission-rules-toolbar"><strong>{localize(title)}</strong></summary>
     <div className="table-scroll"><table className={`reference-table app-list-table ${showName ? 'approval-rules-table' : 'routing-table'}`}>
       <thead><tr>
-        <th>优先级</th>{showName && <th>规则名称</th>}<th>自然语言描述</th><th>{targetLabel}</th>
-        <th>版本 / 状态</th><th>停用时间</th><th>停用人</th><th data-list-actions>操作</th>
+        <th>{localize("优先级")}</th>{localize(showName && <th>{localize("规则名称")}</th>)}<th>{localize("自然语言描述")}</th><th>{localize(targetLabel)}</th>
+        <th>{localize("版本 / 状态")}</th><th>{localize("停用时间")}</th><th>{localize("停用人")}</th><th data-list-actions>{localize("操作")}</th>
       </tr></thead>
-      <tbody>{versions.map(version => <tr key={version.key}>
-        <td>{version.priority}</td>{showName && <td><strong>{version.name}</strong></td>}
+      <tbody>{localize(versions.map(version => <tr key={version.key}>
+        <td>{localize(version.priority)}</td>{localize(showName && <td><strong>{localize(version.name)}</strong></td>)}
         <td><div className="submission-rule-requirement">
-          {version.requirement}
-          <details><summary>查看执行条件</summary><p>{version.condition}</p></details>
+          {localize(version.requirement)}
+          <details><summary>{localize("查看执行条件")}</summary><p>{localize(version.condition)}</p></details>
         </div></td>
-        <td>{version.target}</td>
-        <td><span className="rule-version-status">v{version.version} · 已停用</span></td>
-        <td>{version.disabledAt ? new Date(version.disabledAt).toLocaleString('zh-CN', { hour12: false }) : '—'}</td>
-        <td>{version.disabledBy ?? '—'}</td><td />
-      </tr>)}{!versions.length && <tr><td colSpan={showName ? 8 : 7} className="routing-empty">
-        {ready ? '暂无已停用版本。' : '正在读取配置…'}
-      </td></tr>}</tbody>
+        <td>{localize(version.target)}</td>
+        <td><span className="rule-version-status">v{localize(version.version)} {localize(" · 已停用")}</span></td>
+        <td>{localize(version.disabledAt ? new Date(version.disabledAt).toLocaleString('zh-CN', { hour12: false }) : '—')}</td>
+        <td>{localize(version.disabledBy ?? '—')}</td><td />
+      </tr>))}{localize(!versions.length && <tr><td colSpan={showName ? 8 : 7} className="routing-empty">
+        {localize(ready ? '暂无已停用版本。' : '正在读取配置…')}
+      </td></tr>)}</tbody>
     </table></div>
   </details>;
 }

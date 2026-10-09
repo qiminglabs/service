@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { useState } from 'react';
 import { ArrowUpRight, CheckCheck, ClipboardList } from 'lucide-react';
@@ -29,6 +31,7 @@ export function WorkspaceFollowups({
   selectedCategory?: string;
   onCategoryChange?: (category: string) => void;
 }) {
+  const { localize } = useI18n();
   const [localCategory, setLocalCategory] = useState('全部事项');
   const category = selectedCategory ?? localCategory;
   const setCategory = onCategoryChange ?? setLocalCategory;
@@ -48,23 +51,23 @@ export function WorkspaceFollowups({
     >
       <div className="pm-panel-heading">
         <h2 id={`${id}-title`}>
-          待办与跟进 <span>{tasks.length}</span>
+          {localize("待办与跟进")}<span>{localize(tasks.length)}</span>
         </h2>
         <div className="workspace-followup-controls">
-          {searchable && (
+          {localize(searchable && (
             <input
-              aria-label="搜索待办"
-              placeholder="搜索待办 / 编号 / 客户"
+              aria-label={localize("搜索待办")}
+              placeholder={localize("搜索待办 / 编号 / 客户")}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
-          )}
+          ))}
           <select
-            aria-label="事项类型"
+            aria-label={localize("事项类型")}
             value={category}
             onChange={(event) => setCategory(event.target.value)}
           >
-            {[
+            {localize([
               ...new Set([
                 '全部事项',
                 ...categories,
@@ -72,13 +75,13 @@ export function WorkspaceFollowups({
                 category,
               ]),
             ].map((value) => (
-              <option key={value}>{value}</option>
-            ))}
+              <option value={value} key={value}>{localize(value)}</option>
+            )))}
           </select>
         </div>
       </div>
       <div className="pm-task-list">
-        {shown.length ? (
+        {localize(shown.length ? (
           shown.map((task) => (
             <button
               type="button"
@@ -93,17 +96,17 @@ export function WorkspaceFollowups({
               </span>
               <span className="pm-task-copy">
                 <strong>
-                  {task.title ||
-                    (task.view === 'projects' ? '未命名项目' : '未命名请求')}
+                  {localize(task.title ||
+                    (task.view === 'projects' ? '未命名项目' : '未命名请求'))}
                 </strong>
-                <small>{customerName(task.customerId)}</small>
+                <small>{localize(customerName(task.customerId))}</small>
               </span>
               <span className="pm-task-end">
-                <span className="pm-tag">{task.kind}</span>
+                <span className="pm-tag">{localize(task.kind)}</span>
                 <small className={task.overdue ? 'pm-danger' : ''}>
-                  {task.date
+                  {localize(task.date
                     ? `${task.date}${task.overdue ? ' · 已逾期' : ''}`
-                    : '未设置日期'}
+                    : '未设置日期')}
                 </small>
               </span>
               <ArrowUpRight size={15} aria-hidden="true" />
@@ -117,7 +120,7 @@ export function WorkspaceFollowups({
                 : '当前没有待跟进事项'
             }
           />
-        )}
+        ))}
       </div>
     </section>
   );
@@ -132,16 +135,17 @@ export function WorkspaceRecentActivity({
   activities: ReturnType<typeof workspaceActivities>;
   emptyText?: string;
 }) {
+  const { localize } = useI18n();
   return (
     <section
       className="pm-panel workspace-recent-activity"
-      aria-label="最近动态"
+      aria-label={localize("最近动态")}
     >
       <div className="pm-panel-heading">
-        <h2>最近动态</h2>
+        <h2>{localize("最近动态")}</h2>
       </div>
       <div className="pm-activity-list">
-        {activities.length ? (
+        {localize(activities.length ? (
           activities.map((activity) => (
             <button
               type="button"
@@ -152,42 +156,43 @@ export function WorkspaceRecentActivity({
               <span className="pm-activity-dot" />
               <span>
                 <strong>
-                  {activity.actor} · {activity.title}
+                  {localize(activity.actor)} · {localize(activity.title)}
                 </strong>
                 <small className="pm-activity-context">
-                  <span title={activity.recordTitle}>
-                    {activity.recordTitle}
+                  <span title={localize(activity.recordTitle)}>
+                    {localize(activity.recordTitle)}
                   </span>
                   <span aria-hidden="true">·</span>
-                  <span title={customerName(activity.customerId)}>
-                    {customerName(activity.customerId)}
+                  <span title={localize(customerName(activity.customerId))}>
+                    {localize(customerName(activity.customerId))}
                   </span>
                 </small>
               </span>
               <time dateTime={activity.at}>
-                {new Date(activity.at).toLocaleString('zh-CN', {
+                {localize(new Date(activity.at).toLocaleString('zh-CN', {
                   month: '2-digit',
                   day: '2-digit',
                   hour: '2-digit',
                   minute: '2-digit',
                   hour12: false,
-                })}
+                }))}
               </time>
             </button>
           ))
         ) : (
           <WorkspaceEmpty text={emptyText} />
-        )}
+        ))}
       </div>
     </section>
   );
 }
 
 function WorkspaceEmpty({ text }: { text: string }) {
+  const { localize } = useI18n();
   return (
     <div className="pm-empty">
       <CheckCheck size={24} aria-hidden="true" />
-      <span>{text}</span>
+      <span>{localize(text)}</span>
     </div>
   );
 }

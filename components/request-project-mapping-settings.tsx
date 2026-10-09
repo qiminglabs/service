@@ -1,4 +1,6 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 import type { RequestField } from '@/components/request-field-settings';
 import { compatibleMappingFields } from '@/lib/custom-field-mapping';
 import { normalizeApplicationFields } from '@/lib/request-application-fields';
@@ -17,6 +19,7 @@ const groups = [
 ] as const;
 
 export function RequestProjectMappingSettings({ actor, applicationFields, projectFields }: { actor: OperationActor; applicationFields: RequestField[]; projectFields: RequestField[] }) {
+  const { localize } = useI18n();
   const [config, setConfig] = useState<RequestProjectMapping>(defaultProjectMapping);
   const [ready, setReady] = useState(false);
   const [savingSection, setSavingSection] = useState<MappingSection | null>(null);
@@ -46,30 +49,30 @@ export function RequestProjectMappingSettings({ actor, applicationFields, projec
     finally { setSavingSection(null); saveLock.current = false; }
   }
   return <div className="sr-project-mapping-settings">
-    {error && <p className="sr-error" role="alert">{error}</p>}
-    {notice && <output className="sr-mapping-notice">{notice}</output>}
-    {!allowed && <p>仅系统管理员可修改映射配置。</p>}
-    <div className="sr-mapping-object-list">{groups.map(({ section, source, target }) => <section className="sr-mapping-object" key={section} aria-label={`${source}到${target}映射`}>
-      <div className="sr-mapping-object-header"><div><h4>{source}<ArrowRight size={16} aria-hidden="true" />{target}</h4></div>{section === '请求字段' && <div className="sr-project-mapping-actions"><Button aria-label={`保存${target}映射`} disabled={!ready || busy || !allowed} onClick={() => void save(section)}>{savingSection === section ? '保存中…' : '保存映射'}</Button></div>}</div>
-      <div className="table-scroll"><table className="sr-project-mapping-table"><colgroup><col className="sr-mapping-source-col" /><col className="sr-mapping-arrow-col" /><col />{section === '请求字段' && <col className="sr-mapping-readonly-col" />}</colgroup><thead><tr><th scope="col">来源字段 / 固定值</th><th scope="col" aria-label="映射到" /><th scope="col">目标字段</th>{section === '请求字段' && <th scope="col">转换后只读</th>}</tr></thead><tbody>{mappingRules.filter(rule => rule.section === section).map(rule => <tr key={rule.target}>
-        <td>{rule.sources.length === 1 ? <span className="sr-mapping-fixed-source">{rule.sources[0][1]}</span> : <select aria-label={`${rule.label}映射来源`} value={config.fields[rule.target]} disabled={!ready || busy || !allowed} onChange={event => { const value = event.target.value; setConfig(current => ({ ...current, fields: { ...current.fields, [rule.target]: value }, ...(!value ? { readonly: { ...current.readonly, [rule.target]: false } } : {}) })); setNotice(''); }}>{rule.sources.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>}</td>
-        <td><ArrowRight size={15} aria-hidden="true" /></td><td>{rule.label}</td>
-        {section === '请求字段' && <td>{rule.target === 'customerId' ? <span className="sr-mapping-fixed-source">系统固定</span> : <div className="sr-mapping-readonly"><Switch aria-label={`${rule.label}转换后只读`} checked={!!config.fields[rule.target] && config.readonly?.[rule.target] === true} disabled={!ready || busy || !allowed || !config.fields[rule.target]} onCheckedChange={checked => { setConfig(current => ({ ...current, readonly: { ...current.readonly, [rule.target]: checked } })); setNotice(''); }} /><span>{!config.fields[rule.target] ? '未映射' : config.readonly?.[rule.target] ? '只读' : '可编辑'}</span></div>}</td>}
-      </tr>)}{section === '请求字段' && customTargets.map(targetField => {
+    {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}
+    {localize(notice && <output className="sr-mapping-notice">{localize(notice)}</output>)}
+    {localize(!allowed && <p>{localize("仅系统管理员可修改映射配置。")}</p>)}
+    <div className="sr-mapping-object-list">{localize(groups.map(({ section, source, target }) => <section className="sr-mapping-object" key={section} aria-label={localize(`${source}到${target}映射`)}>
+      <div className="sr-mapping-object-header"><div><h4>{localize(source)}<ArrowRight size={16} aria-hidden="true" />{localize(target)}</h4></div>{localize(section === '请求字段' && <div className="sr-project-mapping-actions"><Button aria-label={localize(`保存${target}映射`)} disabled={!ready || busy || !allowed} onClick={() => void save(section)}>{localize(savingSection === section ? '保存中…' : '保存映射')}</Button></div>)}</div>
+      <div className="table-scroll"><table className="sr-project-mapping-table"><colgroup><col className="sr-mapping-source-col" /><col className="sr-mapping-arrow-col" /><col />{localize(section === '请求字段' && <col className="sr-mapping-readonly-col" />)}</colgroup><thead><tr><th scope="col">{localize("来源字段 / 固定值")}</th><th scope="col" aria-label={localize("映射到")} /><th scope="col">{localize("目标字段")}</th>{localize(section === '请求字段' && <th scope="col">{localize("转换后只读")}</th>)}</tr></thead><tbody>{localize(mappingRules.filter(rule => rule.section === section).map(rule => <tr key={rule.target}>
+        <td>{localize(rule.sources.length === 1 ? <span className="sr-mapping-fixed-source">{localize(rule.sources[0][1])}</span> : <select aria-label={localize(`${rule.label}映射来源`)} value={config.fields[rule.target]} disabled={!ready || busy || !allowed} onChange={event => { const value = event.target.value; setConfig(current => ({ ...current, fields: { ...current.fields, [rule.target]: value }, ...(!value ? { readonly: { ...current.readonly, [rule.target]: false } } : {}) })); setNotice(''); }}>{localize(rule.sources.map(([value, label]) => <option key={value} value={value}>{localize(label)}</option>))}</select>)}</td>
+        <td><ArrowRight size={15} aria-hidden="true" /></td><td>{localize(rule.label)}</td>
+        {localize(section === '请求字段' && <td>{localize(rule.target === 'customerId' ? <span className="sr-mapping-fixed-source">{localize("系统固定")}</span> : <div className="sr-mapping-readonly"><Switch aria-label={localize(`${rule.label}转换后只读`)} checked={!!config.fields[rule.target] && config.readonly?.[rule.target] === true} disabled={!ready || busy || !allowed || !config.fields[rule.target]} onCheckedChange={checked => { setConfig(current => ({ ...current, readonly: { ...current.readonly, [rule.target]: checked } })); setNotice(''); }} /><span>{localize(!config.fields[rule.target] ? '未映射' : config.readonly?.[rule.target] ? '只读' : '可编辑')}</span></div>)}</td>)}
+      </tr>))}{localize(section === '请求字段' && customTargets.map(targetField => {
         const entry = config.customFields?.find(mapping => mapping.target.id === targetField.id);
         const sources = customSources.filter(sourceField => compatibleMappingFields(sourceField, targetField));
         return <tr key={targetField.id}>
-          <td><select aria-label={`${targetField.name}映射来源`} value={entry?.source.id ?? ''} disabled={!ready || busy || !allowed} onChange={event => {
+          <td><select aria-label={localize(`${targetField.name}映射来源`)} value={entry?.source.id ?? ''} disabled={!ready || busy || !allowed} onChange={event => {
             const sourceField = sources.find(field => field.id === event.target.value);
             setConfig(current => ({ ...current, customFields: [...(current.customFields ?? []).filter(mapping => mapping.target.id !== targetField.id), ...(sourceField ? [{ source: structuredClone(sourceField), target: structuredClone(targetField), readonly: entry?.readonly ?? false }] : [])] })); setNotice('');
-          }}><option value="">不映射</option>{entry && !sources.some(field => field.id === entry.source.id) && <option value={entry.source.id} disabled>{entry.source.name}（已删除或不兼容）</option>}{sources.map(field => <option key={field.id} value={field.id}>{field.name}</option>)}</select></td>
-          <td><ArrowRight size={15} aria-hidden="true" /></td><td>{targetField.name}</td>
-          <td><div className="sr-mapping-readonly"><Switch aria-label={`${targetField.name}转换后只读`} checked={entry?.readonly ?? false} disabled={!ready || busy || !allowed || !entry} onCheckedChange={checked => {
+          }}><option value="">{localize("不映射")}</option>{localize(entry && !sources.some(field => field.id === entry.source.id) && <option value={entry.source.id} disabled>{localize(entry.source.name)}{localize("（已删除或不兼容）")}</option>)}{localize(sources.map(field => <option key={field.id} value={field.id}>{localize(field.name)}</option>))}</select></td>
+          <td><ArrowRight size={15} aria-hidden="true" /></td><td>{localize(targetField.name)}</td>
+          <td><div className="sr-mapping-readonly"><Switch aria-label={localize(`${targetField.name}转换后只读`)} checked={entry?.readonly ?? false} disabled={!ready || busy || !allowed || !entry} onCheckedChange={checked => {
             setConfig(current => ({ ...current, customFields: current.customFields?.map(mapping => mapping.target.id === targetField.id ? { ...mapping, readonly: checked } : mapping) })); setNotice('');
-          }} /><span>{entry ? entry.readonly ? '只读' : '可编辑' : '未映射'}</span></div></td>
+          }} /><span>{localize(entry ? entry.readonly ? '只读' : '可编辑' : '未映射')}</span></div></td>
         </tr>;
-      })}
+      }))}
       </tbody></table></div>
-    </section>)}</div>
+    </section>))}</div>
   </div>;
 }

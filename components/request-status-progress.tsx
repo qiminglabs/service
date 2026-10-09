@@ -1,10 +1,13 @@
 'use client';
+import { useI18n } from '@/lib/i18n/context';
+
 
 import { Check, Square } from 'lucide-react';
 import { requestProgressSteps } from '@/lib/service-requests';
 import type { RequestStatus, ServiceRequest } from '@/lib/service-requests';
 
 export function RequestStatusProgress(props: { status: RequestStatus } | { record: ServiceRequest }) {
+  const { localize } = useI18n();
   const request = 'record' in props ? props.record : props.status;
   const status = typeof request === 'string' ? request : request.status;
   const cancelled = status === '已取消';
@@ -12,10 +15,10 @@ export function RequestStatusProgress(props: { status: RequestStatus } | { recor
     <section
       className="sr-status-progress"
       data-cancelled={cancelled || undefined}
-      aria-label={'服务请求状态：' + status}
+      aria-label={localize('服务请求状态：' + status)}
     >
       <ol className="sr-status-steps">
-        {requestProgressSteps(request).map((step, index) => (
+        {localize(requestProgressSteps(request).map((step, index) => (
           <li
             key={step.label}
             data-state={step.state}
@@ -23,22 +26,22 @@ export function RequestStatusProgress(props: { status: RequestStatus } | { recor
           >
             <span className="sr-status-node">
               <span className="sr-status-circle" aria-hidden="true">
-                {step.label === '已取消' ? (
+                {localize(step.label === '已取消' ? (
                   <Square size={13} />
                 ) : step.state === 'complete' ||
                   (step.state === 'current' && ['已转服务项目', '评估完成'].includes(step.label)) ? (
                   <Check size={16} />
                 ) : (
                   index + 1
-                )}
+                ))}
               </span>
-              <span>{step.label}</span>
-              {step.state === 'complete' && (
-                <span className="sr-only">，已完成</span>
-              )}
+              <span>{localize(step.label)}</span>
+              {localize(step.state === 'complete' && (
+                <span className="sr-only">{localize("，已完成")}</span>
+              ))}
             </span>
           </li>
-        ))}
+        )))}
       </ol>
     </section>
   );
