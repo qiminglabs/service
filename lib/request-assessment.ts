@@ -1,3 +1,4 @@
+import { activityMessage, activityList, activityLabel, type ActivityText } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import { requestApprovalRemaining, requestApprovalRemainingDays } from './request-approval-quota.ts';
 import type { HardwareAssessmentRequirement } from './hardware-assessment-trigger';
@@ -8,7 +9,7 @@ import { canPerformAssessmentRole, type AssessmentRouting } from './assessment-r
 import { effortEntitlementAllocations, entitlementLockIssue, type EntitlementAllocation } from './request-entitlement-reservations.ts';
 import { isDayQuantity, sumDays } from './day-quantity.ts';
 import { calculateEffortPricing, type EffortPricingLine, type EffortPricingInput, type EntitlementPricingContext } from './request-pricing.ts';
-import { assetDayMethod, requestDayRequirements, allocationMethodIssue, planDayGaps, formatDayRequirements, type DayMethod, type DayRequirement } from './request-asset-coverage.ts';
+import { assetDayMethod, requestDayRequirements, allocationMethodIssue, planDayGaps, type DayMethod, type DayRequirement } from './request-asset-coverage.ts';
 import { portalSwitchIdentities } from './portal-context.ts';
 import { operationIdentities } from './internal-users.ts';
 import { isRequestApplicant, requestAudience } from './request-collaboration.ts';
@@ -325,8 +326,8 @@ export function applyAssessmentAction(
     if (!isDayQuantity(n) || n <= 0 || n > 100000)
       throw new Error('人天必须为有效正数，最多一位小数。');
   };
-  let title = '',
-    detail = '',
+  let title: ActivityText = '',
+    detail: ActivityText = '',
     category: '评估' | '审批' = '评估';
   let status: ServiceRequest['status'] = record.status;
   const plan = currentPlan(record);
@@ -349,7 +350,7 @@ export function applyAssessmentAction(
     hardware.rounds.push({ id: crypto.randomUUID(), assignmentId: hardware.assignmentId, authorId: actor.id, author: actor.name, at: now,
       outcome: action.outcome, opinion: action.opinion.trim(),
       itemIds: hardwareItems(record).map(item => item.id), source: hardwareReviewSource(record) });
-    title = `硬件产品经理评估 · ${action.outcome}`;
+    title = activityMessage("硬件产品经理评估 · {0}", [action.outcome]);
     detail = action.opinion.trim();
   } else if (action.type === 'review') {
     manager();
@@ -374,7 +375,7 @@ export function applyAssessmentAction(
       opinion: action.opinion.trim(),
       risks: action.risks?.trim() ?? '',
     });
-    title = `材料评估 · ${action.outcome}`;
+    title = activityMessage("材料评估 · {0}", [activityLabel(action.outcome)]);
     detail = action.opinion;
   } else if (action.type === 'return-draft') {
     manager();
@@ -407,7 +408,7 @@ export function applyAssessmentAction(
       },
       actor,
       '提交',
-      '退回草稿',
+      activityMessage("退回草稿"),
       action.reason.trim(),
       now,
     );
@@ -429,9 +430,9 @@ export function applyAssessmentAction(
         if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
       });
     }
-    title = '人天核定';
-    if (requestTypeOf(record) === '技术评估') { status = '评估完成'; title = '人天核定 · 评估完成'; }
-    detail = `预估 ${pricing.estimatedDays} 人天 · 计价 ${pricing.days} 人天 · ${pricing.lines.map(line => `${line.serviceName}：${line.kind === 'entitlement' ? `差额权益 ${line.deficitEntitlements}` : line.estimatedDays} × ${line.priceCoefficient} = ${line.billableDays}`).join("；")}${assessment.effort.note ? ` · ${assessment.effort.note}` : ''}`;
+    title = activityMessage("人天核定");
+    if (requestTypeOf(record) === '技术评估') { status = '评估完成'; title = activityMessage("人天核定 · 评估完成"); }
+    detail = activityMessage("预估 {0} 人天 · 计价 {1} 人天 · {2}{3}", [pricing.estimatedDays, pricing.days, activityList(pricing.lines.map(line => activityMessage("{0}：{1} × {2} = {3}", [activityLabel(line.serviceName), (line.kind === 'entitlement' ? activityMessage("差额权益 {0}", [line.deficitEntitlements]) : line.estimatedDays), line.priceCoefficient, line.billableDays])), "；"), (assessment.effort.note ? activityMessage(" · {0}", [assessment.effort.note]) : '')]);
   } else if (action.type === 'plan') {
     if (!canManageAssessmentBasis(record, actor, customers, users)) throw new Error(assessmentBasisPermissionMessage(record));
     const round = assessment.rounds.find((r) => r.outcome === '评估通过');
@@ -477,8 +478,8 @@ export function applyAssessmentAction(
     assessment.approvals.forEach((a) => {
       if (a.state === '待审批' || a.state === '已通过') a.state = '已失效';
     });
-    title = plan ? '调整服务依据' : '服务依据关联';
-    detail = `计价总人天 ${effort} · 关联 ${planAssetDays(assessment.plans.at(-1))} 人天`;
+    title = (plan ? activityMessage("调整服务依据") : activityMessage("服务依据关联"));
+    detail = activityMessage("计价总人天 {0} · 关联 {1} 人天", [effort, planAssetDays(assessment.plans.at(-1))]);
   } else if (action.type === 'gap-submit') {
     if (!plan || !canSubmitGapApproval(record, actor, users))
       throw new Error('仅本请求的内部申请人或方案指定的销售可发起额度特批。');
@@ -528,8 +529,8 @@ export function applyAssessmentAction(
       state: '待审批',
     });
     category = '审批';
-    title = workflow ? '发起特殊审批' : '发起额度特批';
-    detail = `申请额度 ${formatDayRequirements(gaps) || `${days} 人天`} · ${action.reason}${workflow ? ` · ${workflow.ruleName} · ${workflow.steps.map(step => step.approver).join(' → ')}` : ''}`;
+    title = (workflow ? activityMessage("发起特殊审批") : activityMessage("发起额度特批"));
+    detail = activityMessage("申请额度 {0} · {1}{2}", [gaps.length ? activityList(gaps.map(row => activityMessage('{0} {1} 人天', [activityLabel(row.method), row.days]))) : activityMessage('{0} 人天', [days]), action.reason, (workflow ? activityMessage(" · {0} · {1}", [activityLabel(workflow.ruleName), activityList(workflow.steps.map(step => step.approver), ' → ')]) : '')]);
   } else if (action.type === 'gap-decide') {
     const approval = assessment.approvals.find((a) => a.id === action.id);
     if (
@@ -547,16 +548,16 @@ export function applyAssessmentAction(
       throw new Error('仅指定上级可审批，不能自行审批。');
     text(action.note, '审批意见');
     if (approval.workflow) {
-      detail = decideApprovalExecution(approval, actor, users, action.approve, action.note, now);
+      decideApprovalExecution(approval, actor, users, action.approve, action.note, now, value => { detail = value; });
       category = '审批';
-      title = action.approve ? (approval.workflow.steps.every(step => step.state === '已通过') ? '特殊审批全部通过' : '特殊审批环节通过') : '特殊审批驳回，退回申请人';
+      title = (action.approve ? ((approval.workflow.steps.every(step => step.state === '已通过') ? activityMessage("特殊审批全部通过") : activityMessage("特殊审批环节通过"))) : activityMessage("特殊审批驳回，退回申请人"));
     } else {
       approval.state = action.approve ? '已通过' : '已拒绝';
       approval.note = action.note.trim();
       approval.decidedAt = now;
       approval.decidedBy = actor.name;
       category = '审批';
-      title = `额度特批${action.approve ? '通过' : '拒绝'}`;
+      title = activityMessage("额度特批{0}", [(action.approve ? activityMessage("通过") : activityMessage("拒绝"))]);
       detail = action.note;
     }
   } else if (action.type === 'confirm') {
@@ -581,8 +582,8 @@ export function applyAssessmentAction(
       entitlementAllocations: structuredClone(plan.entitlementAllocations ?? effortEntitlementAllocations(assessment.effort?.lines)),
     };
     status = '待确认';
-    title = '发起客户确认';
-    detail = `${round.scope} · 计价总人天 ${plan.effort} · 客户资产 ${planAssetDays(plan)} · 特批 ${gap}`;
+    title = activityMessage("发起客户确认");
+    detail = activityMessage("{0} · 计价总人天 {1} · 客户资产 {2} · 特批 {3}", [round.scope, plan.effort, planAssetDays(plan), gap]);
   } else {
     throw new Error('不支持的评估操作。');
   }

@@ -577,10 +577,10 @@ function Header({
   onInitialize: () => Promise<void>;
   initializationDisabled: boolean;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   return (
     <header className="topbar">
-      <div className="topbar-brand" aria-label={localize(`SmartX ${portal.title}`)}>
+      <div className="topbar-brand" aria-label={localizeMessage("SmartX {0}", [localize(portal.title)])}>
         {/* oxlint-disable-next-line next/no-img-element -- using the exact SmartX CDN wordmark from the reference console */}
         <img
           src="https://cdn.smartx.com/partner-connect/navigation/smartx-badge-on-light-horizontal.svg"
@@ -612,21 +612,21 @@ function Header({
                 variant="outline"
                 className="role-switcher"
                 type="button"
-                aria-label={localize(`当前用户：${currentActor.name || '未选择'}，切换身份`)}
+                aria-label={localizeMessage("当前用户：{0}，切换身份", [localize(currentActor.name || '未选择')])}
               />
             }
           >
             <span
               title={
                 localize(currentActor.name
-                  ? `${currentActor.name} · ${currentActor.role}`
+                  ? localizeMessage("{0} · {1}", [String(localize(currentActor.name)), String(localize(currentActor.role))])
                   : '请选择用户')
               }
             >
               {localize(currentActor.name
                 ? currentActor.name === currentActor.role
                   ? currentActor.name
-                  : `${currentActor.name} · ${currentActor.role}`
+                  : localizeMessage("{0} · {1}", [String(localize(currentActor.name)), String(localize(currentActor.role))])
                 : '请选择用户')}
             </span>
             <ChevronDown aria-hidden="true" />
@@ -651,7 +651,7 @@ function Header({
                   key={identity.id}
                   value={identity.id}
                 >
-                  {localize(`${identity.name} · ${resolvePortalContext(identity, identitySources).organizationName.replace(/（模拟）|\(模拟\)/g, '')} · ${identity.role}`)}
+                  {localizeMessage("{0} · {1} · {2}", [localize(identity.name), localize(resolvePortalContext(identity, identitySources).organizationName.replace(/（模拟）|\(模拟\)/g, '')), localize(identity.role)])}
                 </DropdownMenuRadioItem>
               )))}
             </DropdownMenuRadioGroup>
@@ -2045,7 +2045,7 @@ type CatalogViewProps = {
 };
 
 function CatalogView(props: CatalogViewProps) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   if (props.detailService)
     return (
       <CatalogDetail
@@ -2114,7 +2114,7 @@ function CatalogView(props: CatalogViewProps) {
                           type="button"
                           className="app-list-link"
                           onClick={() => props.onView(service.id)}
-                          aria-label={localize(`查看服务 ${service.name}`)}
+                          aria-label={localizeMessage("查看服务 {0}", [localize(service.name)])}
                         >
                           {localize(service.name)}
                         </button>
@@ -2131,9 +2131,9 @@ function CatalogView(props: CatalogViewProps) {
                         {localize(!isEntitlementService(service) && '/ ')}{localize(service.priceUnit)}
                       </small>
                     </td>
-                    <td>{localize(service.deliveryMethods.join(' / '))}</td>
-                    <td>{localize(service.providers.join('、'))}</td>
-                    <td>{localize(service.allowedInitiatorSites.join('、'))}</td>
+                    <td>{localizeList(service.deliveryMethods, ' / ')}</td>
+                    <td>{localizeList(service.providers)}</td>
+                    <td>{localizeList(service.allowedInitiatorSites)}</td>
                     <td>v{localize(service.version ?? 1)}</td>
                     <td>
                       <StatusCapsule status={service.status} />
@@ -2151,12 +2151,12 @@ function CatalogView(props: CatalogViewProps) {
                           type="button"
                           className="app-list-link"
                           onClick={() => props.onView(service.id)}
-                          aria-label={localize(`查看 ${service.name}`)}
+                          aria-label={localizeMessage("查看 {0}", [localize(service.name)])}
                         >
                           {localize("查看")}</button>
                         <button
                           type="button"
-                          aria-label={localize(`更多 ${service.name} 操作`)}
+                          aria-label={localizeMessage("更多 {0} 操作", [localize(service.name)])}
                         >
                           <MoreHorizontal />
                         </button>
@@ -2190,9 +2190,9 @@ function CatalogDetail({
   onEdit: (service: Service) => void;
   onToggle: (service: Service) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   return (
-    <article className="catalog-detail" aria-label={localize(`${service.name}详情`)}>
+    <article className="catalog-detail" aria-label={localizeMessage("{0}详情", [localize(service.name)])}>
       <header className="detail-heading">
         <div>
           <button type="button" className="detail-back" onClick={onBack}>
@@ -2274,19 +2274,19 @@ function CatalogDetail({
             <dl>
               <div className="detail-span">
                 <dt>{localize("支持服务方式")}</dt>
-                <dd>{localize(service.deliveryMethods.join('、'))}</dd>
+                <dd>{localizeList(service.deliveryMethods)}</dd>
               </div>
               <div className="detail-span">
                 <dt>{localize("认证要求")}</dt>
-                <dd>{localize(service.certifications.join('、'))}</dd>
+                <dd>{localizeList(service.certifications)}</dd>
               </div>
               <div className="detail-span">
                 <dt>{localize("支持服务方")}</dt>
-                <dd>{localize(service.providers.join('、'))}</dd>
+                <dd>{localizeList(service.providers)}</dd>
               </div>
               <div className="detail-span">
                 <dt>{localize("可发起站点")}</dt>
-                <dd>{localize(service.allowedInitiatorSites.join('、'))}</dd>
+                <dd>{localizeList(service.allowedInitiatorSites)}</dd>
               </div>
             </dl>
           </section>
@@ -2370,14 +2370,14 @@ function DisableRecordAction({
   label: string;
   onDisable: () => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   return isDisabled ? (
     <span className="disabled-record-label">{localize("已停用")}</span>
   ) : (
     <button
       className="disable-record"
       type="button"
-      aria-label={localize(`停用${label}`)}
+      aria-label={localizeMessage("停用{0}", [localize(label)])}
       onClick={onDisable}
     >
       {localize("停用")}</button>
@@ -2385,7 +2385,7 @@ function DisableRecordAction({
 }
 
 function ReferenceDataView(props: ReferenceDataViewProps) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const partnerNames = new Map(
     props.partners.map((partner) => [partner.id, partner.name]),
   );
@@ -2460,7 +2460,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   </td>
                   <td>{localize(record.team)}</td>
                   <td>
-                    <select aria-label={localize(`${record.name}的客户所有人`)} value={record.ownerUserId ?? ''} onChange={event => props.onCustomerOwnerChange(record.id, event.target.value)}>
+                    <select aria-label={localizeMessage("{0}的客户所有人", [localize(record.name)])} value={record.ownerUserId ?? ''} onChange={event => props.onCustomerOwnerChange(record.id, event.target.value)}>
                       <option value="">{localize("未设置")}</option>
                       {localize(props.users.filter(user => user.status === '启用' || user.id === record.ownerUserId).map(user => <option key={user.id} value={user.id} disabled={user.status !== '启用'}>{localize(user.name)}{localize(user.status !== '启用' ? '（已停用）' : '')}</option>))}
                       {localize(record.ownerUserId && !props.users.some(user => user.id === record.ownerUserId) && <option value={record.ownerUserId} disabled>{localize("原用户不可用")}</option>)}
@@ -2480,7 +2480,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={localize(`客户 ${record.name}`)}
+                      label={localizeMessage("客户 {0}", [localize(record.name)])}
                       onDisable={() => props.onDisableCustomer(record.id)}
                     />
                   </td>
@@ -2526,7 +2526,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={localize(`联系人 ${record.name}`)}
+                      label={localizeMessage("联系人 {0}", [localize(record.name)])}
                       onDisable={() => props.onDisableContact(record.id)}
                     />
                   </td>
@@ -2555,7 +2555,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <strong>{localize(customerNames.get(record.customerId))}</strong>
                   </td>
                   <td>{localize(record.name)}</td>
-                  <td><Input key={`${record.id}:${record.balanceDays}`} aria-label={localize(`${record.id} 余额人天`)} type="number" min="0" step="0.1" placeholder={localize("待维护")} defaultValue={record.balanceDays ?? ''} onChange={event => event.target.setCustomValidity('')} onBlur={event => {
+                  <td><Input key={`${record.id}:${record.balanceDays}`} aria-label={localizeMessage("{0} 余额人天", [localize(record.id)])} type="number" min="0" step="0.1" placeholder={localize("待维护")} defaultValue={record.balanceDays ?? ''} onChange={event => event.target.setCustomValidity('')} onBlur={event => {
                     const value = parseDayQuantity(event.target.value);
                     if (value !== null) props.onAssetBalanceChange(record.id, value);
                     else { event.target.setCustomValidity('余额人天须为非负数，最多一位小数。'); event.target.reportValidity(); event.target.value = record.balanceDays === undefined ? '' : String(record.balanceDays); }
@@ -2574,7 +2574,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={localize(`服务资产 ${record.id}`)}
+                      label={localizeMessage("服务资产 {0}", [localize(record.id)])}
                       onDisable={() => props.onDisableAsset(record.id)}
                     />
                   </td>
@@ -2618,13 +2618,13 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <td className="numeric-cell" key={field}>
                       <Input
                         key={`${record.id}:${field}:${record[field]}`}
-                        aria-label={localize(`${record.id} ${field === 'upgradeEntitlement' ? '升级权益' : '巡检权益'}（含已冻结）`)}
+                        aria-label={localizeMessage("{0} {1}（含已冻结）", [localize(record.id), localize(field === 'upgradeEntitlement' ? '升级权益' : '巡检权益')])}
                         type="number"
                         min="0"
                         max={record.nodeCount}
                         step="1"
                         defaultValue={record[field]}
-                        title={localize(`请输入 0 至 ${record.nodeCount} 的整数，离开输入框后保存`)}
+                        title={localizeMessage("请输入 0 至 {0} 的整数，离开输入框后保存", [localize(record.nodeCount)])}
                         onBlur={(event) => {
                           const quantity = parseEntitlementQuantity(event.target.value, record.nodeCount);
                           if (quantity !== null) props.onEntitlementChange(record.id, field, quantity);
@@ -2647,7 +2647,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={localize(`业务对象 ${record.name}`)}
+                      label={localizeMessage("业务对象 {0}", [localize(record.name)])}
                       onDisable={() => props.onDisableBusinessObject(record.id)}
                     />
                   </td>
@@ -2692,7 +2692,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <td>
                       <DisableRecordAction
                         isDisabled={record.status === '停用'}
-                        label={localize(`合作伙伴 ${record.name}`)}
+                        label={localizeMessage("合作伙伴 {0}", [localize(record.name)])}
                         onDisable={() => props.onDisablePartner(record.id)}
                       />
                     </td>
@@ -2747,7 +2747,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                     <td>
                       <DisableRecordAction
                         isDisabled={record.status === '停用'}
-                        label={localize(`合作伙伴用户 ${record.name}`)}
+                        label={localizeMessage("合作伙伴用户 {0}", [localize(record.name)])}
                         onDisable={() => props.onDisablePartnerUser(record.id)}
                       />
                     </td>
@@ -2811,7 +2811,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                       <td>
                         <DisableRecordAction
                           isDisabled={record.status === '停用'}
-                          label={localize(`服务认证 ${userName} ${record.certification}`)}
+                          label={localizeMessage("服务认证 {0} {1}", [localize(userName), localize(record.certification)])}
                           onDisable={() =>
                             props.onDisableCertification(record.id)
                           }
@@ -2850,7 +2850,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>{localize(record.email)}</td>
                   <td>{localize(record.department)}</td>
                   <td>
-                    {localize(props.canEditReporting ? <select className="reference-reporting-select" aria-label={localize(`${record.name}的汇报人`)} value={record.reportsToUserId ?? ''} onChange={event => props.onReportingChange(record.id, event.target.value)}>
+                    {localize(props.canEditReporting ? <select className="reference-reporting-select" aria-label={localizeMessage("{0}的汇报人", [localize(record.name)])} value={record.reportsToUserId ?? ''} onChange={event => props.onReportingChange(record.id, event.target.value)}>
                       <option value="">{localize("未设置")}</option>
                       {localize(record.reportsToUserId && !props.users.some(user => user.id === record.reportsToUserId) && <option value={record.reportsToUserId} disabled>{localize("原汇报人已不存在")}</option>)}
                       {localize(props.users.filter(user => user.id !== record.id && (user.status === '启用' || user.id === record.reportsToUserId)).map(user => <option key={user.id} value={user.id} disabled={!!reportingRelationshipIssue(props.users, record.id, user.id)}>{localize(user.name)}{localize(user.status !== '启用' ? '（已停用）' : '')}</option>))}
@@ -2871,7 +2871,7 @@ function ReferenceDataView(props: ReferenceDataViewProps) {
                   <td>
                     <DisableRecordAction
                       isDisabled={record.status === '停用'}
-                      label={localize(`内部用户 ${record.name}`)}
+                      label={localizeMessage("内部用户 {0}", [localize(record.name)])}
                       onDisable={() => props.onDisableUser(record.id)}
                     />
                   </td>

@@ -1,3 +1,4 @@
+import { activityFields, type ActivityEvent, type ActivityText } from './activity-events.ts';
 import type {
   OperationActor,
   RequestMeeting,
@@ -13,6 +14,7 @@ export type ProjectActivity = {
   category: '项目' | '服务项' | '协作' | '补充信息' | '会议' | '工时' | '工单' | '复核' | '服务日报' | '项目报告';
   title: string;
   detail: string;
+  event?: ActivityEvent;
   externalVisible?: boolean;
 };
 export type ProjectOperations = {
@@ -29,8 +31,8 @@ export function appendProjectActivity(
   record: ServiceProjectRecord,
   actor: OperationActor,
   category: ProjectActivity['category'],
-  title: string,
-  detail = '',
+  title: ActivityText,
+  detail: ActivityText = '',
   now = new Date().toISOString(),
   externalVisible = true,
 ): ServiceProjectRecord {
@@ -47,8 +49,7 @@ export function appendProjectActivity(
           actor: actor.name,
           actorId: actor.id,
           category,
-          title,
-          detail,
+          ...activityFields('project', title, detail),
           externalVisible,
         },
       ],

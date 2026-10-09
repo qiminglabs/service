@@ -4,6 +4,7 @@ import ts from 'typescript';
 const root = path.resolve(import.meta.dirname, '..');
 const messages = JSON.parse(fs.readFileSync(path.join(root, 'lib/i18n/en.json'), 'utf8'));
 const patterns = JSON.parse(fs.readFileSync(path.join(root, 'lib/i18n/patterns.json'), 'utf8'));
+const activityMessages = JSON.parse(fs.readFileSync(path.join(root, 'lib/activity-messages.json'), 'utf8'));
 const categories = {};
 function classify(text) {
   if (/^(草稿|已|待|未|全部|远程|现场|启用|停用|进行中|执行中|有效|无效|必填|选填|是$|否$)/.test(text) && text.length < 14) return 'statuses';
@@ -13,7 +14,7 @@ function classify(text) {
   if (text.length < 20 && !/[。？！；：]/.test(text)) return 'fields';
   return 'content';
 }
-for (const key of [...Object.keys(messages), ...patterns.map(([source]) => source)]) categories[key] = classify(key);
+for (const key of [...Object.keys(messages), ...patterns.map(([source]) => source)]) if (!activityMessages[key] || activityMessages[key].uiLabel) categories[key] = classify(key);
 function scan(folder) {
   for (const file of fs.readdirSync(folder, { withFileTypes: true })) {
     const target = path.join(folder, file.name);

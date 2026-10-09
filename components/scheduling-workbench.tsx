@@ -87,7 +87,7 @@ export function SchedulingWorkbench({
   onOpen,
   onOpenProject,
 }: Props) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const [snapshot, setSnapshot] = useState<ScheduleSnapshot>();
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -209,7 +209,7 @@ export function SchedulingWorkbench({
           <div className="schedule-pending-title">
             <h2>
               {localize("待排事项")}{localize(' ')}
-              <span aria-label={localize(`${pending.length} 个项目`)}>
+              <span aria-label={localizeMessage("{0} 个项目", [localize(pending.length)])}>
                 {localize(pending.length)}
               </span>
             </h2>
@@ -227,7 +227,7 @@ export function SchedulingWorkbench({
                   <span className="schedule-project-type">{localize("服务项目")}</span>
                   <h3>{localize(project.name)}</h3>
                   <button
-                    aria-label={localize(`查看项目 ${project.name}`)}
+                    aria-label={localizeMessage("查看项目 {0}", [localize(project.name)])}
                     onClick={() => onOpenProject(project.id)}
                   >
                     <ArrowUpRight size={16} />
@@ -305,7 +305,7 @@ export function SchedulingWorkbench({
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label={localize(`上一${periodName}`)}
+                  aria-label={localizeMessage("上一{0}", [localize(periodName)])}
                   onClick={() =>
                     resetDate(moveScheduleViewDate(anchor, view, -1))
                   }
@@ -322,7 +322,7 @@ export function SchedulingWorkbench({
                 <Button
                   variant="outline"
                   size="icon"
-                  aria-label={localize(`下一${periodName}`)}
+                  aria-label={localizeMessage("下一{0}", [localize(periodName)])}
                   onClick={() =>
                     resetDate(moveScheduleViewDate(anchor, view, 1))
                   }
@@ -457,7 +457,7 @@ export function SchedulingWorkbench({
                       <td key={index}>
                         <span
                           className="schedule-capacity-value"
-                          aria-label={localize(`${slots[index].date} 可用 ${total.available} 人`)}
+                          aria-label={localizeMessage("{0} 可用 {1} 人", [localize(slots[index].date), localize(total.available)])}
                         >
                           {localize(total.available)}
                         </span>
@@ -565,7 +565,7 @@ function SchedulePanel({
   onPanel: (panel: Panel) => void;
   onSave: (action: ScheduleAction, revision: number) => Promise<void>;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList } = useI18n();
   const revision = useRef(snapshot.data.revision);
   const [resourceKey, setResourceKey] = useState(
     panel.kind === 'exception'
@@ -892,7 +892,7 @@ function SchedulePanel({
                 <div className="schedule-detail-row">
                   <span>{localize("有效认证")}</span>
                   <strong>
-                    {localize(panel.resource.certifications.join('、') || '无有效认证')}
+                    {localize(localizeList(panel.resource.certifications, '、') || '无有效认证')}
                   </strong>
                 </div>
                 <div className="schedule-detail-row">
@@ -902,7 +902,7 @@ function SchedulePanel({
                 <div className="schedule-detail-row">
                   <span>{localize("每周工作日")}</span>
                   <strong>
-                    {localize([1, 2, 3, 4, 5, 6, 0]
+                    {localize(localizeList([1, 2, 3, 4, 5, 6, 0]
                       .filter((day) =>
                         snapshot.data.calendar.weekdays.includes(day),
                       )
@@ -917,8 +917,7 @@ function SchedulePanel({
                             '周五',
                             '周六',
                           ][day],
-                      )
-                      .join('、'))}
+                      ), '、'))}
                   </strong>
                 </div>
                 <div className="schedule-subheading">

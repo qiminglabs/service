@@ -39,3 +39,19 @@
 - 保留整块字段点击展开、小时/分钟双列、直接输入、清空/取消/确定、键盘操作、只读和禁用状态。弹层必须正确覆盖所在业务弹窗。
 - 使用 `id`、`label`、`required`、`value`、`onChange`、`readonly` 和 `disabled` 配置。值使用 24 小时制 `HH:mm` 字符串，空值为 `''`；不转换成 UTC 时间戳。
 - 日期时间组合使用 `DateField` + `TimeField`。预约是否在未来等业务规则由业务表单与保存逻辑校验，公共组件仅校验时刻格式。
+
+# 前台翻译规范
+
+- 中文仍是保存值与后台配置的主语言；只翻译前台展示，不修改历史记录、用户正文或业务判断。
+- 列表使用 `localizeList(values)` 逐项翻译，禁止把 `join()` 的结果交给 `localize`。
+- 动态句子使用 `localizeMessage('完整句子 {0}', [value])`，将完整模板及英文录入 `lib/i18n/en.json`（按完整键匹配；不要为新模板增加模糊匹配规则）；变量中的界面标签显式翻译，用户姓名、编号和正文原样传入。不要拼接多个翻译片段来组成句子。
+- 新增默认字段条件、材料说明等固定文案时，同步更新词典并运行 `node scripts/build-translation-catalog.mjs`，使翻译台可编辑。
+- 构建前自动运行 `npm run check:i18n`，检查直接拼接、列表拼接、缺失模板及变量数量；新增复杂展示应补充中英文渲染测试。
+
+# 活动记录规范
+
+- 新活动通过 `activityFields`（通常由 `appendActivity` / `appendProjectActivity` 调用）保存版本化 `event`、稳定事件类型及结构化参数。`title` / `detail` 保留中文兼容快照，供已有校验和旧页面使用，不作为新记录英文展示的数据源。
+- 固定系统文本使用 `activityMessage`，名单及多行列表使用 `activityList`，需要按标签显示的业务枚举用 `activityLabel`。用户姓名、正文和意见作为原始参数，不拼接后解析、不自动翻译。
+- 活动模板由 `lib/activity-messages.json` 随代码维护；保留旧模板键和稳定 ID，保证历史事件可继续渲染。`uiLabel: false` 的活动专用文案不进入翻译台；界面共用标签可以保留。
+- 活动列表及工作台使用共享 ActivityTitle / ActivityDetail 展示。旧活动没有 event 时使用兼容展示，不批量重写原记录。
+- 构建必须通过 `check:activities`，新增写入入口应测试中英文、特殊分隔符、原文保留以及历史记录兼容。

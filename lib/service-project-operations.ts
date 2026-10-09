@@ -1,3 +1,4 @@
+import { activityMessage, activityList, activityLabel, type ActivityText } from './activity-events.ts';
 import { isDemoAdministrator, canActForUser } from './demo-permissions.ts';
 import { projectWorklogsLocked } from './service-project-work-order-policy.ts';
 import { canViewServiceProject } from './service-projects.ts';
@@ -83,8 +84,8 @@ export function applyProjectOperation(
     throw new Error('当前身份无权执行此项目操作。');
   const ops = structuredClone(projectOperationsOf(record));
   let category: ProjectActivity['category'] = '会议';
-  let title = '';
-  let detail = '';
+  let title: ActivityText = '';
+  let detail: ActivityText = '';
   const requireText = (value: string, label: string) => {
     if (!value.trim()) throw new Error(`请填写${label}。`);
   };
@@ -119,8 +120,8 @@ export function applyProjectOperation(
         durationMinutes: action.durationMinutes,
       });
       category = '会议';
-      title = '预约模拟会议';
-      detail = `${action.title.trim()} · ${date} ${time} · ${action.durationMinutes} 分钟`;
+      title = activityMessage("预约模拟会议");
+      detail = activityMessage("{0} · {1} {2} · {3} 分钟", [action.title.trim(), date, time, action.durationMinutes]);
       break;
     }
     case 'meeting-notify': {
@@ -154,21 +155,8 @@ export function applyProjectOperation(
         { ...record, revision: record.revision + 1, updatedAt: now },
         actor,
         '会议',
-        '发送会议通知',
-        [
-          meeting.title,
-          meeting.scheduledDate
-            ? `${meeting.scheduledDate} ${meeting.scheduledTime} · ${meeting.durationMinutes} 分钟`
-            : '',
-          internalNames.length ? `内部协作人：${internalNames.join('、')}` : '',
-          externalNames.length ? `外部协作人：${externalNames.join('、')}` : '',
-          partnerNames.length
-            ? `合作伙伴协作人：${partnerNames.join('、')}`
-            : '',
-          '本地模拟，未实际发送',
-        ]
-          .filter(Boolean)
-          .join(' · '),
+        activityMessage("发送会议通知"),
+        activityList([meeting.title, (meeting.scheduledDate ? activityMessage("{0} {1} · {2} 分钟", [meeting.scheduledDate, meeting.scheduledTime, meeting.durationMinutes]) : ''), (internalNames.length ? activityMessage("内部协作人：{0}", [activityList(internalNames, '、')]) : ''), (externalNames.length ? activityMessage("外部协作人：{0}", [activityList(externalNames, '、')]) : ''), (partnerNames.length ? activityMessage("合作伙伴协作人：{0}", [activityList(partnerNames, '、')]) : ''), activityMessage("本地模拟，未实际发送")].filter(Boolean), ' · '),
         now,
       );
     }
@@ -198,7 +186,7 @@ export function applyProjectOperation(
         ];
       }
       category = '会议';
-      title = '开始模拟会议';
+      title = activityMessage("开始模拟会议");
       detail = meeting.title;
       break;
     }
@@ -216,7 +204,7 @@ export function applyProjectOperation(
         mode: 'local-demo',
       });
       category = '会议';
-      title = '发起模拟会议';
+      title = activityMessage("发起模拟会议");
       detail = action.title;
       break;
     }
@@ -229,7 +217,7 @@ export function applyProjectOperation(
       meeting.status = '已结束';
       meeting.endedAt = now;
       category = '会议';
-      title = '结束模拟会议';
+      title = activityMessage("结束模拟会议");
       detail = meeting.title;
       break;
     }
@@ -248,8 +236,8 @@ export function applyProjectOperation(
       }
       meeting.attachments = [...(meeting.attachments ?? []), ...action.files];
       category = '会议';
-      title = '上传会议附件';
-      detail = `${meeting.title} · ${action.files.map((file) => file.name).join('、')}`;
+      title = activityMessage("上传会议附件");
+      detail = activityMessage("{0} · {1}", [meeting.title, activityList(action.files.map((file) => file.name), '、')]);
       break;
     }
     case 'meeting-attachment-delete': {
@@ -266,8 +254,8 @@ export function applyProjectOperation(
       );
       if (meeting.recording?.id === action.fileId) delete meeting.recording;
       category = '会议';
-      title = '删除会议附件';
-      detail = `${meeting.title} · ${file.name}`;
+      title = activityMessage("删除会议附件");
+      detail = activityMessage("{0} · {1}", [meeting.title, file.name]);
       break;
     }
     case 'meeting-materials': {
@@ -290,7 +278,7 @@ export function applyProjectOperation(
         throw new Error('请上传录制或填写转写正文。');
       meeting.transcript = action.transcript.trim();
       category = '会议';
-      title = '归档会议资料';
+      title = activityMessage("归档会议资料");
       detail = meeting.title;
       break;
     }
@@ -303,8 +291,8 @@ export function applyProjectOperation(
         return log;
       });
       logs.forEach(log => Object.assign(log, { confirmedAt: now, confirmedById: actor.id, confirmedBy: actor.name }));
-      category = '工时'; title = '确认工时';
-      detail = logs.map(log => `${log.userName} · ${log.date} · ${formatWorklogHours(log.hours)} 小时`).join('；');
+      category = '工时'; title = activityMessage("确认工时");
+      detail = activityList(logs.map(log => activityMessage("{0} · {1} · {2} 小时", [log.userName, log.date, formatWorklogHours(log.hours)])), '；');
       break;
     }
     case 'worklog-add':
@@ -368,8 +356,8 @@ export function applyProjectOperation(
       if (existing) { Object.assign(existing, updatedLog); delete existing.confirmedAt; delete existing.confirmedById; delete existing.confirmedBy; }
       else ops.worklogs.unshift(updatedLog);
       category = '工时';
-      title = existing ? '编辑工时' : '录入工时';
-      detail = `${order.id} · ${order.item.serviceName} · ${action.date} ${action.startTime}–${action.endTime} · ${formatWorklogHours(hours)} 小时 · ${action.description.trim()}`;
+      title = (existing ? activityMessage("编辑工时") : activityMessage("录入工时"));
+      detail = activityMessage("{0} · {1} · {2} {3}–{4} · {5} 小时 · {6}", [order.id, activityLabel(order.item.serviceName), action.date, action.startTime, action.endTime, formatWorklogHours(hours), action.description.trim()]);
       break;
     }
     case 'worklog-void': {
@@ -380,8 +368,8 @@ export function applyProjectOperation(
       log.voidedAt = now;
       log.voidReason = action.reason.trim();
       category = '工时';
-      title = '作废工时';
-      detail = `${log.date} · ${log.hours} 小时 · ${log.voidReason}`;
+      title = activityMessage("作废工时");
+      detail = activityMessage("{0} · {1} 小时 · {2}", [log.date, log.hours, log.voidReason]);
       break;
     }
     default:

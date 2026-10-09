@@ -71,7 +71,7 @@ export function ProjectManagerHome({
   directory,
   onOpen,
 }: Props) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const [projects, setProjects] = useState<ServiceProjectRecord[]>([]);
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [reviewContext, setReviewContext] = useState<ProjectDashboardContext>();
@@ -279,7 +279,7 @@ export function ProjectManagerHome({
                   <Tooltip>
                     <TooltipTrigger
                       className="pm-metric-info"
-                      aria-label={localize(`${card.label}统计说明`)}
+                      aria-label={localizeMessage("{0}统计说明", [localize(card.label)])}
                     >
                       <CircleAlert size={15} aria-hidden="true" />
                     </TooltipTrigger>
@@ -302,7 +302,7 @@ export function ProjectManagerHome({
               <button
                 type="button"
                 className="pm-metric-action"
-                aria-label={localize(`查看${card.label}：${card.value}项`)}
+                aria-label={localizeMessage("查看{0}：{1}项", [localize(card.label), localize(card.value)])}
                 onClick={card.action}
               >
                 <strong>
@@ -395,12 +395,11 @@ export function ProjectManagerHome({
                       <small>{localize(customerName(project.customerId))}</small>
                     </td>
                     <td>
-                      {localize(project.collaborators?.internal
+                      {localize(localizeList(project.collaborators?.internal
                         ?.filter((person) =>
                           person.assignmentRoles?.includes('项目经理'),
                         )
-                        .map((person) => person.name)
-                        .join('、') || '未指派')}
+                        .map((person) => person.name) ?? [], '、') || '未指派')}
                     </td>
                     <td>
                       <span className="pm-tag" data-status={project.status}>
@@ -413,7 +412,7 @@ export function ProjectManagerHome({
                         title={localize("已完成或跳过的步骤／总步骤")}
                       >
                         <progress
-                          aria-label={localize(`${project.name}已完成或跳过 ${progress.completed} 步／共 ${progress.total} 步`)}
+                          aria-label={localizeMessage("{0}已完成或跳过 {1} 步／共 {2} 步", [localize(project.name), localize(progress.completed), localize(progress.total)])}
                           value={progress.percent}
                           max={100}
                         />

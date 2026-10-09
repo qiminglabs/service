@@ -25,7 +25,7 @@ export function StepReportTemplateSelect({
   onChange: (value: ReportTemplateSelection | undefined) => void;
   onManage: () => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const current = value?.template;
   return (
     <section className="report-step-template">
@@ -64,7 +64,7 @@ export function StepReportTemplateSelect({
         </NativeSelect>
       </label>
       <div className="report-template-version">
-        <span>{localize(current ? `已绑定 v${current.version}` : '当前流程模板')}</span>
+        <span>{localize(current ? localizeMessage("已绑定 v{0}", [String(localize(current.version))]) : '当前流程模板')}</span>
         <Button size="sm" variant="ghost" onClick={onManage}>
           {localize("前往文档模板")}</Button>
       </div>

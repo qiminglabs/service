@@ -38,7 +38,7 @@ export function ServiceWorkOrderOverview({
   onSaved: (project: ServiceProjectRecord) => void;
   onExecute: (id: string) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
   const [dispatchIds, setDispatchIds] = useState<string[] | null>(null);
   const [notice, setNotice] = useState('');
@@ -58,7 +58,7 @@ export function ServiceWorkOrderOverview({
           <span>
             {localize("已完成")}{localize(completed)} / {localize(orders.filter(order => order.status !== '已取消').length)} {localize(" 张")}</span>
           <WorkOrderChangeAction project={project} actor={actor} busy={busy} onBusy={onBusy} onSaved={onSaved} services={services} />
-          {localize(canAssign && <Button disabled={busy || !selectedOrders.length} onClick={() => setDispatchIds(selectedOrders.map(order => order.id))}>{localize("批量指派")}{localize(selectedOrders.length ? `（${selectedOrders.length}）` : '')}</Button>)}
+          {localize(canAssign && <Button disabled={busy || !selectedOrders.length} onClick={() => setDispatchIds(selectedOrders.map(order => order.id))}>{localize("批量指派")}{localize(selectedOrders.length ? localizeMessage("（{0}）", [String(localize(selectedOrders.length))]) : '')}</Button>)}
         </header>
         {localize(notice && <output className="sr-notice">{localize(notice)}</output>)}
         {localize(orders.length === 0 ? (
@@ -90,7 +90,7 @@ export function ServiceWorkOrderOverview({
                       : order.status;
                   return (
                     <tr key={order.id}>
-                      {localize(canAssign && <td className="wo-overview-select-cell"><Checkbox aria-label={localize(`选择工单 ${order.item.serviceName} ${order.id}`)} disabled={busy || ['已完成', '已取消'].includes(order.status)} checked={!['已完成', '已取消'].includes(order.status) && selectedOrderIds.includes(order.id)} onCheckedChange={checked => setSelectedOrderIds(ids => checked ? [...ids, order.id] : ids.filter(id => id !== order.id))} /></td>)}
+                      {localize(canAssign && <td className="wo-overview-select-cell"><Checkbox aria-label={localizeMessage("选择工单 {0} {1}", [localize(order.item.serviceName), localize(order.id)])} disabled={busy || ['已完成', '已取消'].includes(order.status)} checked={!['已完成', '已取消'].includes(order.status) && selectedOrderIds.includes(order.id)} onCheckedChange={checked => setSelectedOrderIds(ids => checked ? [...ids, order.id] : ids.filter(id => id !== order.id))} /></td>)}
                       <td className="wo-overview-text-cell">
                         <button
                           type="button"
@@ -132,7 +132,7 @@ export function ServiceWorkOrderOverview({
                           className="wo-overview-progress"
                           value={progress.completed + progress.skipped}
                           max={progress.total || 1}
-                          aria-label={localize(`${order.item.serviceName}步骤完成进度`)}
+                          aria-label={localizeMessage("{0}步骤完成进度", [localize(order.item.serviceName)])}
                         />
                       </td>
                       <td>

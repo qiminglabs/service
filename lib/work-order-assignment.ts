@@ -1,3 +1,4 @@
+import { activityMessage, activityList, activityLabel } from './activity-events.ts';
 import { withWorkOrderCollaboratorRoles } from './project-work-order-collaborators.ts';
 import type { CatalogService } from './service-requests';
 import type { ServiceProjectRecord } from './service-projects';
@@ -100,6 +101,6 @@ export function assignWorkOrders(project: ServiceProjectRecord, actor: Operation
   return appendProjectActivity({
     ...project, collaborators, revision: project.revision + 1, updatedAt: now,
     workOrders: project.workOrders!.map(order => changedIds.has(order.id) ? { ...order, assignee: undefined, assignees: structuredClone(assignees), updatedAt: now } : order),
-  }, actor, '工单', targets.length > 1 ? '批量指派工单' : assignedEngineers(targets[0]).length ? '改派工单' : '指派工单',
-  (changed.length ? changed : targets).map(order => `${order.id} · ${order.item.serviceName}：${assignedEngineers(order).map(person => person.name).join('、') || '未指派'} → ${assignees.map(person => person.name).join('、')}`).join('；'), now, false);
+  }, actor, '工单', (targets.length > 1 ? activityMessage("批量指派工单") : (assignedEngineers(targets[0]).length ? activityMessage("改派工单") : activityMessage("指派工单"))),
+  activityList((changed.length ? changed : targets).map(order => activityMessage("{0} · {1}：{2} → {3}", [order.id, activityLabel(order.item.serviceName), assignedEngineers(order).length ? activityList(assignedEngineers(order).map(person => person.name)) : activityMessage('未指派'), activityList(assignees.map(person => person.name), '、')])), '；'), now, false);
 }

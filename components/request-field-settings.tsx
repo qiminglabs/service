@@ -187,7 +187,7 @@ export function RequestFieldSettings({
   onProjectFieldsChange?: (fields: RequestField[]) => void;
   ready: boolean;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const currentSection = backendSettingsSections.find(item => item.key === section)!;
   const [activeTab, setActiveTab] = useState<string>(currentSection.tabs[0]?.key ?? '');
   const settingsTabsId = useId();
@@ -485,7 +485,7 @@ export function RequestFieldSettings({
                     <tbody>
                       {localize(options.map((option, index) => (
                         <tr key={index}>
-                          <td><Input aria-label={localize(`选项 ${index + 1} 名称`)} value={option.value} onChange={(event) => {
+                          <td><Input aria-label={localizeMessage("选项 {0} 名称", [localize(index + 1)])} value={option.value} onChange={(event) => {
                             setOptions(items => items.map((item, i) => i === index ? { ...item, value: event.target.value } : item));
                             setError('');
                           }} /></td>
@@ -505,7 +505,7 @@ export function RequestFieldSettings({
                               data-action={
                                 option.enabled ? 'disable' : 'enable'
                               }
-                              aria-label={localize(`${option.enabled ? '停用' : '启用'}${option.value}`)}
+                              aria-label={option.enabled ? localizeMessage('停用{0}', [localize(option.value)]) : localizeMessage('启用{0}', [localize(option.value)])}
                               onClick={() =>
                                 setOptions((items) =>
                                   items.map((item, i) =>
@@ -582,7 +582,7 @@ export function RequestFieldControl({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const addressDetailId = useId();
   if (field.type === 'address') {
     const address = readAddress(value);
@@ -618,8 +618,8 @@ export function RequestFieldControl({
                 }}
               >
                 <ComboboxInput
-                  aria-label={localize(`${field.name}·${label}`)}
-                  placeholder={localize(`请选择或搜索${label}`)}
+                  aria-label={localizeMessage("{0}·{1}", [localize(field.name), localize(label)])}
+                  placeholder={localizeMessage("请选择或搜索{0}", [localize(label)])}
                   disabled={disabled}
                 />
                 <ComboboxContent>
@@ -639,7 +639,7 @@ export function RequestFieldControl({
         <label className="request-address-detail" htmlFor={addressDetailId}>
           {localize("详细地址")}<Input
             id={addressDetailId}
-            aria-label={localize(`${field.name}·详细地址`)}
+            aria-label={localizeMessage("{0}·详细地址", [localize(field.name)])}
             value={address.detail}
             onChange={(event) =>
               onChange(writeAddress({ ...address, detail: event.target.value }))

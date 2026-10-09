@@ -90,7 +90,7 @@ export function ServiceFlowDesigner({
   onBack: () => void;
   onSaved: (saved: ServiceFlowConfig) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [flow, setFlow] = useState(() =>
     readonly
       ? withFlowReportTemplates(initialFlow)
@@ -368,7 +368,7 @@ export function ServiceFlowDesigner({
                           <header className="service-phase-header">
                             {localize(group.id ? (
                               <Input
-                                aria-label={localize(`阶段 ${groupIndex + 1} 名称`)}
+                                aria-label={localizeMessage("阶段 {0} 名称", [localize(groupIndex + 1)])}
                                 value={group.name}
                                 maxLength={120}
                                 disabled={!editable}
@@ -393,7 +393,7 @@ export function ServiceFlowDesigner({
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={localize(`上移阶段 ${group.name}`)}
+                                      aria-label={localizeMessage("上移阶段 {0}", [localize(group.name)])}
                                       disabled={groupIndex === 0}
                                       onClick={() => {
                                         const phases = [...flow.phases!];
@@ -417,7 +417,7 @@ export function ServiceFlowDesigner({
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={localize(`下移阶段 ${group.name}`)}
+                                      aria-label={localizeMessage("下移阶段 {0}", [localize(group.name)])}
                                       disabled={
                                         groupIndex === flow.phases!.length - 1
                                       }
@@ -443,7 +443,7 @@ export function ServiceFlowDesigner({
                                     <Button
                                       variant="ghost"
                                       size="icon"
-                                      aria-label={localize(`删除阶段 ${group.name}，保留步骤`)}
+                                      aria-label={localizeMessage("删除阶段 {0}，保留步骤", [localize(group.name)])}
                                       title={localize("删除阶段，步骤保留在未分组中")}
                                       onClick={() =>
                                         edit(
@@ -493,7 +493,7 @@ export function ServiceFlowDesigner({
                                   <span>{localize(item.enabled ? '启用' : '停用')}</span>
                                 </header>
                                 <button
-                                  aria-label={localize(`配置步骤 ${item.name || item.sequence}`)}
+                                  aria-label={localizeMessage("配置步骤 {0}", [localize(item.name || item.sequence)])}
                                   className="approval-node-content"
                                   type="button"
                                   aria-pressed={selected === item.id}
@@ -503,7 +503,7 @@ export function ServiceFlowDesigner({
                                   <span>
                                     {localize(item.required ? '必须完成' : '可选完成')}
                                     {localize(stepDeliverySummary(item) &&
-                                      ` · ${stepDeliverySummary(item)}`)}
+                                      localizeMessage(" · {0}", [String(localize(stepDeliverySummary(item)))]))}
                                   </span>
                                   {localize(item.materials.length > 0 && (
                                     <small>
@@ -601,7 +601,7 @@ export function ServiceFlowDesigner({
                           <Button
                             variant="ghost"
                             size="icon"
-                            aria-label={localize(`删除说明 ${index + 1}`)}
+                            aria-label={localizeMessage("删除说明 {0}", [localize(index + 1)])}
                             onClick={() =>
                               update({
                                 materials: step.materials.filter(
@@ -615,7 +615,7 @@ export function ServiceFlowDesigner({
                         </div>
                         {localize(material.kind === 'text' && (
                           <Textarea
-                            aria-label={localize(`说明 ${index + 1} 文本`)}
+                            aria-label={localizeMessage("说明 {0} 文本", [localize(index + 1)])}
                             maxLength={10000}
                             rows={3}
                             value={material.content}
@@ -631,7 +631,7 @@ export function ServiceFlowDesigner({
                         {localize(material.kind === 'link' && (
                           <>
                             <Input
-                              aria-label={localize(`说明 ${index + 1} 链接名称`)}
+                              aria-label={localizeMessage("说明 {0} 链接名称", [localize(index + 1)])}
                               maxLength={300}
                               value={material.title}
                               placeholder={localize("链接名称")}
@@ -643,7 +643,7 @@ export function ServiceFlowDesigner({
                               }
                             />
                             <Input
-                              aria-label={localize(`说明 ${index + 1} 链接地址`)}
+                              aria-label={localizeMessage("说明 {0} 链接地址", [localize(index + 1)])}
                               maxLength={2048}
                               value={material.url}
                               placeholder="https://"

@@ -220,7 +220,7 @@ export function ServiceWorkOrders({
   onDirty: (dirty: boolean) => void;
   onBusy: (busy: boolean) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const dirty = useRef(false);
   const markDirty = (value: boolean) => {
     dirty.current = value;
@@ -272,7 +272,7 @@ export function ServiceWorkOrders({
                 <SelectItem
                   key={entry.id}
                   value={entry.id}
-                  label={localize(`${entry.id} · ${entry.item.serviceName}`)}
+                  label={localizeMessage("{0} · {1}", [localize(entry.id), localize(entry.item.serviceName)])}
                 >
                   <span className="wo-order-option">
                     <strong>{localize(entry.item.serviceName)}</strong>
@@ -306,7 +306,7 @@ export function ServiceWorkOrders({
           <div className="wo-engineers" aria-label={localize("执行工程师")}>
             <span>{localize("执行工程师")}</span>
             <span>
-              {localize(assignedEngineers(order).map(person => person.name).join('、') || '未指派')}
+              {localize(localizeList(assignedEngineers(order).map(person => person.name), '、') || '未指派')}
             </span>
           </div>
         </div>
@@ -353,7 +353,7 @@ function WorkOrderDetail({
   onBusy: (busy: boolean) => void;
   canLeave: () => boolean;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [sections, setSections] = useState<WorkOrderSections>(() => {
     const remembered = sectionMemory[order.id];
     if (remembered) return remembered;
@@ -450,8 +450,8 @@ function WorkOrderDetail({
                     data-selected={selected?.definition.id === step.definition.id}
                     data-complete={step.status === '已完成'}
                     data-skipped={step.status === '已跳过'}
-                    title={localize(`${step.definition.name} · ${step.status} · ${step.definition.required ? '必做' : '可选'}`)}
-                    aria-label={localize(`${index + 1}. ${step.definition.name}，${step.status}，${step.definition.required ? '必做' : '可选'}`)}
+                    title={localizeMessage("{0} · {1} · {2}", [localize(step.definition.name), localize(step.status), localize(step.definition.required ? '必做' : '可选')])}
+                    aria-label={localizeMessage("{0}. {1}，{2}，{3}", [localize(index + 1), localize(step.definition.name), localize(step.status), localize(step.definition.required ? '必做' : '可选')])}
                     onClick={() => {
                       if (step.definition.id !== stepId && canLeave()) {
                         onDirty(false);

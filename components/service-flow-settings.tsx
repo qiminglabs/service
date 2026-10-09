@@ -97,7 +97,7 @@ function FlowSelect({
   );
 }
 export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [data, setData] =
     useState<Awaited<ReturnType<typeof readServiceFlowData>>>();
   const [busy, setBusy] = useState(false),
@@ -743,12 +743,12 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
             <section className="service-flow-result" aria-live="polite">
               <strong>
                 {localize(result.flow
-                  ? `分配流程：${result.flow.name}`
+                  ? localizeMessage("分配流程：{0}", [String(localize(result.flow.name))])
                   : '未分配服务流程')}
               </strong>
               <p>
                 {localize(result.rule
-                  ? `命中规则「${result.rule.name}」，优先级 ${result.rule.priority}。`
+                  ? localizeMessage("命中规则「{0}」，优先级 {1}。", [String(localize(result.rule.name)), String(localize(result.rule.priority))])
                   : result.flow
                     ? '未命中启用的条件规则，使用默认服务流程。'
                     : '未命中启用的条件规则，且尚未设置默认服务流程。')}
@@ -758,7 +758,7 @@ export function ServiceFlowSettings({ actor }: { actor: OperationActor }) {
                   {localize(result.steps.map((step) => (
                     <li key={step.id}>
                       <strong>{localize(step.name)}</strong>
-                      {localize(` · ${serviceStepTypes[step.type]} · ${step.required ? '必须完成' : '可选完成'}${stepDeliverySummary(step) ? ` · ${stepDeliverySummary(step)}` : ''}`)}
+                      {localizeMessage(" · {0} · {1}{2}", [localize(serviceStepTypes[step.type]), localize(step.required ? '必须完成' : '可选完成'), localize(stepDeliverySummary(step) ? localizeMessage(" · {0}", [String(localize(stepDeliverySummary(step)))]) : '')])}
                       {localize((step.type === 'document' || step.type === 'upload') && (
                         <ul>
                           {localize((step.type === 'document'

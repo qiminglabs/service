@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import { demoServiceExecution, populateDemoWorkOrders } from './demo-service-execution.ts';
 import { startProjectWorkOrders, submitProjectReview } from './service-work-orders.ts';
 import type { ServiceFlowConfig } from './service-flows';
@@ -81,7 +82,7 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
         confirmationTargets.set(project.id, target);
         break;
       } else if (status === '待复核') project = submitProjectReview(project, engineer, at);
-      project = appendProjectActivity(project, manager, '项目', '变更项目状态', status);
+      project = appendProjectActivity(project, manager, '项目', activityMessage("变更项目状态"), status);
     }
     return project;
   }
@@ -128,7 +129,7 @@ export function buildProjectSamples(sources: Sources, samples: ServiceRequest[],
     const sourceItems = [...new Map(requests.filter(request => request.customerId === customer.id).flatMap(request => request.items).filter(item => status !== '已完成' || !['巡检权益', '升级权益'].includes(sources.services.find(service => service.id === item.serviceId)?.priceUnit ?? '')).map(item => [item.serviceId, item])).values()].slice(0, 2);
     if (!sourceItems.length) throw new Error('项目样例缺少可用服务项。');
     project.items = sourceItems.map((item, index) => ({ ...structuredClone(item), id: `${project.id}-ITEM-${index + 1}` }));
-    project = appendProjectActivity(project, actor, '项目', '创建项目', project.id, at);
+    project = appendProjectActivity(project, actor, '项目', activityMessage("创建项目"), project.id, at);
     projects.push(enrich(project, status));
   }
   const identities = operationIdentities(sources.users);

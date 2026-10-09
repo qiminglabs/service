@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { translate, type Locale } from './translate';
+import { translate, translateList, translateMessage, type Locale } from './translate';
 import { readTranslations, translationsEvent } from './store';
 
 const storageKey = 'smartx-service-language';
@@ -48,7 +48,7 @@ export function LanguageScope({ chinese, children }: { chinese: boolean; childre
 
 export function useI18n() {
   const language = useContext(LanguageContext);
-  return useMemo(() => ({ ...language, localize: <T,>(value: T): T => translate(value, language.locale, language.labels) }), [language]);
+  return useMemo(() => ({ ...language, localize: <T,>(value: T): T => translate(value, language.locale, language.labels), localizeList: (values: readonly string[], separator?: string) => translateList(values, language.locale, language.labels, separator), localizeMessage: (source: string, values: readonly (string | number)[]) => translateMessage(source, values, language.locale, language.labels) }), [language]);
 }
 
 export function LanguageSwitch() {

@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/dialog';
 import { canManageRouting } from '@/lib/assessment-routing-store';
 import type { OperationActor } from '@/lib/request-operations';
+import { isEditableTranslation } from '@/lib/i18n/editable';
 import messages from '@/lib/i18n/en.json';
 import patterns from '@/lib/i18n/patterns.json';
 import categories from '@/lib/i18n/categories.json';
@@ -41,10 +42,8 @@ const sections = [
   ['content', '其他文本'],
 ] as const;
 const sectionLabels: Record<string, string> = Object.fromEntries(sections);
-const defaults: Record<string, string> = {
-  ...messages,
-  ...Object.fromEntries(patterns),
-};
+const bundledDefaults: Record<string, string> = { ...messages, ...Object.fromEntries(patterns) };
+const defaults: Record<string, string> = Object.fromEntries(Object.entries(bundledDefaults).filter(([key]) => isEditableTranslation(key)));
 const groups: Record<string, string> = categories;
 const pageSize = 40;
 type Editor = { original: string | null; source: string; english: string };
@@ -104,7 +103,7 @@ export function TranslationWorkbench({ actor }: { actor: OperationActor }) {
 
   const allKeys = useMemo(
     () => [
-      ...new Set([...Object.keys(defaults), ...Object.keys(record.labels)]),
+      ...new Set([...Object.keys(defaults), ...Object.keys(record.labels)].filter(isEditableTranslation)),
     ],
     [record],
   );
@@ -161,7 +160,7 @@ export function TranslationWorkbench({ actor }: { actor: OperationActor }) {
     if (!editor || busy || !writable) return;
     const source = editor.source.trim(),
       english = editor.english.trim();
-    const issue = validateTranslation(source, english);
+    const issue = isEditableTranslation(source) ? validateTranslation(source, english) : '活动模板由系统维护，请在此修改界面标签。';
     if (issue) {
       setFormError(issue);
       return;

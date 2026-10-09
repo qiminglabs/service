@@ -35,7 +35,7 @@ export function SchedulingDayCell({
   customers: CustomerRef[];
   onOpen: (projectId: string, orderId: string) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const day = slotState(snapshot, person, slot);
   const conflict =
     day.bookings.length > 0 &&
@@ -62,11 +62,11 @@ export function SchedulingDayCell({
       <div
         className="schedule-slot"
         data-state={conflict ? 'conflict' : day.state}
-        aria-label={localize(`${person.name} ${slot.date} ${day.bookings.length ? `${day.bookings.length} 个工单` : day.label}${conflict ? '，排期冲突' : ''}`)}
+        aria-label={localizeMessage("{0} {1} {2}{3}", [localize(person.name), localize(slot.date), localize(day.bookings.length ? localizeMessage("{0} 个工单", [String(localize(day.bookings.length))]) : day.label), localize(conflict ? '，排期冲突' : '')])}
       >
         {localize(day.exceptions.length > 0 && (
           <small className="schedule-personal-note">
-            {localize(day.exceptions.map((entry) => entry.kind).join('、'))}
+            {localize(localizeList(day.exceptions.map((entry) => entry.kind), '、'))}
             {localize(conflict ? ' · 排期冲突' : '')}
           </small>
         ))}
@@ -83,7 +83,7 @@ export function SchedulingDayCell({
                   onClick={() => onOpen(booking.projectId, booking.orderId)}
                   aria-label={
                     localize(order.allowed
-                      ? `查看工单概览：${order.label} · ${order.detail}`
+                      ? localizeMessage("查看工单概览：{0} · {1}", [String(localize(order.label)), String(localize(order.detail))])
                       : order.label)
                   }
                   title={localize(order.detail || order.label)}
@@ -96,7 +96,7 @@ export function SchedulingDayCell({
               <Popover>
                 <PopoverTrigger
                   className="schedule-orders-more"
-                  aria-label={localize(`${person.name} ${slot.date} 查看全部 ${day.bookings.length} 个工单`)}
+                  aria-label={localizeMessage("{0} {1} 查看全部 {2} 个工单", [localize(person.name), localize(slot.date), localize(day.bookings.length)])}
                 >
                   {localize("另有")}{localize(day.bookings.length - 3)} {localize(" 个")}</PopoverTrigger>
                 <PopoverContent
@@ -108,7 +108,7 @@ export function SchedulingDayCell({
                   </PopoverTitle>
                   <div
                     className="schedule-orders-list"
-                    aria-label={localize(`全部 ${day.bookings.length} 个工单`)}
+                    aria-label={localizeMessage("全部 {0} 个工单", [localize(day.bookings.length)])}
                   >
                     {localize(day.bookings.map((booking) => {
                       const order = describe(booking);

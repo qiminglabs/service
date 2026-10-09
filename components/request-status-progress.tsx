@@ -7,7 +7,7 @@ import { requestProgressSteps } from '@/lib/service-requests';
 import type { RequestStatus, ServiceRequest } from '@/lib/service-requests';
 
 export function RequestStatusProgress(props: { status: RequestStatus } | { record: ServiceRequest }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const request = 'record' in props ? props.record : props.status;
   const status = typeof request === 'string' ? request : request.status;
   const cancelled = status === '已取消';
@@ -15,7 +15,7 @@ export function RequestStatusProgress(props: { status: RequestStatus } | { recor
     <section
       className="sr-status-progress"
       data-cancelled={cancelled || undefined}
-      aria-label={localize('服务请求状态：' + status)}
+      aria-label={localize(localizeMessage("服务请求状态：{0}", [String(localize(status))]))}
     >
       <ol className="sr-status-steps">
         {localize(requestProgressSteps(request).map((step, index) => (

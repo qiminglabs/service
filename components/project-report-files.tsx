@@ -23,7 +23,7 @@ export function ProjectReportFilesSection({
   files: ProjectReportFile[];
   title?: string;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   return (
     <section className="report-project-files" aria-label={localize(title)}>
       <h3>
@@ -40,7 +40,7 @@ export function ProjectReportFilesSection({
                   variant="ghost"
                   size="sm"
                   onClick={() => downloadFile(item.file)}
-                  aria-label={localize(`下载 ${item.file.name}`)}
+                  aria-label={localizeMessage("下载 {0}", [localize(item.file.name)])}
                 >
                   <Download size={14} />
                   {localize("下载")}</Button>
@@ -67,7 +67,7 @@ export function ProjectReportFilePicker({
   disabled: boolean;
   onChange: (selections: ProjectReportFileSelection[]) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [query, setQuery] = useState('');
   const available = new Set(items.map((item) => item.id));
   const unavailable = selections.some(
@@ -120,7 +120,7 @@ export function ProjectReportFilePicker({
               >
                 <Checkbox
                   id={`report-file-${encodeURIComponent(item.id)}`}
-                  aria-label={localize(`选择 ${item.file.name} · ${item.stepName}`)}
+                  aria-label={localizeMessage("选择 {0} · {1}", [localize(item.file.name), localize(item.stepName)])}
                   checked={!!selected}
                   disabled={
                     disabled ||
@@ -155,7 +155,7 @@ export function ProjectReportFilePicker({
                   <span>{localize("文件说明")}</span>
                   <Textarea
                     id={`file-description-${encodeURIComponent(item.id)}`}
-                    aria-label={localize(`${item.file.name} 文件说明`)}
+                    aria-label={localizeMessage("{0} 文件说明", [localize(item.file.name)])}
                     value={selected.description}
                     maxLength={maxProjectReportFileDescription}
                     rows={3}

@@ -73,7 +73,7 @@ export function ServiceEngineerHome({
   onOpen,
   onOpenWorklogs,
 }: Props) {
-  const { localize, locale } = useI18n();
+  const { localize, locale, localizeMessage } = useI18n();
   const [snapshot, setSnapshot] = useState<PersonalScheduleSnapshot>();
   const [worklogProjects, setWorklogProjects] = useState<
     ServiceProjectRecord[]
@@ -234,14 +234,14 @@ export function ServiceEngineerHome({
       <section
         className="eh-project-group"
         key={project.id}
-        aria-label={localize(`项目：${project.name}`)}
+        aria-label={localizeMessage("项目：{0}", [localize(project.name)])}
         data-collapsed={!expanded || undefined}
       >
         <header className="eh-project-heading">
           <button
             type="button"
             className="eh-project-expand-area"
-            aria-label={localize(`${expanded ? '收起' : '展开'} ${project.name} 的工单`)}
+            aria-label={localizeMessage("{0} {1} 的工单", [localize(expanded ? '收起' : '展开'), localize(project.name)])}
             aria-expanded={expanded}
             aria-controls={ordersId}
             onClick={() =>
@@ -322,7 +322,7 @@ export function ServiceEngineerHome({
                   <progress
                     value={row.completed}
                     max={row.total || 1}
-                    aria-label={localize(`${row.order.item.serviceName}已完成或跳过 ${row.completed} 步，共 ${row.total} 步`)}
+                    aria-label={localizeMessage("{0}已完成或跳过 {1} 步，共 {2} 步", [localize(row.order.item.serviceName), localize(row.completed), localize(row.total)])}
                   />
                   <span>
                     {localize(row.completed)}/{localize(row.total)} {localize(" 步")}</span>
@@ -331,7 +331,7 @@ export function ServiceEngineerHome({
                   variant="ghost"
                   size="sm"
                   className="eh-work-action"
-                  aria-label={localize(`执行工单 ${row.order.item.serviceName || '未命名工单'}`)}
+                  aria-label={localizeMessage("执行工单 {0}", [localize(row.order.item.serviceName || '未命名工单')])}
                   onClick={() => onOpen(project.id, row.order.id)}
                 >
                   {localize(row.active ? '进入执行' : '查看工单')}
@@ -564,7 +564,7 @@ export function ServiceEngineerHome({
                   <button
                     type="button"
                     key={date}
-                    aria-label={localize(`${date}，${off ? '休息' : '上班'}，${state.bookings.length}张工单`)}
+                    aria-label={localizeMessage("{0}，{1}，{2}张工单", [localize(date), localize(off ? '休息' : '上班'), localize(state.bookings.length)])}
                     aria-pressed={date === selectedDate}
                     data-today={date === today || undefined}
                     data-off={off || undefined}

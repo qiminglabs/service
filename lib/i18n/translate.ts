@@ -2,6 +2,15 @@ import messages from './en.json' with { type: 'json' };
 import patterns from './patterns.json' with { type: 'json' };
 export type Locale = 'zh-CN' | 'en';
 const dictionary: Record<string, string> = messages;
+const templateDictionary: Record<string, string> = Object.fromEntries(patterns);
+
+// Saved prose and configured names only use an explicitly registered full label.
+// Unlike legacy UI messages, their contents must never be inferred from patterns.
+export function translateExact(value: string, locale: Locale, overrides: Record<string, string> = {}): string {
+  if (locale !== 'en') return value;
+  if (Object.hasOwn(overrides, value)) return overrides[value];
+  return Object.hasOwn(dictionary, value) ? dictionary[value] : value;
+}
 const templates = (patterns as string[][]).map(([source, target]) => ({
   matcher: new RegExp('^' + source.trim().split(/\{\d+\}/).map(part => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('([\\s\\S]*?)') + '$'),
   target, source,
@@ -35,4 +44,16 @@ export function translate<T>(value: T, locale: Locale, overrides: Record<string,
     return (next.some((item, index) => item !== value[index]) ? next : value) as T;
   }
   return value;
+}
+
+// Join display labels only after translating each item; never split free-form text.
+export function translateList(values: readonly string[], locale: Locale, overrides: Record<string, string> = {}, separator = '、'): string {
+  return translate(values, locale, overrides).join(locale === 'en' && (separator === '、' || separator === '，') ? ', ' : separator);
+}
+
+// Select the complete sentence before inserting values. Values are deliberately
+// opaque: callers explicitly translate UI labels and leave user content intact.
+export function translateMessage(source: string, values: readonly (string | number)[], locale: Locale, overrides: Record<string, string> = {}): string {
+  const template = locale === 'en' ? overrides[source] ?? dictionary[source] ?? templateDictionary[source] ?? source : source;
+  return template.replace(/\{(\d+)\}/g, (token, index) => values[Number(index)] === undefined ? token : String(values[Number(index)]));
 }

@@ -22,7 +22,7 @@ export function FlowNode({ x, y, width = 126, label, owners, optional = false, t
   navigationLabel?: string;
   onNavigate?: () => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const content = <>
     <rect x={x + 5} y={y + 4} width={width - 10} height={32} rx={6} />
     <text className="request-flow-map-node-title" x={x + width / 2} y={y + 20} dominantBaseline="middle" textAnchor="middle">{localize(label)}</text>
@@ -30,8 +30,8 @@ export function FlowNode({ x, y, width = 126, label, owners, optional = false, t
   return <g className="request-flow-map-node" data-optional={optional || undefined} data-terminal={terminal || undefined} data-interactive={!!href || undefined} data-active={active || undefined}>
     <Tooltip>
       <TooltipTrigger delay={150} render={href
-        ? <a href={href} aria-label={localize(`${label}，${owners.join('，')}，打开下方${navigationLabel ?? label}配置`)} onClick={event => { event.preventDefault(); onNavigate?.(); }} />
-        : <g tabIndex={0} role="img" aria-label={localize(`${label}，${owners.join('，')}`)} />}
+        ? <a href={href} aria-label={localizeMessage("{0}，{1}，打开下方{2}配置", [localize(label), localize(localizeList(owners, '，')), localize(navigationLabel ?? label)])} onClick={event => { event.preventDefault(); onNavigate?.(); }} />
+        : <g tabIndex={0} role="img" aria-label={localizeMessage("{0}，{1}", [localize(label), localize(localizeList(owners, '，'))])} />}
       >{localize(content)}</TooltipTrigger>
       <TooltipContent>
         <div>{localize(owners.map(owner => <div key={owner}>{localize(owner)}</div>))}</div>

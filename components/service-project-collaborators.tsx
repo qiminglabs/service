@@ -50,7 +50,7 @@ function ProjectCollaboratorCard({
   emptyHint?: string;
   save: (ids: string[]) => Promise<string | null>;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const headingId = useId();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
@@ -112,7 +112,7 @@ function ProjectCollaboratorCard({
                   disabled={busy || addDisabled}
                 />
               }
-              aria-label={localize('添加' + title)}
+              aria-label={localize(localizeMessage("添加{0}", [String(localize(title))]))}
             >
               <Plus size={14} />
               {localize("添加")}</DialogTrigger>
@@ -136,8 +136,8 @@ function ProjectCollaboratorCard({
                       <small title={localize(current.details)}>{localize(current.details)}</small>
                     </span>
                     {localize(identityLabels.length ? (
-                      <span className="sr-help" title={localize(`${identityLabels.join(' · ')}为固定协作人，不允许移除`)}>
-                        {localize(identityLabels.join(' · '))}
+                      <span className="sr-help" title={localizeMessage("{0}为固定协作人，不允许移除", [localize(localizeList(identityLabels, ' · '))])}>
+                        {localize(localizeList(identityLabels, ' · '))}
                       </span>
                     ) : null)}
                     {localize(!readonly && !current.assignmentRoles?.length && (
@@ -145,7 +145,7 @@ function ProjectCollaboratorCard({
                         size="sm"
                         variant="ghost"
                         disabled={busy}
-                        aria-label={localize('移除' + title + ' ' + current.name)}
+                        aria-label={localize(localizeMessage("移除{0} {1}", [String(localize(title)), String(localize(current.name))]))}
                         onClick={() =>
                           void persist(
                             value
@@ -161,7 +161,7 @@ function ProjectCollaboratorCard({
               }))}
             </ul>
           ) : (
-            <p className="sr-help">{localize(emptyHint ?? `未添加${title}`)}</p>
+            <p className="sr-help">{localize(emptyHint ?? localizeMessage("未添加{0}", [String(localize(title))]))}</p>
           ))}
         </div>
         {localize(error && !open && (
@@ -177,7 +177,7 @@ function ProjectCollaboratorCard({
         <div className="sr-collaborator-search">
           <Search size={16} aria-hidden="true" />
           <Input
-            aria-label={localize('搜索' + title)}
+            aria-label={localize(localizeMessage("搜索{0}", [String(localize(title))]))}
             placeholder={localize(placeholder)}
             value={query}
             disabled={busy}
@@ -186,7 +186,7 @@ function ProjectCollaboratorCard({
         </div>
         <div
           className="sr-collaborator-results"
-          aria-label={localize(title + '搜索结果')}
+          aria-label={localize(localizeMessage("{0}搜索结果", [String(localize(title))]))}
         >
           {localize(matches.length ? (
             matches.map((person) => (

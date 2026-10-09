@@ -37,7 +37,7 @@ export function HardwareAssessmentTriggerSettings({
   ready: boolean;
   onSaved: (config: RoutingConfig) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const trigger = parseHardwareAssessmentTrigger(config.hardware.trigger);
   const [open, setOpen] = useState(false),
     [busy, setBusy] = useState(false),
@@ -64,7 +64,7 @@ export function HardwareAssessmentTriggerSettings({
           <strong>{localize("触发条件")}</strong>
           <p className="sr-help">
             {localize(trigger.enabled
-              ? `服务项包含任一：${trigger.serviceIds.map(name).join('、')}`
+              ? localizeMessage("服务项包含任一：{0}", [String(localize(localizeList(trigger.serviceIds.map(name), '、')))])
               : '已关闭，不自动增加硬件产品经理评估。')}
           </p>
         </div>

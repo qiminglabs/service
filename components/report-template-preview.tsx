@@ -27,7 +27,7 @@ export function ReportTemplatePreview({
   flowId?: string;
   customers: CustomerRef[];
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const [projects, setProjects] = useState<ServiceProjectRecord[]>();
   const [selected, setSelected] = useState('');
   const [query, setQuery] = useState('');
@@ -95,7 +95,7 @@ export function ReportTemplatePreview({
     <div className="report-data-preview">
       <div className="report-data-preview-toolbar">
         <Input
-          aria-label={localize(`搜索预览${objectLabel}`)}
+          aria-label={localizeMessage("搜索预览{0}", [localize(objectLabel)])}
           placeholder={
             localize(flowId ? '搜索工单编号、服务名称或项目名称' : '搜索项目名称或编号')
           }
@@ -103,7 +103,7 @@ export function ReportTemplatePreview({
           onChange={(event) => setQuery(event.target.value)}
         />
         <NativeSelect
-          aria-label={localize(`选择预览${objectLabel}`)}
+          aria-label={localizeMessage("选择预览{0}", [localize(objectLabel)])}
           value={selected}
           disabled={!projects || !options.length}
           onChange={(event) => setSelected(event.target.value)}
@@ -123,7 +123,7 @@ export function ReportTemplatePreview({
       ))}
       {localize(resolved?.missing.length ? (
         <p className="sr-help">
-          {localize("未填写或无法匹配的字段：")}{localize(resolved.missing.join('、'))}
+          {localize("未填写或无法匹配的字段：")}{localizeList(resolved.missing)}
         </p>
       ) : null)}
       {localize(resolved ? (
@@ -131,7 +131,7 @@ export function ReportTemplatePreview({
           className="report-data-preview-document"
           key={selected}
           role="region"
-          aria-label={localize(`${template.name}阅读预览`)}
+          aria-label={localizeMessage("{0}阅读预览", [localize(template.name)])}
           tabIndex={0}
         >
           <article
@@ -152,7 +152,7 @@ export function ReportTemplatePreview({
                   : '暂无可预览的项目'
                 : !matches.length
                   ? '暂无匹配的记录'
-                  : `请选择${objectLabel}预览`)}
+                  : localizeMessage("请选择{0}预览", [String(localize(objectLabel))]))}
           </p>
         )
       ))}

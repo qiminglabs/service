@@ -60,7 +60,7 @@ export function ReportTemplateSettings({
   onTemplatesChange?: (templates: ReportTemplate[]) => void;
   onViewStep?: (stepId: string) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [data, setData] =
     useState<Awaited<ReturnType<typeof readReportTemplateData>>>();
   const [draft, setDraft] = useState<ReportTemplate>();
@@ -235,7 +235,7 @@ export function ReportTemplateSettings({
       <div className="submission-rules-toolbar">
         <Input
           className="execution-form-search"
-          aria-label={localize(`搜索${templateKind}`)}
+          aria-label={localizeMessage("搜索{0}", [localize(templateKind)])}
           placeholder={localize("搜索模板名称")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -462,7 +462,7 @@ export function ReportTemplateSettings({
             showCloseButton={false}
           >
             <DialogHeader>
-              <DialogTitle>{localize(draft.name || `新建${templateKind}`)} </DialogTitle>
+              <DialogTitle>{localize(draft.name || localizeMessage("新建{0}", [String(localize(templateKind))]))} </DialogTitle>
             </DialogHeader>
             <div className="report-template-config">
               {localize(preview ? (
@@ -489,7 +489,7 @@ export function ReportTemplateSettings({
                 >
                   {localize(fieldSettings
                     ? '返回正文'
-                    : `引用字段（${reportFields(draft.body).length}）`)}
+                    : localizeMessage("引用字段（{0}）", [String(localize(reportFields(draft.body).length))]))}
                 </Button>
               ))}
               <Button

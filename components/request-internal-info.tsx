@@ -54,7 +54,7 @@ function CollaboratorCard({
   allowRemove?: boolean;
   showCustomerVisibility?: boolean;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -90,7 +90,7 @@ function CollaboratorCard({
           >
             <DialogTrigger
               render={<Button size="sm" variant="outline" disabled={busy} />}
-              aria-label={localize('添加' + title)}
+              aria-label={localize(localizeMessage("添加{0}", [String(localize(title))]))}
             >
               <Plus size={14} />
               {localize("添加")}</DialogTrigger>
@@ -104,7 +104,7 @@ function CollaboratorCard({
               <div className="sr-collaborator-search">
                 <Search size={16} aria-hidden="true" />
                 <Input
-                  aria-label={localize('搜索' + title)}
+                  aria-label={localize(localizeMessage("搜索{0}", [String(localize(title))]))}
                   placeholder={localize(placeholder)}
                   value={query}
                   disabled={busy}
@@ -113,7 +113,7 @@ function CollaboratorCard({
               </div>
               <div
                 className="sr-collaborator-results"
-                aria-label={localize(title + '搜索结果')}
+                aria-label={localize(localizeMessage("{0}搜索结果", [String(localize(title))]))}
               >
                 {localize(matches.length ? (
                   matches.map((person) => {
@@ -187,13 +187,13 @@ function CollaboratorCard({
                   </span>
                   <small title={localize(person.details)}>{localize(person.details)}</small>
                 </span>
-                {localize(person.fixed && <span className="sr-help" title={localize(`${person.fixed}为固定协作人，不允许移除`)}>{localize(person.fixed)}</span>)}
+                {localize(person.fixed && <span className="sr-help" title={localizeMessage("{0}为固定协作人，不允许移除", [localize(person.fixed)])}>{localize(person.fixed)}</span>)}
                 {localize(!readonly && allowRemove && !person.fixed && (
                   <Button
                     size="sm"
                     variant="ghost"
                     disabled={busy}
-                    aria-label={localize('移除' + title + ' ' + person.name)}
+                    aria-label={localize(localizeMessage("移除{0} {1}", [String(localize(title)), String(localize(person.name))]))}
                     onClick={() => onRemove(person.id)}
                   >
                     {localize("移除")}</Button>

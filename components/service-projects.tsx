@@ -139,7 +139,7 @@ export function ServiceProjects({
   businessObjects: ObjectRef[];
   itemFields: RequestField[];
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const openedLink = useRef('');
   const [records, setRecords] = useState<ServiceProjectRecord[]>([]);
   const [requestNames, setRequestNames] = useState<Record<string, string>>({});
@@ -317,7 +317,7 @@ export function ServiceProjects({
       if (editing.items?.some(item => item.businessObjectIds.length || item.businessObjectSnapshot || item.materials.length)) affected.push('服务项中的业务对象及材料');
     }
     if (editing && (form.serviceProviderId ?? '') !== (editing.serviceProviderId ?? '') && editing.collaborators?.partner?.length) affected.push('原合作伙伴协作人');
-    if (affected.length && !window.confirm(localize(`保存后将清空${affected.join('、')}，是否继续？`))) return;
+    if (affected.length && !window.confirm(localizeMessage("保存后将清空{0}，是否继续？", [localize(localizeList(affected, '、'))]))) return;
     saveLock.current = true;
     setSaving(true);
     setFormError('');
@@ -1090,7 +1090,7 @@ export function ServiceProjects({
               <Search size={16} />
               <Input
                 aria-label={localize("搜索服务项目")}
-                placeholder={localize(`搜索${labels.name}、编号或${labels.customerId}`)}
+                placeholder={localizeMessage("搜索{0}、编号或{1}", [localize(labels.name), localize(labels.customerId)])}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />

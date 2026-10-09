@@ -90,7 +90,7 @@ export function RequestMaterialDialog({
   onClose: () => void;
   lockedFileIds?: string[];
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [material, setMaterial] = useState<ItemMaterial>(() =>
     structuredClone(
       item.materials.find((m) => m.requirementId === requirement.id) ?? {
@@ -334,7 +334,7 @@ export function RequestMaterialDialog({
                     multiple
                     accept={fileAccept}
                     disabled={blocked}
-                    aria-label={localize('上传' + requirement.name)}
+                    aria-label={localize(localizeMessage("上传{0}", [String(localize(requirement.name))]))}
                     onChange={(e) => {
                       const selected = Array.from(e.target.files ?? []);
                       e.target.value = '';
@@ -445,7 +445,7 @@ export function RequestMaterialDialog({
                         variant="ghost"
                         disabled={blocked}
                         onClick={() => downloadFile(file)}
-                        aria-label={localize('下载 ' + file.name)}
+                        aria-label={localize(localizeMessage("下载 {0}", [String(localize(file.name))]))}
                       >
                         <Download size={14} />
                         {localize("下载")}</Button>
@@ -456,7 +456,7 @@ export function RequestMaterialDialog({
                           className="sr-material-delete"
                           disabled={blocked}
                           onClick={() => setDeleteTarget(file)}
-                          aria-label={localize('删除 ' + file.name)}
+                          aria-label={localize(localizeMessage("删除 {0}", [String(localize(file.name))]))}
                         >
                           <Trash2 size={14} />
                           {localize("删除")}</Button>

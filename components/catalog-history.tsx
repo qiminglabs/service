@@ -1,7 +1,7 @@
 'use client';
 import { useI18n } from '@/lib/i18n/context';
 
-import { materialRequirementLabel } from '@/lib/material-requirements';
+import { translateMaterialRequirement } from '@/lib/i18n/materials';
 import { fieldRequirementLabels } from '@/lib/request-field-requirements';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -49,39 +49,37 @@ function ConfigSnapshot({
   config: RequestConfig;
   title: string;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage, locale, labels: translationLabels } = useI18n();
   return (
     <section className="detail-card">
       <h3>{localize(title)}</h3>
       <p>
-        {localize("需求说明：")}{localize(config.basicFields?.description?.enabled === false
-          ? '不显示'
-          : config.basicFields?.description?.required === false
-            ? '选填'
-            : '必填')}
+        {localizeMessage('需求说明：{0}', [localize(config.basicFields?.description?.enabled === false
+          ? '不显示' : config.basicFields?.description?.required === false ? '选填' : '必填')])}
       </p>
       <p>
-        {localize("业务对象：")}{localize(config.basicFields?.businessObjects?.enabled === false
-          ? '不显示'
-          : config.basicFields?.businessObjects?.required
-            ? '必填'
-            : '选填')}
-        {localize("；可搜索产品：")}{localize(config.basicFields?.businessObjects?.products?.join('、') ?? '不限')}
+        {localizeMessage('业务对象：{0}；可搜索产品：{1}', [
+          localize(config.basicFields?.businessObjects?.enabled === false
+            ? '不显示' : config.basicFields?.businessObjects?.required ? '必填' : '选填'),
+          config.basicFields?.businessObjects?.products
+            ? localizeList(config.basicFields.businessObjects.products) : localize('不限'),
+        ])}
       </p>
-      {localize(config.fields.map((id) => (
-        <p key={id}>
-          {localize((config.fieldNames?.[id] ?? id))}：
-          {localize(config.fieldRequiredWhen?.[id] ? fieldRequirementLabels[config.fieldRequiredWhen[id]] : config.fieldRequired?.[id] === false ? '选填' : '必填')}
-          {localize(config.fieldOptions?.[id]
-            ? `；可用选项：${config.fieldOptions[id].join('、')}`
-            : '')}
-        </p>
-      )))}
+      {config.fields.map((id) => {
+        const name = localize(config.fieldNames?.[id] ?? id);
+        const requirement = localize(config.fieldRequiredWhen?.[id]
+          ? fieldRequirementLabels[config.fieldRequiredWhen[id]]
+          : config.fieldRequired?.[id] === false ? '选填' : '必填');
+        const options = config.fieldOptions?.[id];
+        return <p key={id}>{options?.length
+          ? localizeMessage('{0}：{1}；可用选项：{2}', [name, requirement, localizeList(options)])
+          : localizeMessage('{0}：{1}', [name, requirement])}</p>;
+      })}
       <h4>{localize("材料要求")}</h4>
       {localize(config.materials.map((material) => (
         <div key={material.id}>
           <strong>
-            {localize(material.name)}（{localize(materialRequirementLabel(material))}）
+            {localizeMessage('{0}（{1}）', [localize(material.name), translateMaterialRequirement(material, locale, translationLabels)])}
           </strong>
           <p>{localize(material.instructions)}</p>
           {localize(material.template ? (
@@ -110,7 +108,7 @@ function ConfigSnapshot({
   );
 }
 export function CatalogHistory({ serviceId }: { serviceId: string }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<CatalogVersion['payload'][]>([]);
   const [index, setIndex] = useState(0);
@@ -177,7 +175,7 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
             <span id="catalog-history-version-label">{localize("查看版本")}</span>
             <Select value={String(index)} onValueChange={value => { if (value !== null) setIndex(Number(value)); }} disabled={!entries.length}>
               <SelectTrigger aria-labelledby="catalog-history-version-label" className="catalog-history-select">
-                <SelectValue>{localize(selected ? `v${selected.service.version ?? 1} · ${historyTime(selected.savedAt)}` : '读取版本中…')}</SelectValue>
+                <SelectValue>{localize(selected ? localizeMessage("v{0} · {1}", [String(localize(selected.service.version ?? 1)), String(localize(historyTime(selected.savedAt)))]) : '读取版本中…')}</SelectValue>
               </SelectTrigger>
               <SelectContent className="catalog-history-select-popup" align="start" alignItemWithTrigger={false}>
                 {localize(entries.map((entry, i) => <SelectItem key={i} value={String(i)}>
@@ -191,7 +189,7 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
           {localize(!selected && !error && <output>{localize("正在读取历史版本…")}</output>)}
           {localize(selected && (
             <>
-              <p className="catalog-history-meta">{localize("保存时间：")}{localize(historyTime(selected.savedAt))}{localize("（北京时间）")}</p>
+              <p className="catalog-history-meta">{localizeMessage('保存时间：{0}（北京时间）', [historyTime(selected.savedAt)])}</p>
               <section className="detail-card">
                 <h3>{localize("目录信息")}</h3>
                 <dl>
@@ -199,8 +197,8 @@ export function CatalogHistory({ serviceId }: { serviceId: string }) {
                     <div key={key}>
                       <dt>{localize(labels[key] ?? key)}</dt>
                       <dd>
-                        {localize(key === 'updatedAt' && typeof value === 'string' ? historyTime(value) : key === 'version' ? `v${String(value)}` : Array.isArray(value)
-                          ? value.join('、')
+                        {localize(key === 'updatedAt' && typeof value === 'string' ? historyTime(value) : key === 'version' ? localizeMessage("v{0}", [String(localize(String(value)))]) : Array.isArray(value)
+                          ? localizeList(value, '、')
                           : typeof value === 'string' ||
                               typeof value === 'number'
                             ? value

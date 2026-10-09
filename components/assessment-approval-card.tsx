@@ -1,10 +1,9 @@
 'use client';
 import { useI18n } from '@/lib/i18n/context';
-
-
+import { translateExact } from '@/lib/i18n/translate';
 import type { ReactNode } from 'react';
 import type { GapApproval } from '@/lib/request-assessment';
-import { formatDayRequirements, type DayRequirement } from '@/lib/request-asset-coverage';
+import type { DayRequirement } from '@/lib/request-asset-coverage';
 import { formatDays } from '@/lib/day-quantity';
 
 function stamp(value?: string) {
@@ -17,20 +16,30 @@ function stamp(value?: string) {
 export function AssessmentApprovalCard({ approval, fallbackGaps = [], children }: {
   approval: GapApproval; fallbackGaps?: DayRequirement[]; children?: ReactNode;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage, locale, labels } = useI18n();
+  const gaps = approval.gaps ?? fallbackGaps;
+  const days = gaps.length
+    ? localizeList(gaps.map(row => localizeMessage('{0} {1} 人天', [localize(row.method), formatDays(row.days)])))
+    : localizeMessage('{0} 人天', [formatDays(approval.days)]);
+  // Only explicitly registered text is translated in saved names and comments.
+  const savedText = (value: string) => translateExact(value, locale, labels);
+  const source = approval.workflow
+    ? savedText(approval.workflow.ruleName)
+    : localizeMessage('上级审批人：{0}', [approval.approver]);
   return <article>
     <div>
-      <strong>{localize(formatDayRequirements(approval.gaps ?? fallbackGaps) || `${formatDays(approval.days)} 人天`)}{localize("额度特批")}</strong>{localize(' ')}
+      <strong>{localizeMessage('{0}额度特批', [days])}</strong>{' '}
       <span className="sr-assessment-badge">{localize(approval.state)}</span>
-      <p>{localize(approval.reason)}</p>
-      <small>{localize(approval.author)} {localize(" 发起 ·")}{localize(approval.workflow ? approval.workflow.ruleName : '上级审批人：' + approval.approver)} · {localize(stamp(approval.at))}</small>
-      {localize(approval.workflow && <ol className="sr-approval-step-history">{localize(approval.workflow.steps.map(step => <li key={step.id}>
-        <strong>{localize(step.nodeName)} · {localize(step.approver)}</strong>{localize(' ')}<span className="sr-assessment-badge">{localize(step.state)}</span>
-        {localize(step.cutoff && <small>{localize("审批截止人")}</small>)}
-        {localize(step.fallback && <small>{localize("默认审批人兜底：")}{localize(step.fallbackReason)}</small>)}
-        {localize(step.note && <p>{localize(step.note)} · {localize(stamp(step.decidedAt))}</p>)}
-      </li>))}</ol>)}
+      <p>{savedText(approval.reason)}</p>
+      <small>{localizeMessage('{0} 发起 · {1} · {2}', [approval.author, source, stamp(approval.at)])}</small>
+      {approval.workflow && <ol className="sr-approval-step-history">{approval.workflow.steps.map(step => <li key={step.id}>
+        <strong>{savedText(step.nodeName)} · {step.approver}</strong>{' '}
+        <span className="sr-assessment-badge">{localize(step.state)}</span>
+        {step.cutoff && <small>{localize('审批截止人')}</small>}
+        {step.fallback && <small>{localizeMessage('默认审批人兜底：{0}', [localize(step.fallbackReason ?? '')])}</small>}
+        {step.note && <p>{savedText(step.note)} · {stamp(step.decidedAt)}</p>}
+      </li>)}</ol>}
     </div>
-    {localize(children)}
+    {children}
   </article>;
 }

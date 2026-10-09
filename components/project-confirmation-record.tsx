@@ -14,7 +14,7 @@ export function ProjectConfirmationRecord({
   entry: ProjectConfirmation;
   version: number;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const assets = [
     ...entry.allocations.map((row) => ({
       name: row.name,
@@ -33,7 +33,7 @@ export function ProjectConfirmationRecord({
           className="project-confirmation-record-status"
           data-state={entry.invalidatedAt ? '已失效' : entry.state}
         >
-          {localize(entry.invalidatedAt ? `已失效（${entry.state}）` : entry.state)}
+          {localize(entry.invalidatedAt ? localizeMessage("已失效（{0}）", [String(localize(entry.state))]) : entry.state)}
         </span>
         {localize(entry.deliverables && (
           <span className="project-confirmation-record-files">

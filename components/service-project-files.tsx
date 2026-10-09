@@ -16,7 +16,7 @@ const stamp = (value: string) => value ? new Date(value).toLocaleString('zh-CN',
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 
 export function ServiceProjectFiles({ projectName, items }: { projectName: string; items: ProjectFile[] }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -35,7 +35,7 @@ export function ServiceProjectFiles({ projectName, items }: { projectName: strin
   };
   return <section className="sr-panel" aria-label={localize("全部文件")}>
     <div className="sr-panel-heading"><h3>{localize("全部文件")}</h3>
-      <Button variant="outline" disabled={busy || !chosen.length} onClick={download}>{localize(busy ? '正在打包…' : `批量下载${chosen.length ? `（${chosen.length}）` : ''}`)}</Button>
+      <Button variant="outline" disabled={busy || !chosen.length} onClick={download}>{localize(busy ? '正在打包…' : localizeMessage("批量下载{0}", [String(localize(chosen.length ? localizeMessage("（{0}）", [String(localize(chosen.length))]) : ''))]))}</Button>
     </div>
     {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}
     <div className="sr-table-scroll"><table className="sr-table app-list-table sr-project-files-table">
@@ -45,7 +45,7 @@ export function ServiceProjectFiles({ projectName, items }: { projectName: strin
         <th>{localize("名称")}</th><th>{localize("类型")}</th><th>{localize("大小")}</th><th>{localize("来源工单")}</th><th>{localize("来源步骤")}</th><th>{localize("提交人")}</th><th>{localize("提交时间")}</th><th data-list-actions>{localize("操作")}</th>
       </tr></thead>
       <tbody>{localize(items.map(item => <tr key={item.id}>
-        <td><Checkbox aria-label={localize(`选择 ${item.file.name}`)} checked={selected.includes(item.id)} disabled={busy} onCheckedChange={checked => setSelected(current => checked ? [...current, item.id] : current.filter(id => id !== item.id))} /></td>
+        <td><Checkbox aria-label={localizeMessage("选择 {0}", [localize(item.file.name)])} checked={selected.includes(item.id)} disabled={busy} onCheckedChange={checked => setSelected(current => checked ? [...current, item.id] : current.filter(id => id !== item.id))} /></td>
         <td title={localize(item.file.name)}>{localize(item.file.name)}</td><td>{localize(item.kind)}</td><td>{localize(size(item.file.blob.size))}</td>
         <td>{localize(item.orderName)}<small>{localize(item.orderId)}</small></td><td>{localize(item.stepName)}</td><td>{localize(item.submittedBy)}</td><td>{localize(stamp(item.submittedAt))}</td>
         <td><div className="sr-project-file-actions">{localize(item.file.onlineDocument && <Button variant="ghost" onClick={() => setViewingId(item.id)}>{localize("查看")}</Button>)}<Button className="sr-project-file-download" variant="ghost" onClick={() => downloadFile(item.file)}>{localize("下载")}</Button></div></td>

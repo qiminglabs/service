@@ -1,3 +1,4 @@
+import { activityMessage, activityLabel } from './activity-events.ts';
 import type { ServiceProjectRecord } from './service-projects';
 import type { OperationActor } from './request-operations';
 import type { InternalUser } from './service-requests';
@@ -26,5 +27,5 @@ export function changeServiceProjectSuspension(project: ServiceProjectRecord, ac
   }
   next.revision += 1;
   next.updatedAt = at;
-  return appendProjectActivity(next, actor, '项目', action === 'pause' ? '暂停项目' : '恢复项目', `${project.status} → ${next.status}${action === 'pause' ? `；${reason.trim()}` : ''}`, at);
+  return appendProjectActivity(next, actor, '项目', (action === 'pause' ? activityMessage("暂停项目") : activityMessage("恢复项目")), activityMessage("{0} → {1}{2}", [activityLabel(project.status), activityLabel(next.status), (action === 'pause' ? activityMessage("；{0}", [reason.trim()]) : '')]), at);
 }

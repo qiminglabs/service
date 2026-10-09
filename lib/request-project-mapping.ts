@@ -1,3 +1,4 @@
+import { activityFields, activityMessage } from './activity-events.ts';
 import { assignInitialProjectCollaborators } from './project-collaborator-assignment.ts';
 import { projectRequestSnapshots } from './project-request-snapshot.ts';
 import type { ProjectCollaboratorDirectory } from './service-project-collaborators';
@@ -97,6 +98,6 @@ export function mappedServiceProject(record: ServiceRequest, project: ServicePro
     collaboratorAssignmentsVersion: 1,
     collaborators: directory ? assignInitialProjectCollaborators(record.customerId, { id: creation.actorId, name: creation.actor, role: 'SmartX 项目经理' }, { customers: directory.customers ?? [], users: directory.users ?? [], contacts: directory.contacts ?? [], partners: directory.partners ?? [], partnerUsers: directory.partnerUsers ?? [] }, {}, record) : { internal: [{ id: creation.actorId, name: creation.actor, details: '负责项目经理', assignmentRoles: ['项目经理'] }] },
     requestConversion: { mapping, assessmentSnapshot: projectRequestSnapshots(record, creation).get(project.id), workOrders: project.workOrders.map(({ id, sourceItemId, pricing }) => ({ id, sourceItemId, ...(pricing ? { pricing: structuredClone(pricing) } : {}) })) },
-    operations: { meetings: [], worklogs: [], activities: [{ id: `request-conversion:${creation.id}:${project.id}`, at: creation.at, actorId: creation.actorId, actor: creation.actor, category: '项目', title: '由服务请求创建项目', detail: `来源请求：${record.id} · ${record.title}` }] },
+    operations: { meetings: [], worklogs: [], activities: [{ id: `request-conversion:${creation.id}:${project.id}`, at: creation.at, actorId: creation.actorId, actor: creation.actor, category: '项目', ...activityFields('project', activityMessage('由服务请求创建项目'), activityMessage('来源请求：{0} · {1}', [record.id, record.title])) }] },
   };
 }

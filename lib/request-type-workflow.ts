@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
 import { canPerformAssessmentRole } from './assessment-routing.ts';
@@ -57,7 +58,7 @@ export function convertAssessmentToDelivery(record: ServiceRequest, actor: Opera
   if (issue) throw new Error(issue);
   const missing = deliveryConversionMaterialIssues(record);
   if (missing.length) throw new Error(`请补齐服务交付必传材料：${missing.join('；')}`);
-  return appendActivity({ ...record, requestType: '服务交付', status: '待评估' }, actor, '评估', '转为服务交付', conversionDetail, now);
+  return appendActivity({ ...record, requestType: '服务交付', status: '待评估' }, actor, '评估', activityMessage("转为服务交付"), activityMessage(conversionDetail), now);
 }
 
 // Enforce type and branch transitions again against the latest stored request.

@@ -22,7 +22,7 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
   record: ServiceRequest; actor: OperationActor; customerId?: string; users: InternalUser[]; contacts?: ContactRef[]; customers?: CustomerRef[]; busy: boolean;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [comment, setComment] = useState('');
   const [files, setFiles] = useState<StoredFile[]>([]);
   const [externalVisible, setExternalVisible] = useState(!isInternal(actor.role));
@@ -92,7 +92,7 @@ export function RequestSupplements({ record, actor, customerId, users, contacts 
         </div>
         {localize(files.length > 0 && <div className="sr-supplement-files">{localize(files.map(file => <div className="sr-supplement-file" key={file.id}>
           <FileText size={16} aria-hidden="true" /><span title={localize(file.name)}>{localize(file.name)}</span><small>{localize((file.size / 1024).toFixed(1))} KB</small>
-          <Button variant="ghost" disabled={disabled} aria-label={localize(`移除 ${file.name}`)} onClick={() => setFiles(old => old.filter(item => item.id !== file.id))}>{localize("移除")}</Button>
+          <Button variant="ghost" disabled={disabled} aria-label={localizeMessage("移除 {0}", [localize(file.name)])} onClick={() => setFiles(old => old.filter(item => item.id !== file.id))}>{localize("移除")}</Button>
         </div>))}</div>)}
         <div className="sr-supplement-toolbar">
           <div className="sr-supplement-upload">

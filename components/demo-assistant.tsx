@@ -15,7 +15,7 @@ function readContext(): AssistantContext {
   return normalizeAssistantContext({ page: main?.getAttribute('data-assistant-page'), tab: selected || main?.getAttribute('data-assistant-reference-tab'), status: main?.querySelector('[data-assistant-status]')?.getAttribute('data-assistant-status') });
 }
 export function DemoAssistant() {
-  const { localize, locale } = useI18n();
+  const { localize, locale, localizeMessage } = useI18n();
   const [open, setOpen] = useState(false);
   const [context, setContext] = useState<AssistantContext>({ page: 'requests' });
   const [messages, setMessages] = useState<Message[]>([]);
@@ -119,7 +119,7 @@ export function DemoAssistant() {
   return <div ref={floating} className="demo-assistant" style={position} data-dragging={dragging || undefined}>
     {localize(open && <section id="demo-assistant-panel" className="demo-assistant-panel" role="dialog" aria-modal="false" aria-labelledby="demo-assistant-title" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}>
       <header className="demo-assistant-header" {...dragHandlers}><div><strong id="demo-assistant-title">{localize("Demo 功能助手")}</strong></div><div className="demo-assistant-tools"><button type="button" title={localize("清空对话")} aria-label={localize("清空对话")} onClick={clear}><RotateCcw size={17} /></button><button type="button" aria-label={localize("收起功能助手")} onClick={close}><X size={20} /></button></div></header>
-      <div className="demo-assistant-context">{localize("当前页面：")}{localize(assistantPages[context.page])}{localize(context.status ? ` · ${context.status}` : '')}</div>
+      <div className="demo-assistant-context">{localize("当前页面：")}{localize(assistantPages[context.page])}{localize(context.status ? localizeMessage(" · {0}", [String(localize(context.status))]) : '')}</div>
       <div className="demo-assistant-messages" role="log" aria-live="polite" aria-relevant="additions text" aria-busy={busy}>
         {localize(!messages.length && <div className="demo-assistant-welcome"><MessageCircle size={28} /><h2>{localize("想了解哪个功能？")}</h2><p>{localize("我可以解释为什么、在哪里操作，以及下一步怎么做。")}</p><div className="demo-assistant-suggestions">{localize(['这个页面可以做什么？', '为什么找不到可申请的服务？', '哪些功能只是本地模拟？'].map(text => <button key={text} disabled={busy} onClick={() => void send(text)}>{localize(text)}</button>))}</div></div>)}
         {localize(messages.map((message, index) => <article key={index} className={`demo-assistant-message demo-assistant-message--${message.role}`}><small>{localize(message.role === 'user' ? '你' : '功能助手')} · {localize(message.page)}</small><p>{localize(message.content)}</p></article>))}

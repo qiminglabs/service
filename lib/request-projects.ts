@@ -1,3 +1,4 @@
+import { activityFields, activityMessage, activityList, activityLabel } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import { defaultProjectMapping, parseProjectMapping, type RequestProjectMapping } from './request-project-mapping.ts';
 import type { EffortPricingLine } from './request-pricing';
@@ -63,7 +64,7 @@ export function createServiceProjects(record: ServiceRequest, actor: OperationAc
   const ops = operationsOf(record);
   return { ...record, status: '已转服务项目', updatedAt: at, operations: { ...ops,
     projectCreation: { id, at, actorId: actor.id, actor: actor.name, projects, mapping },
-    activities: [...ops.activities, { id: `project-creation:${id}`, at, actorId: actor.id, actor: actor.name, category: '受理', title: '创建服务项目', detail: `创建 ${projects.length} 个项目、${orderNumber} 个工单。\n${projects.map(project => `${project.name}：${project.workOrders.map(order => order.serviceName).join('、')}`).join('\n')}` }],
+    activities: [...ops.activities, { id: `project-creation:${id}`, at, actorId: actor.id, actor: actor.name, category: '受理', ...activityFields('request', activityMessage('创建服务项目'), activityMessage('创建 {0} 个项目、{1} 个工单。\n{2}', [projects.length, orderNumber, activityList(projects.map(project => activityMessage('{0}：{1}', [project.name, activityList(project.workOrders.map(order => activityLabel(order.serviceName)))])), '\n')])) }],
   } };
 }
 export function projectCreationSaveIssue(next: ServiceRequest, previous: ServiceRequest | undefined, actor?: OperationActor, mapping = defaultProjectMapping()): string | null {

@@ -128,7 +128,7 @@ export function ServiceProjectDailyReports({
   onBusy: (busy: boolean) => void;
   onSaved: (project: ServiceProjectRecord) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [open, setOpen] = useState(!!confirmationFlow);
   const [mailConfig, setMailConfig] = useState<ServiceMailConfig>();
   const [choosingKind, setChoosingKind] = useState(false);
@@ -419,7 +419,7 @@ export function ServiceProjectDailyReports({
                 ? stage === 'edit'
                   ? '发送报告并发起确认'
                   : '预览客户确认邮件'
-                : `${stage === 'edit' ? '写' : '预览'}${template.title}`)}
+                : stage === 'edit' ? localizeMessage('写{0}', [localize(template.title)]) : localizeMessage('预览{0}', [localize(template.title)]))}
             </DialogTitle>
           </DialogHeader>
           <div

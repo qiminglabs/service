@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import {
   defaultMailTemplate,
@@ -270,8 +271,8 @@ export function sendProjectDailyReport(
     },
     actor,
     '服务日报',
-    input.kind === 'project' ? '发送项目报告（本地）' : '发送服务日报（本地）',
-    `${report.date} · ${report.subject}`,
+    (input.kind === 'project' ? activityMessage("发送项目报告（本地）") : activityMessage("发送服务日报（本地）")),
+    activityMessage("{0} · {1}", [report.date, report.subject]),
     now,
     false,
   );

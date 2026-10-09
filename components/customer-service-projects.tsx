@@ -30,7 +30,7 @@ function Status({ value }: { value: CustomerServiceProject['status'] }) {
   return <span className="sr-badge" data-tone={value === '已取消' ? 'cancelled' : value === '已完成' ? 'green' : value === '待启动' ? 'muted' : 'blue'}>{localize(serviceProjectStatusLabel(value, true))}</span>;
 }
 export function CustomerServiceProjects({ actor, initialProjectId, itemFields, services }: { actor: OperationActor; initialProjectId?: string; itemFields: RequestField[]; services: CatalogService[] }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [records, setRecords] = useState<CustomerServiceProject[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState('');
@@ -90,7 +90,7 @@ export function CustomerServiceProjects({ actor, initialProjectId, itemFields, s
       </TabsContent>
       <TabsContent value="deliverables"><ServiceProjectDeliverables projectName={project.name} key={project.id} items={project.deliverables} /></TabsContent>
       <TabsContent value="overview">
-        {localize(['已取消', '已暂停'].includes(project.status) && <section className="sr-panel sr-ops-panel" role="status"><div className="sr-ops-heading"><div><h3>{localize(project.status === '已取消' ? '项目已取消' : '项目已暂停')}</h3><p className="whitespace-pre-wrap break-words">{localize(project.status === '已取消' ? `取消原因：${project.cancellationReason || '未记录'}` : `暂停原因：${project.suspensionReason || '未记录'}`)}</p></div></div></section>)}
+        {localize(['已取消', '已暂停'].includes(project.status) && <section className="sr-panel sr-ops-panel" role="status"><div className="sr-ops-heading"><div><h3>{localize(project.status === '已取消' ? '项目已取消' : '项目已暂停')}</h3><p className="whitespace-pre-wrap break-words">{localize(project.status === '已取消' ? localizeMessage("取消原因：{0}", [String(localize(project.cancellationReason || '未记录'))]) : localizeMessage("暂停原因：{0}", [String(localize(project.suspensionReason || '未记录'))]))}</p></div></div></section>)}
         <CustomerProjectConfirmation key={project.id} project={project} actor={actor} onViewDeliverables={() => setTab('deliverables')} onSaved={updated => { ++sequence.current; setRecords(current => current.map(record => record.id === updated.id ? updated : record)); setNotice('客户确认已保存'); }} />
         <section className="sr-panel"><div className="sr-panel-heading"><h3>{localize("基本信息")}</h3></div>
           <ServiceProjectBasicInfo fields={[

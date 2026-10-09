@@ -80,7 +80,7 @@ export function ProjectSupplementsPanel({
   editable: boolean;
   emptyMessage?: string;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [comment, setComment] = useState('');
   const [files, setFiles] = useState<StoredFile[]>([]);
   const [externalVisible, setExternalVisible] = useState(
@@ -281,7 +281,7 @@ export function ProjectSupplementsPanel({
                     <Button
                       variant="ghost"
                       disabled={disabled}
-                      aria-label={localize(`移除 ${file.name}`)}
+                      aria-label={localizeMessage("移除 {0}", [localize(file.name)])}
                       onClick={() =>
                         setFiles((old) =>
                           old.filter((item) => item.id !== file.id),

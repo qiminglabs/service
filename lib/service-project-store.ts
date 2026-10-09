@@ -1,3 +1,4 @@
+import { activityMessage, activityLabel } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import { changeServiceProjectSuspension } from './service-project-suspension.ts';
 import { fixedIdentityRoles, operationIdentities } from './internal-users.ts';
@@ -119,15 +120,9 @@ export async function saveProjectItems(
         editProjectItems(previous, change, actor, context),
         actor,
         '服务项',
-        change.type === 'copy'
-          ? '复制服务项'
-          : change.type === 'remove'
-            ? '移除服务项'
-            : change.type === 'materials' ? '保存项目材料' : '保存服务项',
-        change.type === 'save'
-          ? change.item.serviceName
-          : (previous.items?.find((item) => item.id === change.id)
-              ?.serviceName ?? ''),
+        (change.type === 'copy' ? activityMessage("复制服务项") : (change.type === 'remove' ? activityMessage("移除服务项") : (change.type === 'materials' ? activityMessage("保存项目材料") : activityMessage("保存服务项")))),
+        (change.type === 'save' ? activityLabel(change.item.serviceName) : (previous.items?.find((item) => item.id === change.id)
+              ?.serviceName ?? '')),
       );
     },
   ).then((project) => projectForActor(project, actor));
@@ -153,7 +148,7 @@ export async function saveProjectSupplement(
         updated,
         actor,
         '补充信息',
-        '发布补充信息',
+        activityMessage("发布补充信息"),
         '',
         updated.updatedAt,
         updated.supplements!.at(-1)!.externalVisible,
@@ -255,7 +250,7 @@ export async function createStoredServiceProject(
         project,
         actor,
         '项目',
-        '创建项目',
+        activityMessage("创建项目"),
         project.id,
         project.createdAt,
       );
@@ -295,10 +290,8 @@ export async function updateStoredServiceProject(
         updated,
         actor,
         '项目',
-        '更新项目信息',
-        previous.status !== updated.status
-          ? `${previous.status} → ${updated.status}`
-          : '保存项目基本信息',
+        activityMessage("更新项目信息"),
+        (previous.status !== updated.status ? activityMessage("{0} → {1}", [activityLabel(previous.status), activityLabel(updated.status)]) : activityMessage("保存项目基本信息")),
         updated.updatedAt,
       );
     },
@@ -327,8 +320,8 @@ export async function saveProjectCollaborators(
         editProjectCollaborators(previous, group, ids, actor, directory),
         actor,
         '协作',
-        '更新协作人',
-        `${group === 'customer' ? '客户' : group === 'internal' ? '内部' : '合作伙伴'}协作人`,
+        activityMessage("更新协作人"),
+        activityMessage("{0}协作人", [(group === 'customer' ? activityMessage("客户") : (group === 'internal' ? activityMessage("内部") : activityMessage("合作伙伴")))]),
         undefined,
         group !== 'internal',
       );
@@ -422,7 +415,7 @@ export async function saveCustomerProjectSupplement(
     const contact = directory.contacts.find(person => person.id === actor.id)!;
     const author = { ...actor, name: contact.name };
     const updated = addProjectSupplement(previous, author, { ...input, externalVisible: true }, directory.users, directory);
-    return appendProjectActivity(updated, author, '补充信息', '发布补充信息', '', updated.updatedAt, true);
+    return appendProjectActivity(updated, author, '补充信息', activityMessage("发布补充信息"), '', updated.updatedAt, true);
   });
   return customerServiceProject(project, directory);
 }

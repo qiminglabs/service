@@ -1,3 +1,4 @@
+import { activityMessage, type ActivityText } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import { canonicalMailTemplate, parseMailConfig, type ServiceMailConfig } from './service-mail-templates.ts';
 import { buildProjectDailyReport, reportMailText, type DailyReportInput } from './service-project-daily-reports.ts';
@@ -304,7 +305,7 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
   const next = structuredClone(p), review = next.review = structuredClone(projectReviewOf(p));
   const basisOwner = canManageProjectReviewBasis(p, actor, ctx), manager = canManageProjectAsManager(p, actor);
   const waiting = currentProjectReviewApproval(p)?.state === '待审批';
-  let title = '';
+  let title: ActivityText = '';
   if (action.type === 'effort') {
     if (!manager) throw new Error('仅负责项目经理或系统管理员可核定人天。');
     const issue = projectSourceIssue(p, ctx); if (issue) throw new Error(issue);
@@ -320,7 +321,7 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
     if (confirmation && !confirmation.invalidatedAt && (!confirmation.fingerprint || confirmation.fingerprint !== projectConfirmationFingerprint(next))) {
       confirmation.invalidatedAt = now;
     }
-    title = '核定项目人天';
+    title = activityMessage("核定项目人天");
   } else if (action.type === 'basis') {
     if (!basisOwner) throw new Error('服务依据由内部申请人或当前客户所有人关联。');
     if (waiting || p.status === '待确认') throw new Error('审批或客户确认中，暂不能调整服务依据。');
@@ -350,7 +351,7 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
     review.basis = { id: review.basis?.id ?? crypto.randomUUID(), capacities, allocations: allocateProjectAssets(review.effort.lines, capacities), entitlementAllocations: effortEntitlementAllocations(review.effort.lines), at: now, author: actor.name };
     review.confirmations.forEach(c => { c.invalidatedAt ??= now; });
     assertBasis(next, ctx);
-    title = '关联项目服务依据';
+    title = activityMessage("关联项目服务依据");
   } else if (action.type === 'gap-submit') {
     if (!basisOwner) throw new Error('仅内部申请人或当前客户所有人可发起特批。');
     if (action.method !== '远程' && action.method !== '现场') throw new Error('请选择远程或现场服务方式。');
@@ -363,12 +364,12 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
     if (!isDemoAdministrator(actor, ctx.users) && workflow.steps.some(step => step.approverId === actor.id)) throw new Error('审批流程不能包含申请人本人，请调整审批配置。');
     review.approvals.push({ id: crypto.randomUUID(), planId, independent: true, days: action.days, gaps, reason: action.reason.trim(), authorId: actor.id, author: actor.name,
       approverId: workflow.steps[0].approverId, approver: workflow.steps[0].approver, at: now, state: '待审批', workflow });
-    title = '发起项目额度特批';
+    title = activityMessage("发起项目额度特批");
   } else if (action.type === 'gap-decide') {
     const approval = matchingApprovals(next).find(a => a.id === action.id && a.state === '待审批');
     if (!approval?.workflow || !action.note.trim()) throw new Error('审批已变更或缺少审批意见。');
     decideApprovalExecution(approval, actor, ctx.users, action.approve, action.note, now);
-    title = action.approve ? '项目额度审批通过' : '项目额度审批拒绝';
+    title = (action.approve ? activityMessage("项目额度审批通过") : activityMessage("项目额度审批拒绝"));
   } else if (action.type === 'confirm') {
     if (p.status !== '待复核') throw new Error('仅可在待复核阶段发起客户确认。');
     if (waiting) throw new Error('请先完成正在进行的额度审批，再发起客户确认。');
@@ -379,11 +380,11 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
     if (!p.collaborators?.customer?.some(person => ctx.contacts.some(c => c.id === person.id && c.customerId === p.customerId && c.status === '启用'))) throw new Error('请先添加有效的客户协作人。');
     const previous = review.confirmations.at(-1);
     if (previous && !previous.invalidatedAt && previous.state !== '已拒绝' && previous.fingerprint === projectConfirmationFingerprint(next)) {
-      next.status = '待确认'; title = '沿用客户确认';
+      next.status = '待确认'; title = activityMessage("沿用客户确认");
     } else {
     if (previous && previous.state !== '已拒绝') previous.invalidatedAt ??= now;
     review.confirmations.push({ changes: projectConfirmationChanges(next), ...projectConfirmationContent(next), fingerprint: projectConfirmationFingerprint(next), id: crypto.randomUUID(), at: now, by: actor.name, note: action.note.trim(), allocations: structuredClone(review.basis!.allocations), entitlementAllocations: structuredClone(review.basis!.entitlementAllocations), state: '待确认' });
-    next.status = '待确认'; title = '发起项目客户确认';
+    next.status = '待确认'; title = activityMessage("发起项目客户确认");
     }
   } else if (action.type === 'customer-decision') {
     const confirmation = review.confirmations.at(-1);
@@ -394,10 +395,10 @@ export function applyProjectReview(p: ServiceProjectRecord, action: ProjectRevie
     Object.assign(confirmation, { state: action.accepted ? '已确认' : '已拒绝', decidedAt: now, decidedBy: isDemoAdministrator(actor) ? `${actor.name}（管理员代确认）` : actor.name, reason: action.reason.trim() });
     if (action.accepted) settleConfirmedProject(next, ctx, now);
     else next.status = '待复核';
-    title = action.accepted ? '客户确认通过，自动完成项目并核销服务资产' : '客户拒绝项目确认';
+    title = (action.accepted ? activityMessage("客户确认通过，自动完成项目并核销服务资产") : activityMessage("客户拒绝项目确认"));
 
   }
-  if (action.type === 'confirm' && action.mail) { recordConfirmationMail(next, action, actor, ctx, now); title = '发送项目报告并发起确认（本地）'; }
+  if (action.type === 'confirm' && action.mail) { recordConfirmationMail(next, action, actor, ctx, now); title = activityMessage("发送项目报告并发起确认（本地）"); }
   next.revision++; next.updatedAt = now;
   return appendProjectActivity(next, actor, '复核', title, '', now, customer || action.type === 'confirm');
 }
@@ -417,24 +418,24 @@ function applyPartnerConfirmation(p: ServiceProjectRecord, action: ProjectReview
   }
   const next = structuredClone(p), review = next.review = structuredClone(projectReviewOf(p));
   const confirmation = review.confirmations.at(-1);
-  let title = '';
+  let title: ActivityText = '';
   if (action.type === 'confirm') {
     if (!['进行中', '待复核'].includes(p.status) && !(p.status === '待确认' && projectCustomerConfirmationStale(p))) throw new Error('当前项目已发起客户确认。');
     const issue = partnerProjectConfirmationIssue(p); if (issue) throw new Error(issue);
     if (!p.collaborators?.customer?.some(person => ctx.contacts.some(contact => contact.id === person.id && contact.customerId === p.customerId && contact.status === '启用'))) throw new Error('请先添加有效的客户协作人。');
     if (confirmation && confirmation.state !== '已拒绝') confirmation.invalidatedAt ??= now;
     review.confirmations.push({ ...projectConfirmationContent(next), fingerprint: projectConfirmationFingerprint(next), id: crypto.randomUUID(), at: now, by: actor.name, note: action.note.trim(), allocations: [], entitlementAllocations: [], state: '待确认' });
-    next.status = '待确认'; title = '发起项目客户确认';
+    next.status = '待确认'; title = activityMessage("发起项目客户确认");
   } else if (action.type === 'customer-decision') {
     if (p.status !== '待确认' || confirmation?.id !== action.confirmationId || confirmation.state !== '待确认' || confirmation.invalidatedAt) throw new Error('客户确认已更新，请重新打开项目。');
     if (!action.accepted && !action.reason.trim()) throw new Error('请填写拒绝原因。');
     if (action.accepted && projectCustomerConfirmationStale(p)) throw new Error('项目交付内容已变化，请重新发起客户确认。');
     Object.assign(confirmation, { state: action.accepted ? '已确认' : '已拒绝', decidedAt: now, decidedBy: isDemoAdministrator(actor) ? `${actor.name}（管理员代确认）` : actor.name, reason: action.reason.trim() });
     next.status = action.accepted ? '已完成' : '进行中';
-    title = action.accepted ? '客户确认通过，自动完成项目' : '客户拒绝项目确认';
+    title = (action.accepted ? activityMessage("客户确认通过，自动完成项目") : activityMessage("客户拒绝项目确认"));
 
   }
-  if (action.type === 'confirm' && action.mail) { recordConfirmationMail(next, action, actor, ctx, now); title = '发送项目报告并发起确认（本地）'; }
+  if (action.type === 'confirm' && action.mail) { recordConfirmationMail(next, action, actor, ctx, now); title = activityMessage("发送项目报告并发起确认（本地）"); }
   next.revision++; next.updatedAt = now;
   return appendProjectActivity(next, actor, '项目', title, '', now, true);
 }

@@ -32,7 +32,7 @@ const sections = [
 type Section = (typeof sections)[number]['key'];
 
 export function CollaborationHome({ actor, customers, onOpen }: Props) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [data, setData] = useState<{
     projects: ServiceProjectRecord[];
     requests: ServiceRequest[];
@@ -148,7 +148,7 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
           </div>
           <div
             className="collaboration-record-list"
-            aria-label={localize(`${sections.find((item) => item.key === section)?.label}列表`)}
+            aria-label={localizeMessage("{0}列表", [localize(sections.find((item) => item.key === section)?.label ?? '')])}
           >
             {localize(records.length > 0 && (
               <table className="collaboration-record-table">
@@ -213,7 +213,7 @@ export function CollaborationHome({ actor, customers, onOpen }: Props) {
                           <button
                             type="button"
                             className="pm-link"
-                            aria-label={localize(`查看${title}详情`)}
+                            aria-label={localizeMessage("查看{0}详情", [localize(title)])}
                             onClick={() => onOpen(view, record.id)}
                           >
                             {localize("查看详情")}</button>

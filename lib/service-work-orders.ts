@@ -1,3 +1,4 @@
+import { activityMessage, activityLabel } from './activity-events.ts';
 import { isPartnerProjectCreator, isResponsibleProjectManager } from './service-project-work-order-policy.ts';
 import { snapshotWorkOrderForm } from './work-order-form.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
@@ -193,8 +194,8 @@ export function startProjectWorkOrders(
     },
     actor,
     '项目',
-    '启动项目并生成工单',
-    `已锁定 ${workOrders.length} 个服务项并生成工单`,
+    activityMessage("启动项目并生成工单"),
+    activityMessage("已锁定 {0} 个服务项并生成工单", [workOrders.length]),
     now,
     false,
   );
@@ -428,14 +429,8 @@ export function applyWorkStep(
     next,
     actor,
     '工单',
-    action.type === 'complete'
-      ? '完成工单步骤'
-      : action.type === 'skip'
-        ? '跳过工单步骤'
-        : wasCompleted
-          ? '修改已完成工单步骤'
-          : '保存工单步骤',
-    `${order.item.serviceName} · ${step.definition.name}`,
+    (action.type === 'complete' ? activityMessage("完成工单步骤") : (action.type === 'skip' ? activityMessage("跳过工单步骤") : (wasCompleted ? activityMessage("修改已完成工单步骤") : activityMessage("保存工单步骤")))),
+    activityMessage("{0} · {1}", [activityLabel(order.item.serviceName), step.definition.name]),
     now,
     false,
   );
@@ -508,7 +503,7 @@ export function addProjectWorkOrder(project: ServiceProjectRecord, actor: Operat
   let id = '';
   do { id = `WO-${project.id}-${String(sequence++).padStart(2, '0')}`; } while (project.workOrders?.some(order => order.id === id));
   const order = { ...buildWorkOrder(project, item, id, actor, config, dictionary, now), origin: 'manual' as const };
-  return appendProjectActivity({ ...project, revision: project.revision + 1, updatedAt: now, workOrders: [...(project.workOrders ?? []), order] }, actor, '工单', '创建工单', `${order.id} · ${order.item.serviceName}`, now, false);
+  return appendProjectActivity({ ...project, revision: project.revision + 1, updatedAt: now, workOrders: [...(project.workOrders ?? []), order] }, actor, '工单', activityMessage("创建工单"), activityMessage("{0} · {1}", [order.id, activityLabel(order.item.serviceName)]), now, false);
 }
 export function canPauseProjectWorkOrder(project: ServiceProjectRecord, actor: OperationActor, order: ServiceWorkOrder) {
   return project.status === '进行中' && canManageProjectAsManager(project, actor) && ['待执行', '进行中'].includes(order.status);
@@ -533,7 +528,7 @@ export function changeProjectWorkOrderSuspension(project: ServiceProjectRecord, 
   }
   target.updatedAt = now;
   next.revision += 1; next.updatedAt = now;
-  return appendProjectActivity(next, actor, '工单', action === 'pause' ? '暂停工单' : '恢复工单', `${order.id} · ${order.item.serviceName}；${order.status} → ${target.status}`, now, false);
+  return appendProjectActivity(next, actor, '工单', (action === 'pause' ? activityMessage("暂停工单") : activityMessage("恢复工单")), activityMessage("{0} · {1}；{2} → {3}", [order.id, activityLabel(order.item.serviceName), activityLabel(order.status), activityLabel(target.status)]), now, false);
 }
 export function cancelProjectWorkOrder(project: ServiceProjectRecord, actor: OperationActor, orderId: string, reason: string, now = new Date().toISOString()): ServiceProjectRecord {
   if (!canChangeProjectWorkOrders(project, actor)) throw new Error('当前身份或项目状态不允许取消工单，仅进行中项目可操作。');
@@ -545,13 +540,13 @@ export function cancelProjectWorkOrder(project: ServiceProjectRecord, actor: Ope
   return appendProjectActivity({ ...project, revision: project.revision + 1, updatedAt: now,
     workOrders: project.workOrders!.map(entry => entry.id === orderId ? { ...entry, status: '已取消', suspension: undefined, updatedAt: now,
       cancellation: { reason: reason.trim(), at: now, actorId: actor.id, actorName: actor.name, previousStatus } } : entry),
-  }, actor, '工单', '取消工单', `${order.id} · ${order.item.serviceName}；${reason.trim()}`, now, false);
+  }, actor, '工单', activityMessage("取消工单"), activityMessage("{0} · {1}；{2}", [order.id, activityLabel(order.item.serviceName), reason.trim()]), now, false);
 }
 export function submitProjectReview(project: ServiceProjectRecord, actor: OperationActor, now = new Date().toISOString()): ServiceProjectRecord {
   if (!canSubmitProjectReview(project, actor)) throw new Error('仅本项目已指派的执行工程师可手动提交进行中的项目复核。');
   const issue = projectReviewIssue(project);
   if (issue) throw new Error(issue);
-  return appendProjectActivity({ ...project, status: '待复核', revision: project.revision + 1, updatedAt: now }, actor, '项目', '提交复核', '进行中 → 待复核', now, false);
+  return appendProjectActivity({ ...project, status: '待复核', revision: project.revision + 1, updatedAt: now }, actor, '项目', activityMessage("提交复核"), activityMessage("进行中 → 待复核"), now, false);
 }
 
 export type ReturnProjectReviewInput = { reason: string };
@@ -572,6 +567,6 @@ export function returnProjectReview(project: ServiceProjectRecord, actor: Operat
   }
   if (next.review?.effort) next.review.effort.stage = '过程';
   next.review?.confirmations.forEach(confirmation => { confirmation.invalidatedAt ??= now; });
-  return appendProjectActivity(next, actor, '项目', '退回执行',
-    `待复核 → 进行中；${input.reason.trim()}`, now, false);
+  return appendProjectActivity(next, actor, '项目', activityMessage("退回执行"),
+    activityMessage("待复核 → 进行中；{0}", [input.reason.trim()]), now, false);
 }

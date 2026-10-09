@@ -38,7 +38,7 @@ export function DateField({
   uncertain?: boolean;
   onUncertain?: () => void;
 }) {
-  const { localize, locale } = useI18n();
+  const { localize, locale, localizeMessage } = useI18n();
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const [open, setOpen] = useState(false);
@@ -80,7 +80,7 @@ export function DateField({
           <PopoverContent
             align="start"
             className="sr-service-date-popover"
-            aria-label={localize('选择' + label)}
+            aria-label={localize(localizeMessage("选择{0}", [String(localize(label))]))}
           >
             <Calendar
               mode="single"

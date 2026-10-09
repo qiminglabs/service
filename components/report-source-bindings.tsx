@@ -22,7 +22,7 @@ export function ReportSourceBindings({
   onChange: (value: ReportBindings) => void;
   disabled?: boolean;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const fields = reportFields(template.body).filter((f) => f.scope === 'step'),
     options = stepFieldOptions(steps);
   if (!fields.length) return null;
@@ -39,11 +39,11 @@ export function ReportSourceBindings({
             <span>
               {localize(f.label)}
               {localize(fields.filter((x) => x.label === f.label).length > 1
-                ? ` · 引用 ${i + 1}`
+                ? localizeMessage(" · 引用 {0}", [String(localize(i + 1))])
                 : '')}
             </span>
             <NativeSelect
-              aria-label={localize(`${f.label} 来源 ${i + 1}`)}
+              aria-label={localizeMessage("{0} 来源 {1}", [localize(f.label), localize(i + 1)])}
               disabled={disabled}
               value={valid ? JSON.stringify([b.stepId, b.fieldId]) : ''}
               onChange={(e) => {

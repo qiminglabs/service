@@ -48,7 +48,7 @@ export function WorkOrderBasicInfoEditor({
   onBusy: (busy: boolean) => void;
   onSaved: (project: ServiceProjectRecord) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [draft, setDraft] = useState<WorkOrderBasicInfoInput | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -186,9 +186,9 @@ export function WorkOrderBasicInfoEditor({
                     <SelectTrigger id="wo-basic-contact">
                       {localize(selectedContact?.name ??
                         (selection === 'stored'
-                          ? `${order.contactName}（原记录）`
+                          ? localizeMessage("{0}（原记录）", [String(localize(order.contactName))])
                           : draft.contact
-                            ? `${order.contactName || '原联系人'}（不可用）`
+                            ? localizeMessage("{0}（不可用）", [String(localize(order.contactName || '原联系人'))])
                             : '请选择协作人'))}
                     </SelectTrigger>
                     <SelectContent>

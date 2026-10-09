@@ -1,3 +1,4 @@
+import { activityMessage, activityList, activityLabel, type ActivityText } from './activity-events.ts';
 import type { RequestField } from '../components/request-field-settings';
 import { snapshotWorkOrderForm, workOrderField, workOrderFieldValue } from './work-order-form.ts';
 import {
@@ -194,7 +195,7 @@ export function editWorkOrderBasicInfo(
     input.contact === undefined
       ? (order.contactPhone ?? '')
       : (selected?.phone ?? '');
-  const changes: string[] = [];
+  const changes: ActivityText[] = [];
   for (const [label, before, after] of [
     ['计划执行日期', order.expectedServiceDate, input.expectedServiceDate],
     ['计划完成日期', order.plannedCompletionDate, input.plannedCompletionDate],
@@ -207,17 +208,17 @@ export function editWorkOrderBasicInfo(
     ['联系电话', order.contactPhone, contactPhone],
   ])
     if ((before ?? '') !== after)
-      changes.push(`${label}：${before || '未填写'} → ${after || '未填写'}`);
+      changes.push(activityMessage('{0}：{1} → {2}', [activityLabel(String(label)), before || activityMessage('未填写'), after || activityMessage('未填写')]));
   for (const id of item.config.fields.filter(id => !['address', 'method', 'description', 'businessObjects'].includes(id))) {
-    if ((order.item.values[id] ?? '') !== (item.values[id] ?? '')) changes.push(`${workOrderField(item, id).name}：${workOrderFieldValue(order.item, id)} → ${workOrderFieldValue(item, id)}`);
+    if ((order.item.values[id] ?? '') !== (item.values[id] ?? '')) changes.push(activityMessage('{0}：{1} → {2}', [activityLabel(workOrderField(item, id).name), workOrderFieldValue(order.item, id), workOrderFieldValue(item, id)]));
   }
-  if (order.item.method !== item.method) changes.push(`服务方式：${workOrderFieldValue(order.item, 'method')} → ${workOrderFieldValue(item, 'method')}`);
-  if (order.item.description !== description) changes.push('服务说明已更新');
+  if (order.item.method !== item.method) changes.push(activityMessage('服务方式：{0} → {1}', [activityLabel(workOrderFieldValue(order.item, 'method')), activityLabel(workOrderFieldValue(item, 'method'))]));
+  if (order.item.description !== description) changes.push(activityMessage('服务说明已更新'));
   if (
     order.contactRef?.id !== contactRef?.id ||
     order.contactRef?.group !== contactRef?.group
   )
-    changes.push('现场联系人关联已更新');
+    changes.push(activityMessage('现场联系人关联已更新'));
   if (!changes.length) return project;
   const updated: ServiceWorkOrder = {
     ...order,
@@ -240,8 +241,8 @@ export function editWorkOrderBasicInfo(
     },
     actor,
     '工单',
-    '编辑工单基本信息',
-    `${order.id}；${changes.join('；')}`,
+    activityMessage("编辑工单基本信息"),
+    activityMessage("{0}；{1}", [order.id, activityList(changes, '；')]),
     now,
     false,
   );

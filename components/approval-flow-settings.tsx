@@ -20,7 +20,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   const { localize } = useI18n(); return <label className="approval-field"><span>{localize(label)}</span>{localize(children)}</label>; }
 
 function ApprovalStopUsers({ users, value, disabled, onChange }: { users: InternalUser[]; value: string[]; disabled: boolean; onChange: (ids: string[]) => void }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [query, setQuery] = useState('');
   const available = users.filter(user => user.status === '启用' && !value.includes(user.id));
   const selected = value.map(id => users.find(user => user.id === id) ?? { id, name: id, email: '', status: '已不存在' });
@@ -35,7 +35,7 @@ function ApprovalStopUsers({ users, value, disabled, onChange }: { users: Intern
       </label>))}
       {localize(!selected.length && !matches.length && <p className="sr-help">{localize("没有匹配的内部用户")}</p>)}
     </div>
-    <small className="sr-help">{localize(value.length ? `已选 ${value.length} 人。沿汇报关系遇到其中任意一人，由其完成最后一级审批。` : '未选择时按指定级数审批；选择后以最先遇到的截止人为终点。')}</small>
+    <small className="sr-help">{localize(value.length ? localizeMessage("已选 {0} 人。沿汇报关系遇到其中任意一人，由其完成最后一级审批。", [String(localize(value.length))]) : '未选择时按指定级数审批；选择后以最先遇到的截止人为终点。')}</small>
   </div>;
 }
 

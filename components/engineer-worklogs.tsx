@@ -19,7 +19,7 @@ type Props = {
 };
 
 export function EngineerWorklogs({ rows, customers, onOpen }: Props) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [expandedProjects, setExpandedProjects] = useState<
     Record<string, boolean>
   >({});
@@ -45,14 +45,14 @@ export function EngineerWorklogs({ rows, customers, onOpen }: Props) {
               <section
                 className="eh-project-group"
                 key={project.id}
-                aria-label={localize(`项目工时：${project.name}`)}
+                aria-label={localizeMessage("项目工时：{0}", [localize(project.name)])}
                 data-collapsed={!expanded || undefined}
               >
                 <header className="eh-project-heading">
                   <button
                     type="button"
                     className="eh-project-expand-area"
-                    aria-label={localize(`${expanded ? '收起' : '展开'} ${project.name} 的工时记录`)}
+                    aria-label={localizeMessage("{0} {1} 的工时记录", [localize(expanded ? '收起' : '展开'), localize(project.name)])}
                     aria-expanded={expanded}
                     aria-controls={recordsId}
                     onClick={() =>
@@ -124,7 +124,7 @@ export function EngineerWorklogs({ rows, customers, onOpen }: Props) {
                               <time>{localize(log.date)}</time>
                               <small>
                                 {localize(log.startTime && log.endTime
-                                  ? `${log.startTime}–${log.endTime}`
+                                  ? localizeMessage("{0}–{1}", [String(localize(log.startTime)), String(localize(log.endTime))])
                                   : '未记录时段')}
                               </small>
                             </td>

@@ -53,7 +53,7 @@ export function RequestFlowSettings({
   role: RoutingRole;
   actor: OperationActor;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [data, setData] = useState<Data>({
     config: emptyRoutingConfig(),
     workspace: { users: [], customers: [], services: [] },
@@ -465,7 +465,7 @@ export function RequestFlowSettings({
                   : sample.operations?.assessment?.hardware?.reviewer ||
                     '未记录分配')}
               {localize(current &&
-                ` · 分配于 ${new Date(current.at).toLocaleString('zh-CN', { hour12: false })}`)}
+                localizeMessage(" · 分配于 {0}", [String(localize(new Date(current.at).toLocaleString('zh-CN', { hour12: false })))]))}
             </p>
             {localize(!!sample.operations?.assessment?.routing?.history?.filter(
               (h) => h.role === role,

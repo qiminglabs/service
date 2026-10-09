@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import { canManageProjectAsManager, isPartnerProjectCreator, projectCustomerConfirmationLocked } from './service-project-work-order-policy.ts';
 import { fixedIdentityRoles } from './internal-users.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
@@ -58,5 +59,5 @@ export function cancelServiceProject(project: ServiceProjectRecord, actor: Opera
   next = { ...next, status: '已取消', revision: project.revision + 1, updatedAt: at,
     cancellation: { at, actorId: actor.id, actor: actor.name, reason: reason.trim(), fromStatus: project.status === '已暂停' ? project.suspension?.fromStatus ?? '进行中' : project.status } };
   delete next.suspension;
-  return { project: appendProjectActivity(next, actor, '项目', '取消服务项目', reason.trim(), at), source: releasedSource };
+  return { project: appendProjectActivity(next, actor, '项目', activityMessage("取消服务项目"), reason.trim(), at), source: releasedSource };
 }

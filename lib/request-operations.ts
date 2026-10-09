@@ -1,3 +1,4 @@
+import { activityFields, activityMessage, activityList, type ActivityEvent, type ActivityText } from './activity-events.ts';
 import { isDemoAdministrator, canActForUser } from './demo-permissions.ts';
 import type { Assessment } from './request-assessment';
 import { isDayQuantity } from './day-quantity.ts';
@@ -38,6 +39,7 @@ export type RequestActivity = {
   category: '受理' | '协作' | '会议' | '工时' | '评估' | '审批' | '服务依据' | '提交';
   title: string;
   detail: string;
+  event?: ActivityEvent;
 };
 export type RequestMeeting = {
   id: string;
@@ -196,8 +198,8 @@ export function appendActivity(
   record: ServiceRequest,
   actor: OperationActor,
   category: RequestActivity['category'],
-  title: string,
-  detail = '',
+  title: ActivityText,
+  detail: ActivityText = '',
   now = new Date().toISOString(),
 ): ServiceRequest {
   const ops = operationsOf(record);
@@ -213,8 +215,7 @@ export function appendActivity(
           actor: actor.name,
           actorId: actor.id,
           category,
-          title,
-          detail,
+          ...activityFields('request', title, detail),
         },
       ],
     },
@@ -346,8 +347,8 @@ export function applyRequestAction(
   const ops = structuredClone(operationsOf(record));
   let status = record.status;
   let category: RequestActivity['category'] = '审批';
-  let title = '';
-  let detail = '';
+  let title: ActivityText = '';
+  let detail: ActivityText = '';
   const requireText = (s: string, label: string) => {
     if (!s.trim()) throw new Error(`请填写${label}。`);
   };
@@ -399,8 +400,8 @@ export function applyRequestAction(
         durationMinutes: action.durationMinutes,
       });
       category = '会议';
-      title = '预约模拟会议';
-      detail = `${action.title.trim()} · ${date} ${time} · ${action.durationMinutes} 分钟`;
+      title = activityMessage("预约模拟会议");
+      detail = activityMessage("{0} · {1} {2} · {3} 分钟", [action.title.trim(), date, time, action.durationMinutes]);
       break;
     }
     case 'meeting-notify': {
@@ -421,15 +422,7 @@ export function applyRequestAction(
         if (!person) throw new Error('外部协作人已变更，请重新选择通知对象。');
         return person.name;
       });
-      return appendActivity(record, actor, '会议', '发送会议通知', [
-        meeting.title,
-        meeting.scheduledDate
-          ? `${meeting.scheduledDate} ${meeting.scheduledTime} · ${meeting.durationMinutes} 分钟`
-          : '',
-        internalNames.length ? `内部协作人：${internalNames.join('、')}` : '',
-        externalNames.length ? `外部协作人：${externalNames.join('、')}` : '',
-        '本地模拟，未实际发送',
-      ].filter(Boolean).join(' · '), now);
+      return appendActivity(record, actor, '会议', activityMessage("发送会议通知"), activityList([meeting.title, (meeting.scheduledDate ? activityMessage("{0} {1} · {2} 分钟", [meeting.scheduledDate, meeting.scheduledTime, meeting.durationMinutes]) : ''), (internalNames.length ? activityMessage("内部协作人：{0}", [activityList(internalNames, '、')]) : ''), (externalNames.length ? activityMessage("外部协作人：{0}", [activityList(externalNames, '、')]) : ''), activityMessage("本地模拟，未实际发送")].filter(Boolean), ' · '), now);
     }
     case 'meeting-start': {
       const meeting = ops.meetings.find((m) => m.id === action.id);
@@ -453,7 +446,7 @@ export function applyRequestAction(
         ];
       }
       category = '会议';
-      title = '开始模拟会议';
+      title = activityMessage("开始模拟会议");
       detail = meeting.title;
       break;
     }
@@ -471,7 +464,7 @@ export function applyRequestAction(
         mode: 'local-demo',
       });
       category = '会议';
-      title = '发起模拟会议';
+      title = activityMessage("发起模拟会议");
       detail = action.title;
       break;
     }
@@ -484,7 +477,7 @@ export function applyRequestAction(
       meeting.status = '已结束';
       meeting.endedAt = now;
       category = '会议';
-      title = '结束模拟会议';
+      title = activityMessage("结束模拟会议");
       detail = meeting.title;
       break;
     }
@@ -503,8 +496,8 @@ export function applyRequestAction(
       }
       meeting.attachments = [...(meeting.attachments ?? []), ...action.files];
       category = '会议';
-      title = '上传会议附件';
-      detail = `${meeting.title} · ${action.files.map((file) => file.name).join('、')}`;
+      title = activityMessage("上传会议附件");
+      detail = activityMessage("{0} · {1}", [meeting.title, activityList(action.files.map((file) => file.name), '、')]);
       break;
     }
     case 'meeting-attachment-delete': {
@@ -521,8 +514,8 @@ export function applyRequestAction(
       );
       if (meeting.recording?.id === action.fileId) delete meeting.recording;
       category = '会议';
-      title = '删除会议附件';
-      detail = `${meeting.title} · ${file.name}`;
+      title = activityMessage("删除会议附件");
+      detail = activityMessage("{0} · {1}", [meeting.title, file.name]);
       break;
     }
     case 'meeting-materials': {
@@ -545,7 +538,7 @@ export function applyRequestAction(
         throw new Error('请上传录制或填写转写正文。');
       meeting.transcript = action.transcript.trim();
       category = '会议';
-      title = '归档会议资料';
+      title = activityMessage("归档会议资料");
       detail = meeting.title;
       break;
     }
@@ -603,8 +596,8 @@ export function applyRequestAction(
       if (existing) Object.assign(existing, updatedLog);
       else ops.worklogs.unshift(updatedLog);
       category = '工时';
-      title = existing ? '编辑内部工时' : '录入内部工时';
-      detail = `${action.date} ${action.startTime}–${action.endTime} · ${formatWorklogHours(hours)} 小时 · ${action.description.trim()}`;
+      title = (existing ? activityMessage("编辑内部工时") : activityMessage("录入内部工时"));
+      detail = activityMessage("{0} {1}–{2} · {3} 小时 · {4}", [action.date, action.startTime, action.endTime, formatWorklogHours(hours), action.description.trim()]);
       break;
     }
     case 'worklog-void': {
@@ -615,8 +608,8 @@ export function applyRequestAction(
       log.voidedAt = now;
       log.voidReason = action.reason.trim();
       category = '工时';
-      title = '作废内部工时';
-      detail = `${log.date} · ${log.hours} 小时 · ${log.voidReason}`;
+      title = activityMessage("作废内部工时");
+      detail = activityMessage("{0} · {1} 小时 · {2}", [log.date, log.hours, log.voidReason]);
       break;
     }
     case 'basis-add': {
@@ -674,8 +667,8 @@ export function applyRequestAction(
         approverName: action.approverName,
       });
       category = '服务依据';
-      title = action.kind === 'asset' ? '关联客户资产' : '提交额度特批';
-      detail = `${action.kind === 'asset' ? asset!.name : '特批'} · ${action.quantity} 人天 · ${action.reason}`;
+      title = (action.kind === 'asset' ? activityMessage("关联客户资产") : activityMessage("提交额度特批"));
+      detail = activityMessage("{0} · {1} 人天 · {2}", [(action.kind === 'asset' ? asset!.name : activityMessage("特批")), action.quantity, action.reason]);
       break;
     }
     case 'basis-decide': {
@@ -700,7 +693,7 @@ export function applyRequestAction(
       basis.decidedAt = now;
       basis.decidedBy = actor.name;
       basis.decisionNote = action.note.trim();
-      title = `${basis.kind === 'asset' ? '资产核对' : '特批审批'}${action.approve ? '通过' : '拒绝'}`;
+      title = activityMessage("{0}{1}", [(basis.kind === 'asset' ? activityMessage("资产核对") : activityMessage("特批审批")), (action.approve ? activityMessage("通过") : activityMessage("拒绝"))]);
       detail = action.note;
       break;
     }
@@ -722,8 +715,8 @@ export function applyRequestAction(
       basis.decidedAt = now;
       basis.decidedBy = actor.name;
       category = '服务依据';
-      title = '移除服务依据';
-      detail = `${basis.name} · ${action.reason}`;
+      title = activityMessage("移除服务依据");
+      detail = activityMessage("{0} · {1}", [basis.name, action.reason]);
       break;
     }
     case 'evaluation-save': {
@@ -773,7 +766,7 @@ export function applyRequestAction(
         ? ops.evaluations.map((e) => (e.id === previous.id ? evaluation : e))
         : [evaluation, ...ops.evaluations];
       category = '评估';
-      title = action.submit ? '提交评估审批' : '保存评估草稿';
+      title = (action.submit ? activityMessage("提交评估审批") : activityMessage("保存评估草稿"));
       detail = action.input.opinion;
       break;
     }
@@ -802,8 +795,8 @@ export function applyRequestAction(
       evaluation.decisionNote = action.note.trim();
       evaluation.updatedAt = now;
       status = action.approve ? '待确认' : '待评估';
-      title = action.approve ? '评估审批通过' : '评估审批拒绝';
-      detail = `${action.note} · 请求${action.approve ? '进入待确认' : '保留待评估，可重新评估'}`;
+      title = (action.approve ? activityMessage("评估审批通过") : activityMessage("评估审批拒绝"));
+      detail = activityMessage("{0} · 请求{1}", [action.note, (action.approve ? activityMessage("进入待确认") : activityMessage("保留待评估，可重新评估"))]);
       break;
     }
   }

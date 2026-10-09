@@ -76,7 +76,7 @@ export function ServiceMailTemplateSettings({
 }: {
   actor: OperationActor;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [data, setData] = useState<ServiceMailTemplateData>();
   const [draft, setDraft] = useState<ServiceMailTemplate | null>(null);
   const [previewOnly, setPreviewOnly] = useState(false);
@@ -241,14 +241,14 @@ export function ServiceMailTemplateSettings({
                     <div className="service-mail-actions">
                       <Button
                         variant="ghost"
-                        aria-label={localize(`编辑${mailTemplateNames[template.id]}`)}
+                        aria-label={localizeMessage("编辑{0}", [localize(mailTemplateNames[template.id])])}
                         disabled={!allowed}
                         onClick={() => open(template, false)}
                       >
                         {localize("编辑模板")}</Button>
                       <Button
                         variant="ghost"
-                        aria-label={localize(`预览${mailTemplateNames[template.id]}`)}
+                        aria-label={localizeMessage("预览{0}", [localize(mailTemplateNames[template.id])])}
                         onClick={() => open(template, true)}
                       >
                         {localize("预览")}</Button>

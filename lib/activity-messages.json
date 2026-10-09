@@ -1,0 +1,807 @@
+{
+  "创建项目": {
+    "id": "event-43d7d2b51d75",
+    "en": "Create project",
+    "uiLabel": true
+  },
+  "变更项目状态": {
+    "id": "event-05abf437d99a",
+    "en": "Change project status",
+    "uiLabel": false
+  },
+  "创建示例申请": {
+    "id": "event-69bd3b801259",
+    "en": "Create demo request",
+    "uiLabel": false
+  },
+  "本地初始化的演示数据。": {
+    "id": "event-2f9c938d388b",
+    "en": "Locally initialized demo data.",
+    "uiLabel": false
+  },
+  "提交服务申请": {
+    "id": "event-4451b7ceebca",
+    "en": "Submit service request",
+    "uiLabel": false
+  },
+  "示例材料已准备，等待项目经理评估。": {
+    "id": "event-26d4ae585542",
+    "en": "Demo materials are ready for project manager assessment.",
+    "uiLabel": false
+  },
+  "取消服务请求": {
+    "id": "event-7833dd338e9b",
+    "en": "Cancel service request",
+    "uiLabel": true
+  },
+  "客户调整季度维护计划，本次演示申请取消。": {
+    "id": "event-c675e9439641",
+    "en": "The customer changed the quarterly maintenance plan; this demo request is cancelled.",
+    "uiLabel": false
+  },
+  "硬件产品经理评估 · {0}": {
+    "id": "event-b77d5747ee78",
+    "en": "Hardware product manager assessment · {0}",
+    "uiLabel": false
+  },
+  "材料评估 · {0}": {
+    "id": "event-8779b519ae64",
+    "en": "Material assessment · {0}",
+    "uiLabel": false
+  },
+  "退回草稿": {
+    "id": "event-06c98741c938",
+    "en": "Return to draft",
+    "uiLabel": true
+  },
+  "人天核定": {
+    "id": "effort-verified",
+    "en": "Person-day verification",
+    "uiLabel": true
+  },
+  "人天核定 · 评估完成": {
+    "id": "event-5cc19cd40207",
+    "en": "Person-days verified · Assessment complete",
+    "uiLabel": false
+  },
+  "差额权益 {0}": {
+    "id": "event-2dd27f3e0c2d",
+    "en": "Entitlement shortfall {0}",
+    "uiLabel": false
+  },
+  "{0}：{1} × {2} = {3}": {
+    "id": "event-8fe7e3a417bc",
+    "en": "{0}: {1} × {2} = {3}",
+    "uiLabel": false
+  },
+  " · {0}": {
+    "id": "event-57ffeb908dd9",
+    "en": " · {0}",
+    "uiLabel": true
+  },
+  "预估 {0} 人天 · 计价 {1} 人天 · {2}{3}": {
+    "id": "event-8c6eea0fbc7e",
+    "en": "Estimated {0} person-days · Billable {1} person-days · {2}{3}",
+    "uiLabel": false
+  },
+  "调整服务依据": {
+    "id": "event-213c0254a5d2",
+    "en": "Adjust service coverage",
+    "uiLabel": false
+  },
+  "服务依据关联": {
+    "id": "event-8018ade51230",
+    "en": "Link Service Coverage",
+    "uiLabel": true
+  },
+  "计价总人天 {0} · 关联 {1} 人天": {
+    "id": "event-f8b1a050feda",
+    "en": "Total billable {0} person-days · Linked {1} person-days",
+    "uiLabel": false
+  },
+  "发起特殊审批": {
+    "id": "exception-approval-requested",
+    "en": "Request exception approval",
+    "uiLabel": false
+  },
+  "发起额度特批": {
+    "id": "event-7bf1f34a0fd8",
+    "en": "Request allowance exception",
+    "uiLabel": false
+  },
+  " · {0} · {1}": {
+    "id": "event-c7f971a26363",
+    "en": " · {0} · {1}",
+    "uiLabel": true
+  },
+  "申请额度 {0} · {1}{2}": {
+    "id": "event-a523dbaf99d8",
+    "en": "Requested allowance {0} · {1}{2}",
+    "uiLabel": false
+  },
+  "特殊审批全部通过": {
+    "id": "exception-approval-completed",
+    "en": "All exception approvals passed",
+    "uiLabel": false
+  },
+  "特殊审批环节通过": {
+    "id": "exception-approval-stage-approved",
+    "en": "Exception approval stage passed",
+    "uiLabel": false
+  },
+  "特殊审批驳回，退回申请人": {
+    "id": "event-9adc9e8bb374",
+    "en": "Exception rejected and returned to requester",
+    "uiLabel": false
+  },
+  "通过": {
+    "id": "event-1e9f2561b7cf",
+    "en": "Approve",
+    "uiLabel": true
+  },
+  "拒绝": {
+    "id": "event-136de7a8c46f",
+    "en": "Reject",
+    "uiLabel": true
+  },
+  "额度特批{0}": {
+    "id": "event-08ab59ac320e",
+    "en": "Allowance exception {0}",
+    "uiLabel": false
+  },
+  "发起客户确认": {
+    "id": "customer-confirmation-requested",
+    "en": "Request customer confirmation",
+    "uiLabel": true
+  },
+  "{0} · 计价总人天 {1} · 客户资产 {2} · 特批 {3}": {
+    "id": "event-e180e44ce305",
+    "en": "{0} · Total billable person-days {1} · Customer assets {2} · Exception allowance {3}",
+    "uiLabel": false
+  },
+  "预约模拟会议": {
+    "id": "event-9b488b2c23dd",
+    "en": "Schedule demo meeting",
+    "uiLabel": false
+  },
+  "{0} · {1} {2} · {3} 分钟": {
+    "id": "event-d391ed0b76b9",
+    "en": "{0} · {1} {2} · {3} minutes",
+    "uiLabel": false
+  },
+  "发送会议通知": {
+    "id": "event-b1a5bf8330c1",
+    "en": "Send meeting notification",
+    "uiLabel": false
+  },
+  "{0} {1} · {2} 分钟": {
+    "id": "event-37b8f1505e6e",
+    "en": "{0} {1} · {2} minutes",
+    "uiLabel": true
+  },
+  "内部协作人：{0}": {
+    "id": "event-06e8728f19a6",
+    "en": "Internal collaborators: {0}",
+    "uiLabel": false
+  },
+  "外部协作人：{0}": {
+    "id": "event-7be11ecc3843",
+    "en": "External collaborators: {0}",
+    "uiLabel": false
+  },
+  "本地模拟，未实际发送": {
+    "id": "event-af1d49b84910",
+    "en": "Local demo; not actually sent",
+    "uiLabel": false
+  },
+  "开始模拟会议": {
+    "id": "event-5103d0b301e3",
+    "en": "Start demo meeting",
+    "uiLabel": true
+  },
+  "发起模拟会议": {
+    "id": "event-e728219e4f54",
+    "en": "Start demo meeting",
+    "uiLabel": false
+  },
+  "结束模拟会议": {
+    "id": "event-77c28f8071e9",
+    "en": "End demo meeting",
+    "uiLabel": true
+  },
+  "上传会议附件": {
+    "id": "event-cb34bfb45c73",
+    "en": "Upload meeting attachments",
+    "uiLabel": true
+  },
+  "{0} · {1}": {
+    "id": "event-cd55a9d95751",
+    "en": "{0} · {1}",
+    "uiLabel": true
+  },
+  "删除会议附件": {
+    "id": "event-914d73492809",
+    "en": "Delete meeting attachment",
+    "uiLabel": false
+  },
+  "归档会议资料": {
+    "id": "event-a95569d728fb",
+    "en": "Archive meeting materials",
+    "uiLabel": false
+  },
+  "编辑内部工时": {
+    "id": "event-3422618a58c8",
+    "en": "Edit internal time entry",
+    "uiLabel": true
+  },
+  "录入内部工时": {
+    "id": "event-99d7b727266a",
+    "en": "Add internal time entry",
+    "uiLabel": true
+  },
+  "{0} {1}–{2} · {3} 小时 · {4}": {
+    "id": "event-b55590208fef",
+    "en": "{0} {1}–{2} · {3} hours · {4}",
+    "uiLabel": false
+  },
+  "作废内部工时": {
+    "id": "event-67b224a39727",
+    "en": "Void internal time entry",
+    "uiLabel": false
+  },
+  "{0} · {1} 小时 · {2}": {
+    "id": "event-85a1b459deeb",
+    "en": "{0} · {1} hours · {2}",
+    "uiLabel": false
+  },
+  "关联客户资产": {
+    "id": "event-d25097d91ad0",
+    "en": "Link customer assets",
+    "uiLabel": false
+  },
+  "提交额度特批": {
+    "id": "event-911898f4aab6",
+    "en": "Submit allowance exception",
+    "uiLabel": false
+  },
+  "特批": {
+    "id": "event-0b80a8b36501",
+    "en": "Exception approval",
+    "uiLabel": false
+  },
+  "{0} · {1} 人天 · {2}": {
+    "id": "event-00aa09ac0f39",
+    "en": "{0} · {1} person-days · {2}",
+    "uiLabel": false
+  },
+  "资产核对": {
+    "id": "event-8bdddff27de3",
+    "en": "Asset verification",
+    "uiLabel": false
+  },
+  "特批审批": {
+    "id": "event-b11c32c0a980",
+    "en": "Exception approval",
+    "uiLabel": false
+  },
+  "{0}{1}": {
+    "id": "event-8391da809dd9",
+    "en": "{0}{1}",
+    "uiLabel": false
+  },
+  "移除服务依据": {
+    "id": "event-c460de3b064b",
+    "en": "Remove service coverage",
+    "uiLabel": false
+  },
+  "提交评估审批": {
+    "id": "event-1e647cee4269",
+    "en": "Submit assessment for approval",
+    "uiLabel": false
+  },
+  "保存评估草稿": {
+    "id": "event-f62285768587",
+    "en": "Save assessment draft",
+    "uiLabel": false
+  },
+  "评估审批通过": {
+    "id": "event-53aee0d3f9cc",
+    "en": "Assessment approved",
+    "uiLabel": false
+  },
+  "评估审批拒绝": {
+    "id": "event-4afac42d60ea",
+    "en": "Assessment rejected",
+    "uiLabel": false
+  },
+  "进入待确认": {
+    "id": "event-1cc3cd7a8d1b",
+    "en": "Moved to pending confirmation",
+    "uiLabel": false
+  },
+  "保留待评估，可重新评估": {
+    "id": "event-16862a3b1dc3",
+    "en": "Remains pending assessment; reassessment is allowed",
+    "uiLabel": false
+  },
+  "{0} · 请求{1}": {
+    "id": "event-037dbc623865",
+    "en": "{0} · Request {1}",
+    "uiLabel": false
+  },
+  "转为服务交付": {
+    "id": "event-b825586d1eba",
+    "en": "Convert to service delivery",
+    "uiLabel": true
+  },
+  "调整工单排期": {
+    "id": "event-d64001c8e58c",
+    "en": "Adjust work order schedule",
+    "uiLabel": false
+  },
+  "取消工单排期": {
+    "id": "event-d4efc3d4403d",
+    "en": "Clear work order schedule",
+    "uiLabel": false
+  },
+  "{0} 至 {1}": {
+    "id": "event-d884d6afdd4f",
+    "en": "{0} to {1}",
+    "uiLabel": true
+  },
+  "清空计划执行和完成日期": {
+    "id": "event-23abb7b84a6b",
+    "en": "Clear planned start and completion dates",
+    "uiLabel": false
+  },
+  "{0}：{1}": {
+    "id": "event-838f6df66524",
+    "en": "{0}: {1}",
+    "uiLabel": true
+  },
+  "取消服务项目": {
+    "id": "event-a995a4c729f3",
+    "en": "Cancel service project",
+    "uiLabel": true
+  },
+  "发送项目报告（本地）": {
+    "id": "event-18c5e4860b4e",
+    "en": "Send project report (local)",
+    "uiLabel": false
+  },
+  "发送服务日报（本地）": {
+    "id": "event-dcd48274c107",
+    "en": "Send service report (local)",
+    "uiLabel": false
+  },
+  "合作伙伴协作人：{0}": {
+    "id": "event-f311bb886bd0",
+    "en": "Partner collaborators: {0}",
+    "uiLabel": false
+  },
+  "确认工时": {
+    "id": "event-618e3c72dc07",
+    "en": "Confirm time entry",
+    "uiLabel": true
+  },
+  "{0} · {1} · {2} 小时": {
+    "id": "event-d3106c466c07",
+    "en": "{0} · {1} · {2} hours",
+    "uiLabel": false
+  },
+  "编辑工时": {
+    "id": "event-7e09fbf378d0",
+    "en": "Edit time entry",
+    "uiLabel": true
+  },
+  "录入工时": {
+    "id": "event-61ea86b3a89f",
+    "en": "Add time entry",
+    "uiLabel": true
+  },
+  "{0} · {1} · {2} {3}–{4} · {5} 小时 · {6}": {
+    "id": "event-e10dfb4617f1",
+    "en": "{0} · {1} · {2} {3}–{4} · {5} hours · {6}",
+    "uiLabel": false
+  },
+  "作废工时": {
+    "id": "event-b4d8f4a3c9a0",
+    "en": "Void time entry",
+    "uiLabel": true
+  },
+  "核定项目人天": {
+    "id": "event-3fc1cd4d5626",
+    "en": "Verify project person-days",
+    "uiLabel": false
+  },
+  "关联项目服务依据": {
+    "id": "event-067f2ccc871e",
+    "en": "Link project service coverage",
+    "uiLabel": false
+  },
+  "发起项目额度特批": {
+    "id": "event-873afd33facf",
+    "en": "Request project allowance exception",
+    "uiLabel": false
+  },
+  "项目额度审批通过": {
+    "id": "event-3ab1b38c3dbe",
+    "en": "Project allowance approved",
+    "uiLabel": false
+  },
+  "项目额度审批拒绝": {
+    "id": "event-f0bb713aed5a",
+    "en": "Project allowance rejected",
+    "uiLabel": false
+  },
+  "沿用客户确认": {
+    "id": "event-5b3db1cda0b7",
+    "en": "Carry forward customer confirmation",
+    "uiLabel": true
+  },
+  "发起项目客户确认": {
+    "id": "event-bb3e28d388fa",
+    "en": "Request project customer confirmation",
+    "uiLabel": false
+  },
+  "客户确认通过，自动完成项目并核销服务资产": {
+    "id": "event-e93ec5e5af3a",
+    "en": "Customer confirmed; project completed and service assets settled automatically",
+    "uiLabel": false
+  },
+  "客户拒绝项目确认": {
+    "id": "event-7901db4fca89",
+    "en": "Customer rejected project confirmation",
+    "uiLabel": false
+  },
+  "发送项目报告并发起确认（本地）": {
+    "id": "event-646b370a965f",
+    "en": "Send project report and request confirmation (local)",
+    "uiLabel": false
+  },
+  "客户确认通过，自动完成项目": {
+    "id": "event-a8abde8f2b4f",
+    "en": "Customer confirmed; project completed automatically",
+    "uiLabel": false
+  },
+  "复制服务项": {
+    "id": "event-4fe1967c477e",
+    "en": "Copy service item",
+    "uiLabel": false
+  },
+  "移除服务项": {
+    "id": "event-6db7683930db",
+    "en": "Remove service item",
+    "uiLabel": false
+  },
+  "保存项目材料": {
+    "id": "event-e059c9989cd6",
+    "en": "Save project materials",
+    "uiLabel": false
+  },
+  "保存服务项": {
+    "id": "event-9dacdb601ef9",
+    "en": "Save service item",
+    "uiLabel": true
+  },
+  "发布补充信息": {
+    "id": "event-0a0fb655014f",
+    "en": "Publish supplementary information",
+    "uiLabel": false
+  },
+  "更新项目信息": {
+    "id": "event-dbe72f2aa31f",
+    "en": "Update project information",
+    "uiLabel": false
+  },
+  "{0} → {1}": {
+    "id": "event-f902df3c3516",
+    "en": "{0} → {1}",
+    "uiLabel": false
+  },
+  "保存项目基本信息": {
+    "id": "event-891ed810ca77",
+    "en": "Save project basic information",
+    "uiLabel": false
+  },
+  "更新协作人": {
+    "id": "event-8619a5455d6b",
+    "en": "Update collaborators",
+    "uiLabel": false
+  },
+  "客户": {
+    "id": "event-ad4af312dbc2",
+    "en": "Customer",
+    "uiLabel": true
+  },
+  "内部": {
+    "id": "event-6f225eb36d6d",
+    "en": "Internal",
+    "uiLabel": false
+  },
+  "合作伙伴": {
+    "id": "event-b1a62b91bf0f",
+    "en": "Partners",
+    "uiLabel": true
+  },
+  "{0}协作人": {
+    "id": "event-f76cd46d87a7",
+    "en": "{0} collaborators",
+    "uiLabel": false
+  },
+  "暂停项目": {
+    "id": "event-03fc7b211376",
+    "en": "Pause project",
+    "uiLabel": true
+  },
+  "恢复项目": {
+    "id": "event-52a1d56be51d",
+    "en": "Resume project",
+    "uiLabel": true
+  },
+  "；{0}": {
+    "id": "event-8ce2996935f2",
+    "en": "；{0}",
+    "uiLabel": false
+  },
+  "{0} → {1}{2}": {
+    "id": "event-814b2d79c422",
+    "en": "{0} → {1}{2}",
+    "uiLabel": false
+  },
+  "启动项目并生成工单": {
+    "id": "event-28279cde2d05",
+    "en": "Start project and generate work orders",
+    "uiLabel": true
+  },
+  "已锁定 {0} 个服务项并生成工单": {
+    "id": "event-b6e0cf95d98c",
+    "en": "Locked {0} service items and generated work orders",
+    "uiLabel": false
+  },
+  "完成工单步骤": {
+    "id": "event-618bf4e8f4f2",
+    "en": "Complete work order step",
+    "uiLabel": false
+  },
+  "跳过工单步骤": {
+    "id": "event-8e231862a553",
+    "en": "Skip work order step",
+    "uiLabel": false
+  },
+  "修改已完成工单步骤": {
+    "id": "event-78973857bfea",
+    "en": "Edit completed work order step",
+    "uiLabel": false
+  },
+  "保存工单步骤": {
+    "id": "event-ef9633ace24a",
+    "en": "Save work order step",
+    "uiLabel": false
+  },
+  "创建工单": {
+    "id": "event-7f49b9561401",
+    "en": "Create work order",
+    "uiLabel": true
+  },
+  "暂停工单": {
+    "id": "event-732946a061cb",
+    "en": "Pause work order",
+    "uiLabel": false
+  },
+  "恢复工单": {
+    "id": "event-404a92d0288d",
+    "en": "Resume work order",
+    "uiLabel": false
+  },
+  "{0} · {1}；{2} → {3}": {
+    "id": "event-9b89ce2fde10",
+    "en": "{0} · {1}；{2} → {3}",
+    "uiLabel": false
+  },
+  "取消工单": {
+    "id": "event-4cb953b2fc18",
+    "en": "Cancel work order",
+    "uiLabel": true
+  },
+  "{0} · {1}；{2}": {
+    "id": "event-652bd0062149",
+    "en": "{0} · {1}；{2}",
+    "uiLabel": false
+  },
+  "提交复核": {
+    "id": "event-7a218e5c3d1b",
+    "en": "Submit for review",
+    "uiLabel": true
+  },
+  "进行中 → 待复核": {
+    "id": "event-b119ea0858f4",
+    "en": "In progress → Pending review",
+    "uiLabel": false
+  },
+  "退回执行": {
+    "id": "event-b5625922df0e",
+    "en": "Return to execution",
+    "uiLabel": true
+  },
+  "待复核 → 进行中；{0}": {
+    "id": "event-b01d1c8d138b",
+    "en": "Pending review → In progress; {0}",
+    "uiLabel": false
+  },
+  "批量指派工单": {
+    "id": "event-db297bf3a008",
+    "en": "Bulk assign work orders",
+    "uiLabel": true
+  },
+  "改派工单": {
+    "id": "event-a224cbefa59a",
+    "en": "Reassign work order",
+    "uiLabel": true
+  },
+  "指派工单": {
+    "id": "event-7ef460b94d9f",
+    "en": "Assign work order",
+    "uiLabel": true
+  },
+  "{0} · {1}：{2} → {3}": {
+    "id": "event-c92655e525b5",
+    "en": "{0} · {1}：{2} → {3}",
+    "uiLabel": false
+  },
+  "编辑工单基本信息": {
+    "id": "event-a53ad3e2bfd7",
+    "en": "Edit work order basic information",
+    "uiLabel": false
+  },
+  "{0}；{1}": {
+    "id": "event-d86d337cb995",
+    "en": "{0}；{1}",
+    "uiLabel": false
+  },
+  "{0} · {1}{2}{3}": {
+    "id": "event-0933392b4c3b",
+    "en": "{0} · {1}{2}{3}",
+    "uiLabel": false
+  },
+  "审批通过": {
+    "id": "event-642cfa74e9d8",
+    "en": " approved",
+    "uiLabel": false
+  },
+  "驳回，退回申请人": {
+    "id": "event-90c36bf2e20c",
+    "en": " rejected; returned to the requester",
+    "uiLabel": false
+  },
+  "；下一审批人：{0}": {
+    "id": "event-2e162f75f6d6",
+    "en": "; Next approver: {0}",
+    "uiLabel": false
+  },
+  "{0} {1} 人天": {
+    "id": "event-544742490d1a",
+    "en": "{0} {1} person-days",
+    "uiLabel": true
+  },
+  "{0} 人天": {
+    "id": "event-9add045a6ec1",
+    "en": "{0} person-days",
+    "uiLabel": true
+  },
+  "客户确认通过": {
+    "id": "event-97c9199390a2",
+    "en": "Customer confirmation accepted",
+    "uiLabel": false
+  },
+  "客户拒绝确认": {
+    "id": "event-b4afadef5b0b",
+    "en": "Customer rejected confirmation",
+    "uiLabel": false
+  },
+  "请求进入待受理。": {
+    "id": "event-23e7102e4049",
+    "en": "The request is pending acceptance.",
+    "uiLabel": false
+  },
+  "{0} · 请求退回客户确认步骤，服务依据、资产冻结及审批结果保留。": {
+    "id": "event-5c06133048d3",
+    "en": "{0} · Request returned to customer confirmation. Coverage, reservations, and approvals are retained.",
+    "uiLabel": false
+  },
+  "由服务请求创建项目": {
+    "id": "project-created-from-request",
+    "en": "Create project from service request",
+    "uiLabel": false
+  },
+  "来源请求：{0} · {1}": {
+    "id": "event-0d0dd67ee1f2",
+    "en": "Source request: {0} · {1}",
+    "uiLabel": false
+  },
+  "创建服务项目": {
+    "id": "projects-created",
+    "en": "Create service project",
+    "uiLabel": true
+  },
+  "创建 {0} 个项目、{1} 个工单。\n{2}": {
+    "id": "event-0de8a7247013",
+    "en": "Created {0} projects and {1} work orders.\n{2}",
+    "uiLabel": false
+  },
+  "技术评估 → 服务交付；沿用评估结论和核定人天，进入服务依据关联。": {
+    "id": "event-2bf52944c16d",
+    "en": "Technical assessment → Service delivery; retain assessment results and verified person-days, and proceed to linking service coverage.",
+    "uiLabel": false
+  },
+  "创建 {0} 个项目、{1} 个工单。": {
+    "id": "event-9d04e94b7428",
+    "en": "Created {0} projects and {1} work orders.",
+    "uiLabel": false
+  },
+  "计价总人天 {0} · 客户资产 {1} · 特批 {2}": {
+    "id": "event-707b1b52731f",
+    "en": "Total billable person-days {0} · Customer assets {1} · Exception allowance {2}",
+    "uiLabel": false
+  },
+  "{0} · {1}审批通过": {
+    "id": "event-0e4e8caa2947",
+    "en": "{0} · Approved by {1}",
+    "uiLabel": false
+  },
+  "{0} · {1}驳回，退回申请人": {
+    "id": "event-5caf0ffa9ac7",
+    "en": "{0} · Rejected by {1}; returned to the requester",
+    "uiLabel": false
+  },
+  "{0}；下一审批人：{1}": {
+    "id": "event-cbb5e49627b3",
+    "en": "{0}; Next approver: {1}",
+    "uiLabel": false
+  },
+  "申请额度 {0}": {
+    "id": "event-73de37af9c6f",
+    "en": "Requested allowance {0}",
+    "uiLabel": false
+  },
+  "{0} · {1} · {2} · {3}": {
+    "id": "event-540be8e5815c",
+    "en": "{0} · {1} · {2} · {3}",
+    "uiLabel": false
+  },
+  "预估 {0} 人天 · 计价 {1} 人天 · {2}": {
+    "id": "event-b7d689fb232e",
+    "en": "Estimated {0} person-days · Billable {1} person-days · {2}",
+    "uiLabel": false
+  },
+  "{0}：{1} → {2}": {
+    "id": "event-af466eed48ed",
+    "en": "{0}：{1} → {2}",
+    "uiLabel": false
+  },
+  "未填写": {
+    "id": "event-7f05190592e5",
+    "en": "Not provided",
+    "uiLabel": true
+  },
+  "服务方式：{0} → {1}": {
+    "id": "event-56cac4a2cb05",
+    "en": "Delivery method: {0} → {1}",
+    "uiLabel": false
+  },
+  "服务说明已更新": {
+    "id": "event-04764f700614",
+    "en": "Service description updated",
+    "uiLabel": false
+  },
+  "现场联系人关联已更新": {
+    "id": "event-60f3fc6bb4c2",
+    "en": "Onsite contact updated",
+    "uiLabel": false
+  },
+  "未指派": {
+    "id": "event-350c68309b7b",
+    "en": "Unassigned",
+    "uiLabel": true
+  }
+}

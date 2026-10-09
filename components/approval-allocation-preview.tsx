@@ -10,7 +10,7 @@ import { resolveApprovalPreview } from '@/lib/approval-preview';
 
 type Data = Awaited<ReturnType<typeof readApprovalPreviewData>>;
 export function ApprovalAllocationPreview({ refreshKey, dirty = false, scope = 'request' }: { refreshKey: string | number; dirty?: boolean; scope?: ApprovalScope }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [data, setData] = useState<Data>();
   const [sampleId, setSampleId] = useState('');
   const [loading, setLoading] = useState(true), [error, setError] = useState('');
@@ -38,7 +38,7 @@ export function ApprovalAllocationPreview({ refreshKey, dirty = false, scope = '
   return <section className="routing-preview approval-allocation-preview" aria-label={localize("分配预览")}>
     <strong>{localize("分配预览")}</strong>
     <NativeSelect aria-label={localize(scope === 'project' ? '预览服务项目' : '预览服务请求')} value={sample ? sampleId : ''} onChange={event => setSampleId(event.target.value)} disabled={loading || !!error || !samples.length}>
-      <option value="">{localize(loading ? '正在读取…' : error ? '读取失败' : samples.length ? `选择服务${scope === 'project' ? '项目' : '请求'}` : `暂无涉及特殊审批的${scope === 'project' ? '项目' : '请求'}`)}</option>
+      <option value="">{localize(loading ? '正在读取…' : error ? '读取失败' : samples.length ? localizeMessage("选择服务{0}", [String(localize(scope === 'project' ? '项目' : '请求'))]) : localizeMessage("暂无涉及特殊审批的{0}", [String(localize(scope === 'project' ? '项目' : '请求'))]))}</option>
       {localize(samples.map(request => <option key={request.id} value={request.id}>{localize(request.id)} · {localize(data?.dictionary.customers.find(customer => customer.id === request.customerId)?.name ?? request.customerId)} · {localize(scope === 'project' ? request.title : request.status)}</option>))}
     </NativeSelect>
     {localize(dirty && <p className="sr-help approval-preview-note">{localize("默认审批人有未保存的修改，预览仍使用已保存配置。")}</p>)}

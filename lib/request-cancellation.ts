@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import type { InternalUser, ServiceRequest } from './service-requests';
 import { canPerformAssessmentRole } from './assessment-routing.ts';
@@ -22,7 +23,7 @@ export function cancelRequest(record: ServiceRequest, actor: OperationActor, use
   next.operations?.assessment?.approvals.forEach(approval => {
     if (['待审批', '已通过'].includes(approval.state)) approval.state = '已失效';
   });
-  return appendActivity(next, actor, '提交', '取消服务请求', reason.trim(), now);
+  return appendActivity(next, actor, '提交', activityMessage("取消服务请求"), reason.trim(), now);
 }
 
 // Check the cancellation against the current stored state, including actor and history.

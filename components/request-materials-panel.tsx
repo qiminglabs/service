@@ -24,7 +24,7 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
   audience?: RequestAudience;
   onMaterial: (target: { itemId: string; requirementId: string }) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
   const [focusedItem, setFocusedItem] = useState<string | null>(null);
   const highlightedItem = hoveredItem ?? focusedItem;
@@ -61,8 +61,8 @@ export function RequestMaterialsPanel({ record, actor, readonly, busy, onMateria
               onMouseEnter={() => setHoveredItem(entry.item.id)} onMouseLeave={() => setHoveredItem(null)}
               onFocus={() => setFocusedItem(entry.item.id)} onBlur={() => setFocusedItem(null)}
               onClick={() => document.getElementById(`sr-service-${record.id}-${entry.item.id}`)?.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })}
-              title={localize(`查看关联服务项：${entry.item.serviceName}`)}
-              aria-label={localize(`定位服务项 ${entry.index + 1} ${entry.item.serviceName}`)}>
+              title={localizeMessage("查看关联服务项：{0}", [localize(entry.item.serviceName)])}
+              aria-label={localizeMessage("定位服务项 {0} {1}", [localize(entry.index + 1), localize(entry.item.serviceName)])}>
               <span className="sr-material-relation-number">{localize(String(entry.index + 1).padStart(2, '0'))}</span><span>{localize(entry.item.serviceName)}</span>
             </button>))}</div>
             {localize(files.length > 0 && <ul className="sr-material-file-summary">{localize(files.map(file => <li key={file.id}>

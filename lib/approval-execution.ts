@@ -1,3 +1,4 @@
+import { activityMessage, activityLabel, renderActivityText, type ActivityText } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import { requestApprovalRemainingDays } from './request-approval-quota.ts';
 import { isDayQuantity, sumDays } from './day-quantity.ts';
@@ -37,7 +38,7 @@ export function createApprovalExecution(record: ServiceRequest, rules: ApprovalR
   return { ruleId: preview.rule?.id, ruleName: preview.rule?.name ?? '默认审批人审批', ruleRevision: preview.rule?.revision, flowRevision: preview.rule?.flow.revision, capturedAt: now, steps };
 }
 
-export function decideApprovalExecution(approval: GapApproval, actor: OperationActor, users: InternalUser[], approve: boolean, note: string, now: string): string {
+export function decideApprovalExecution(approval: GapApproval, actor: OperationActor, users: InternalUser[], approve: boolean, note: string, now: string, capture?: (value: ActivityText) => void): string {
   const steps = approval.workflow!.steps;
   const current = steps.find(step => step.state === '待审批');
   if (!current || (!isDemoAdministrator(actor, users) && (current.approverId !== actor.id || approval.approverId !== actor.id))
@@ -55,7 +56,12 @@ export function decideApprovalExecution(approval: GapApproval, actor: OperationA
     else approval.state = '已通过';
   }
   if (approval.state !== '待审批') { approval.note = note.trim(); approval.decidedAt = now; approval.decidedBy = actor.name; }
-  return `${current.nodeName} · ${current.approver}${approve ? '审批通过' : '驳回，退回申请人'}${approval.state === '待审批' ? `；下一审批人：${approval.approver}` : ''}`;
+  const detail = activityMessage('{0} · {1}{2}{3}', [activityLabel(current.nodeName), current.approver,
+    approve ? activityMessage('审批通过') : activityMessage('驳回，退回申请人'),
+    approval.state === '待审批' ? activityMessage('；下一审批人：{0}', [approval.approver]) : '',
+  ]);
+  capture?.(detail);
+  return renderActivityText(detail, 'zh-CN');
 }
 
 export function specialApprovalSaveIssue(next: ServiceRequest, previous: ServiceRequest | undefined, actor: OperationActor | undefined, users: InternalUser[], customers: RoutingDictionary['customers'], rules: ApprovalRules): string | null {

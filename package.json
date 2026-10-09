@@ -15,7 +15,9 @@
     "format": "oxfmt",
     "index:assistant": "node scripts/build-assistant-index.mjs",
     "predev": "npm run index:assistant",
-    "prebuild": "npm run index:assistant"
+    "prebuild": "npm run check:i18n && npm run check:activities && npm run index:assistant",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:activities": "node scripts/check-activity-events.mjs"
   },
   "dependencies": {
     "react": "19.2.6",

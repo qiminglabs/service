@@ -55,7 +55,7 @@ export function ServiceStepMaterialPreview({
   initialFiles?: StoredFile[];
   onApply?: (files: StoredFile[]) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [reportOpen,setReportOpen]=useState(false);
   const [files, setFiles] = useState<StoredFile[]>(() =>
     structuredClone(initialFiles ?? []),
@@ -238,7 +238,7 @@ export function ServiceStepMaterialPreview({
               ))}
               {localize(file && (
                 <p className="sr-help">
-                  {localize(file.formats ? `允许格式：${file.formats}` : '文件格式不限')}
+                  {localize(file.formats ? localizeMessage("允许格式：{0}", [String(localize(file.formats))]) : '文件格式不限')}
                   {localize("，单个不超过 20 MB。")}</p>
               ))}
               {localize(doc && (

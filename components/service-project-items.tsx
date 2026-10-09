@@ -82,7 +82,7 @@ function ProjectItemsPanel({
   onRemove: (id: string) => void;
   onCopy: (id: string) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const fieldNames = Object.fromEntries(
     useContext(RequestFieldsContext).map((field) => [field.id, field.name]),
   );
@@ -153,7 +153,7 @@ function ProjectItemsPanel({
                                     <button
                                       type="button"
                                       className="sr-description-hint"
-                                      aria-label={localize(`查看${fieldNames.description ?? '需求说明'}`)}
+                                      aria-label={localizeMessage("查看{0}", [localize(fieldNames.description ?? '需求说明')])}
                                     >
                                       <CircleAlert size={16} />
                                     </button>
@@ -188,7 +188,7 @@ function ProjectItemsPanel({
                     ))}
                     {localize(basicMissing.length > 0 && (
                       <p className="sr-missing">
-                        {localize("待补充：")}{localize(basicMissing.join('、'))}
+                        {localize("待补充：")}{localizeList(basicMissing)}
                       </p>
                     ))}
                   </div>
@@ -254,7 +254,7 @@ export function ProjectItemBasicFields({
   busy: boolean;
   update: (patch: Partial<RequestItem>) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const fieldReadonly = (target: MappingTarget) => readonly || lockedFields.includes(target);
   const fields = useContext(RequestFieldsContext);
   const methodField = fields.find((field) => field.id === 'method');
@@ -423,7 +423,7 @@ export function ProjectItemBasicFields({
                                     <small>
                                       （
                                       {localize(recorded
-                                        ? `${o.nodeCount} 节点`
+                                        ? localizeMessage("{0} 节点", [String(localize(o.nodeCount))])
                                         : '保存时数量未记录')}
                                       ）
                                     </small>
@@ -529,7 +529,7 @@ export function ProjectItemBasicFields({
                       placeholder={
                         localize(key === 'nodes'
                           ? '填写本项涉及的节点数'
-                          : `填写${label}`)
+                          : localizeMessage("填写{0}", [String(localize(label))]))
                       }
                     />
                   ))}
@@ -566,7 +566,7 @@ export function ServiceProjectItems({
   busy: boolean;
   save: (change: ProjectItemChange) => Promise<string | null>;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const readonly = requestedReadonly || actor.role === '客户';
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<RequestItem | null>(null);
@@ -720,7 +720,7 @@ export function ServiceProjectItems({
                       <p>
                         {localize(pending.serviceId)} {localize(" · 版本")}{localize(' ')}
                         {localize(selectedService
-                          ? `v${selectedService.version ?? 1}`
+                          ? localizeMessage("v{0}", [String(localize(selectedService.version ?? 1))])
                           : '—')}
                       </p>
                     </div>

@@ -21,7 +21,7 @@ export function ReportFieldSettings({
   disabled: boolean;
   onChange: (template: ReportTemplate) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const fields = reportFields(template.body);
   function update(id: string, patch: Partial<ReportField>) {
     onChange({
@@ -53,7 +53,7 @@ export function ReportFieldSettings({
                 <td>{localize(field.label)}</td>
                 <td>
                   <NativeSelect
-                    aria-label={localize(`${field.label} 字段来源`)}
+                    aria-label={localizeMessage("{0} 字段来源", [localize(field.label)])}
                     disabled={disabled}
                     value={source?.id ?? ''}
                     onChange={(event) => {
@@ -87,7 +87,7 @@ export function ReportFieldSettings({
                 </td>
                 <td>
                   <NativeSelect
-                    aria-label={localize(`${field.label} 空值处理`)}
+                    aria-label={localizeMessage("{0} 空值处理", [localize(field.label)])}
                     disabled={disabled}
                     value={field.emptyPolicy ?? 'block'}
                     onChange={(event) =>
@@ -105,7 +105,7 @@ export function ReportFieldSettings({
                 <td>
                   {localize(field.emptyPolicy === 'default' ? (
                     <Input
-                      aria-label={localize(`${field.label} 默认文本`)}
+                      aria-label={localizeMessage("{0} 默认文本", [localize(field.label)])}
                       required
                       maxLength={1000}
                       disabled={disabled}

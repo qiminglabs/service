@@ -63,7 +63,7 @@ export function ReportTemplateComposer({
   initialDocument?: OnlineDocument;
   saveLabel?: string;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const [templates, setTemplates] = useState<ReportTemplate[]>(
       selection ? [selection.template] : [],
     ),
@@ -222,7 +222,7 @@ export function ReportTemplateComposer({
             >
               {localize(pickingFiles
                 ? '返回报告'
-                : `项目文件（${fileSelections.length}）`)}
+                : localizeMessage("项目文件（{0}）", [String(localize(fileSelections.length))]))}
             </Button>
           ))}
         </DialogHeader>
@@ -328,7 +328,7 @@ export function ReportTemplateComposer({
               ))}
               {localize(!!resolved?.missing.length && (
                 <p className="sr-error" role="alert">
-                  {localize("未取得字段值：")}{localize(resolved.missing.join('、'))}
+                  {localize("未取得字段值：")}{localizeList(resolved.missing)}
                 </p>
               ))}
               {localize(template && (

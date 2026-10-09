@@ -43,7 +43,7 @@ export function ReportPreview({
   };
   projectName: string;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   if (report.kind === 'project' && report.projectDocument)
     return (
       <article className="daily-report-paper" aria-label={localize("项目报告邮件预览")}>
@@ -129,7 +129,7 @@ export function ReportPreview({
                 )))}
               </ol>
             ) : (
-              <p className="daily-report-placeholder">{localize(`待填写${title}`)}</p>
+              <p className="daily-report-placeholder">{localizeMessage("待填写{0}", [localize(title)])}</p>
             ))}
           </section>
         )))}
@@ -164,7 +164,7 @@ export function DailyReportsPanel({
   action?: ReactNode;
   notice?: string;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [viewingId, setViewingId] = useState('');
   const viewing = records.find((report) => report.id === viewingId);
   const reports = [...records].sort(
@@ -237,7 +237,7 @@ export function DailyReportsPanel({
                       variant="outline"
                       size="sm"
                       onClick={() => setViewingId(report.id)}
-                      aria-label={localize(`查看邮件：${report.subject}`)}
+                      aria-label={localizeMessage("查看邮件：{0}", [localize(report.subject)])}
                     >
                       <Eye size={14} />
                       {localize("查看邮件")}</Button>

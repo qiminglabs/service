@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import { operationIdentities, fixedIdentityRoles } from './internal-users.ts';
 import {
   engineerKey,
@@ -483,8 +484,8 @@ function setOrderDates(
     },
     actor,
     '工单',
-    start ? '调整工单排期' : '取消工单排期',
-    `${orderId}：${start ? `${start} 至 ${end}` : '清空计划执行和完成日期'}`,
+    (start ? activityMessage("调整工单排期") : activityMessage("取消工单排期")),
+    activityMessage("{0}：{1}", [orderId, (start ? activityMessage("{0} 至 {1}", [start, end]) : activityMessage("清空计划执行和完成日期"))]),
     now,
     false,
   );

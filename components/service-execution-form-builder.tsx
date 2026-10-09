@@ -30,7 +30,7 @@ export function ExecutionFormBuilder({
   disabled: boolean;
   onChange: (form: ExecutionForm) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [selected, select] = useState(form.fields[0]?.id ?? '');
   const root = useRef<HTMLDivElement>(null),
     cancelDrag = useRef<(() => void) | null>(null),
@@ -152,7 +152,7 @@ export function ExecutionFormBuilder({
                       type="button"
                       className="rf-select-field"
                       disabled={disabled}
-                      aria-label={localize(`配置${row.name}`)}
+                      aria-label={localizeMessage("配置{0}", [localize(row.name)])}
                       onPointerDown={(event) => beginDrag(event, id)}
                       onClick={() => select(id)}
                     >

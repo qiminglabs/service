@@ -5,7 +5,7 @@ import { serviceProjectStatuses, serviceProjectStatusLabel } from '@/lib/service
 import type { ServiceProjectStatus } from '@/lib/service-projects';
 
 export function ServiceProjectProgress({ status, cancelledFromStatus, pausedFromStatus, skipReview = false, external = false }: { status: ServiceProjectStatus; cancelledFromStatus?: ServiceProjectStatus; pausedFromStatus?: ServiceProjectStatus; skipReview?: boolean; external?: boolean }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const originalStatus = status;
   const paused = status === '已暂停';
   const cancelled = status === '已取消';
@@ -17,7 +17,7 @@ export function ServiceProjectProgress({ status, cancelledFromStatus, pausedFrom
   const statuses = serviceProjectStatuses.filter(stage => stage !== '已暂停' && (!skipReview || stage !== '待复核'));
   const stages = interrupted ? [...statuses.slice(0, statuses.indexOf(fromStatus) + 1), status] : statuses.filter(stage => stage !== '已取消');
   const currentStep = stages.indexOf(status);
-  return <section className="sr-status-progress" data-cancelled={cancelled || undefined} data-paused={paused || undefined} aria-label={localize('服务项目状态：' + serviceProjectStatusLabel(originalStatus, external))}>
+  return <section className="sr-status-progress" data-cancelled={cancelled || undefined} data-paused={paused || undefined} aria-label={localize(localizeMessage("服务项目状态：{0}", [String(localize(serviceProjectStatusLabel(originalStatus, external)))]))}>
     <ol className="sr-status-steps">{localize(stages.map((stage, index) => {
       const state = index === currentStep ? 'current' : !interrupted && index < currentStep ? 'complete' : 'pending';
       return <li key={stage} data-state={state} aria-current={state === 'current' ? 'step' : undefined}>

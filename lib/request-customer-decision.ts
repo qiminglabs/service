@@ -1,3 +1,4 @@
+import { activityFields, activityMessage } from './activity-events.ts';
 import { isDemoAdministrator } from './demo-permissions.ts';
 import type { ServiceRequest } from './service-requests';
 import type { OperationActor } from './request-operations';
@@ -40,8 +41,7 @@ export function applyCustomerDecision(
   ops.activities.push({
     id: `customer-decision:${confirmation.planId}:${at}`,
     at, actor: actor.name, actorId: actor.id, category: '服务依据',
-    title: accepted ? '客户确认通过' : '客户拒绝确认',
-    detail: accepted ? '请求进入待受理。' : `${reason.trim()} · 请求退回客户确认步骤，服务依据、资产冻结及审批结果保留。`,
+    ...activityFields('request', accepted ? activityMessage('客户确认通过') : activityMessage('客户拒绝确认'), accepted ? activityMessage('请求进入待受理。') : activityMessage('{0} · 请求退回客户确认步骤，服务依据、资产冻结及审批结果保留。', [reason.trim()])),
   });
   return next;
 }

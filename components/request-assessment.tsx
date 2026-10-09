@@ -149,7 +149,7 @@ export function RequestAssessment({
   save,
   validationFailures,
 }: Props) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const a = assessmentOf(record),
     plan = currentPlan(record),
     effort = assessedEffort(record);
@@ -433,7 +433,7 @@ export function RequestAssessment({
                       <td>—</td><td>{localize("服务权益")}</td><td>—</td>
                     </tr>))}
                     {localize(approvedBasisRows.map(row => <tr key={row.id}>
-                      <td>{localize(row.method === '—' ? '额度审批' : `${row.method}额度审批`)}</td>
+                      <td>{localize(row.method === '—' ? '额度审批' : localizeMessage("{0}额度审批", [String(localize(row.method))]))}</td>
                       <td>{localize(row.method)}</td><td>{localize("服务请求审批")}</td><td>{localize(fmt(row.days))}</td>
                     </tr>))}
                     {localize(!plan.allocations.length && !entitlementAllocations.length && !approvedBasisRows.length && <tr><td colSpan={4}>{localize(plan.effort > 0 ? '暂无已关联的服务依据。' : '本次无需占用客户资产。')}</td></tr>)}
@@ -526,7 +526,7 @@ export function RequestAssessment({
                     <dt>{localize("预计服务日期")}</dt><dd>{localize(record.expectedServiceDate || '未填写')}</dd>
                     <dt>{localize("请求描述")}</dt><dd>{localize(record.description || '未填写')}</dd>
                     <dt>{localize("申请服务")}</dt><dd>{localize(record.items.map(item => (
-                      <div key={item.id}>{localize(item.serviceName)}{localize(item.method ? ` · ${item.method}` : '')}</div>
+                      <div key={item.id}>{localize(item.serviceName)}{localize(item.method ? localizeMessage(" · {0}", [String(localize(item.method))]) : '')}</div>
                     )))}</dd>
                   </dl>
                 </section>
@@ -620,7 +620,7 @@ function AssessmentForm({
   run: (action: AssessmentAction) => Promise<boolean>;
   close: () => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const a = assessmentOf(record),
     plan = currentPlan(record),
     assessed = assessedEffort(record);
@@ -717,7 +717,7 @@ function AssessmentForm({
           <DialogDescription>
             {localize(mode === 'effort'
               ? '人天类按预估人天 × 计价系数计价；权益类按差额权益 × 换算系数计价。计价结果逐项四舍五入到一位小数后汇总。'
-              : mode === 'gap' ? record.title : `额外额度：${formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || `${fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))} 人天`}`)}
+              : mode === 'gap' ? record.title : localizeMessage("额外额度：{0}", [String(localize(formatDayRequirements(mode === 'decide' ? (approval?.gaps ?? planDayGaps(plan)) : planDayGaps(plan)) || localizeMessage("{0} 人天", [String(localize(fmt(mode === 'decide' ? (approval?.days ?? 0) : planGap(plan))))])))]))}
           </DialogDescription>
         ))}
       </DialogHeader>
@@ -761,12 +761,12 @@ function AssessmentForm({
                   ? calculateBillableDays(estimate, coefficient) : undefined;
                 return <tr key={item.id}>
                   <td><strong>{localize(item.serviceName)}</strong><small>{localize(item.method)}</small></td>
-                  <td><Input aria-label={localize(`${item.serviceName} ${item.id} 预估人天`)} aria-describedby={`minimum-days-${item.id}`} aria-invalid={belowMinimum} type="number" min={minimumDays ?? 0.1} max="100000" step="0.1"
+                  <td><Input aria-label={localizeMessage("{0} {1} 预估人天", [localize(item.serviceName), localize(item.id)])} aria-describedby={`minimum-days-${item.id}`} aria-invalid={belowMinimum} type="number" min={minimumDays ?? 0.1} max="100000" step="0.1"
                     placeholder={localize("填写人天")} value={estimates[item.id] ?? ''} disabled={disabled || !pricingReady}
                     onChange={event => setEstimates(old => ({ ...old, [item.id]: event.target.value }))} />
-                    <small id={`minimum-days-${item.id}`} className="sr-pricing-minimum" data-invalid={belowMinimum}>{localize(minimumDays === undefined ? '最小人天数量未获取' : `最少 ${fmt(minimumDays)} 人天`)}</small></td>
-                  <td><span aria-label={localize(`${item.serviceName} 计价系数（只读）`)}>{localize(coefficient === undefined ? '未配置' : `× ${fmt(coefficient)}`)}</span></td>
-                  <td><output aria-label={localize(`${item.serviceName} 计价人天`)}>{localize(billable === undefined ? '—' : fmt(billable))}</output></td>
+                    <small id={`minimum-days-${item.id}`} className="sr-pricing-minimum" data-invalid={belowMinimum}>{localize(minimumDays === undefined ? '最小人天数量未获取' : localizeMessage("最少 {0} 人天", [String(localize(fmt(minimumDays)))]))}</small></td>
+                  <td><span aria-label={localizeMessage("{0} 计价系数（只读）", [localize(item.serviceName)])}>{localize(coefficient === undefined ? '未配置' : localizeMessage("× {0}", [String(localize(fmt(coefficient)))]))}</span></td>
+                  <td><output aria-label={localizeMessage("{0} 计价人天", [localize(item.serviceName)])}>{localize(billable === undefined ? '—' : fmt(billable))}</output></td>
                 </tr>;
               }))}</tbody>
             </table></div>
@@ -785,8 +785,8 @@ function AssessmentForm({
                       {localize(line?.entitlementObjects?.map(object => <small key={object.objectId}>{localize(object.name)}（{localize(object.available)}/{localize(object.nodes)}）</small>))}
                       {localize(issue && pricingReady && <small className="sr-error">{localize(issue)}</small>)}</td>
                     <td><span className={line?.deficitEntitlements ? 'sr-entitlement-deficit' : undefined}>{localize(line ? (line.deficitEntitlements ? fmt(line.deficitEntitlements) : '—') : '—')}</span></td>
-                    <td><span aria-label={localize(`${item.serviceName} 换算系数（只读）`)}>{localize(conversion ? `× ${fmt(conversion.days)}` : '未配置')}</span><small>{localize("人天 / 权益")}</small></td>
-                    <td><output aria-label={localize(`${item.serviceName} 计价人天`)}>{localize(line ? fmt(line.billableDays) : '—')}</output></td>
+                    <td><span aria-label={localizeMessage("{0} 换算系数（只读）", [localize(item.serviceName)])}>{localize(conversion ? localizeMessage("× {0}", [String(localize(fmt(conversion.days)))]) : '未配置')}</span><small>{localize("人天 / 权益")}</small></td>
+                    <td><output aria-label={localizeMessage("{0} 计价人天", [localize(item.serviceName)])}>{localize(line ? fmt(line.billableDays) : '—')}</output></td>
                   </tr>;
                 }))}</tbody>
               </table></div>
@@ -840,14 +840,14 @@ function AssessmentForm({
             <div className="sr-asset-method-groups">
               {localize(coverage.map(row => {
                 const matchingAssets = customerAssets.filter(asset => assetDayMethod(asset) === row.method);
-                return <section className="sr-asset-method-group" key={row.method} aria-label={localize(`${row.method}人天资产`)}>
+                return <section className="sr-asset-method-group" key={row.method} aria-label={localizeMessage("{0}人天资产", [localize(row.method)])}>
                   <div className="sr-assessment-asset-editor">
                     {localize(matchingAssets.map(asset => {
                       const available = assetAvailable(asset, records, record.id);
                       const maxDays = Math.max(0, Math.min(available ?? 0, row.days - (row.lockedDays - (Number(amounts[asset.id]) || 0))));
                       return <div key={asset.id}>
-                        <span><strong>{localize(asset.name)}</strong><small>{localize(asset.id)} · {localize(available === null ? '余额未维护' : `剩余可用 ${fmt(available)} 人天`)}</small></span>
-                        <label className="sr-basis-freeze-input"><Input aria-label={localize(`${asset.name} ${asset.id} 关联${row.method}人天`)} placeholder="0" type="number" min="0" step="0.1" max={maxDays}
+                        <span><strong>{localize(asset.name)}</strong><small>{localize(asset.id)} · {localize(available === null ? '余额未维护' : localizeMessage("剩余可用 {0} 人天", [String(localize(fmt(available)))]))}</small></span>
+                        <label className="sr-basis-freeze-input"><Input aria-label={localizeMessage("{0} {1} 关联{2}人天", [localize(asset.name), localize(asset.id), localize(row.method)])} placeholder="0" type="number" min="0" step="0.1" max={maxDays}
                           disabled={disabled || available === null} value={amounts[asset.id] ?? ''}
                           onChange={event => setAmounts(old => ({ ...old, [asset.id]: event.target.value }))} /><span>{localize("人天")}</span></label>
                       </div>;

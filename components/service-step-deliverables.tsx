@@ -45,7 +45,7 @@ export function ServiceStepDeliverables({
   reportTemplates: ReportTemplate[];
   onManageTemplates: () => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [error, setError] = useState('');
   const [previewId, setPreviewId] = useState<string>();
   const document = step.type === 'document';
@@ -71,7 +71,7 @@ export function ServiceStepDeliverables({
         <section
           className="service-step-deliverable"
           key={item.id}
-          aria-label={localize(`${label} ${index + 1} 配置`)}
+          aria-label={localizeMessage("{0} {1} 配置", [localize(label), localize(index + 1)])}
         >
           <div className="service-flow-step-heading">
             <strong>
@@ -80,7 +80,7 @@ export function ServiceStepDeliverables({
             <Button
               variant="ghost"
               size="icon"
-              aria-label={localize(`删除${label} ${index + 1}`)}
+              aria-label={localizeMessage("删除{0} {1}", [localize(label), localize(index + 1)])}
               disabled={!editable || items.length === 1}
               onClick={() => replace(items.filter((row) => row.id !== item.id))}
             >
@@ -190,7 +190,7 @@ export function ServiceStepDeliverables({
                   type="file"
                   accept={fileAccept}
                   disabled={!editable}
-                  aria-label={localize(`上载 ${item.name} 模板`)}
+                  aria-label={localizeMessage("上载 {0} 模板", [localize(item.name)])}
                   onChange={(event) => {
                     const file = event.target.files?.[0];
                     event.target.value = '';

@@ -24,7 +24,7 @@ export function RequestProjectDialog({ record, actor, busy, save, close, objects
   record: ServiceRequest; actor: OperationActor; busy: boolean; objects: ObjectRef[]; saveError?: string;
   save: (record: ServiceRequest, message?: string) => Promise<boolean>; close: () => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const fieldNames = Object.fromEntries(useContext(RequestFieldsContext).map(field => [field.id, field.name]));
   const [groups, setGroups] = useState<ProjectGroup[]>(() => [{ id: groupId(), name: record.title, note: '', itemIds: record.items.map(item => item.id) }]);
   const [mapping, setMapping] = useState<RequestProjectMapping | null>(null);
@@ -84,14 +84,14 @@ export function RequestProjectDialog({ record, actor, busy, save, close, objects
         <div className="sr-project-board-heading"><span title={localize(record.title)}>{localize(record.title)}</span><Button variant="outline" disabled={disabled || groups.length >= record.items.length} onClick={() => setGroups(old => [...old, { id: groupId(), name: `${mappedProjectName(record, mapping!)} · ${old.length + 1}`.slice(0, 100), expectedServiceDate: record.expectedServiceDate || '', note: '', itemIds: [] }])}><Plus size={16} />{localize("新增项目")}</Button></div>
         <div className="sr-project-board" data-single={groups.length === 1}>
           {localize(groups.map((group, groupIndex) => <section className="sr-project-group sr-project-dropzone" data-over={dropTarget === group.id} key={group.id}
-            aria-label={localize(`项目 ${groupIndex + 1}：${group.name}`)}
+            aria-label={localizeMessage("项目 {0}：{1}", [localize(groupIndex + 1), localize(group.name)])}
             onDragOver={event => { if (!disabled && dragItem.current) { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropTarget(group.id); } }}
             onDragLeave={event => { if (!event.relatedTarget || !event.currentTarget.contains(event.relatedTarget as Node)) setDropTarget(old => old === group.id ? null : old); }}
             onDrop={event => { event.preventDefault(); if (dragItem.current) move(dragItem.current, group.id); }}>
             <div className="sr-project-group-header"><Folder size={18} /><span>{localize("项目")}{localize(groupIndex + 1)}</span><span className="sr-project-count">{localize(group.itemIds.length)} {localize(" 个服务项")}</span>
-              {localize(groups.length > 1 && <Button size="sm" variant="ghost" aria-label={localize(`移除空项目 ${groupIndex + 1}`)} title={localize(group.itemIds.length ? '移出全部申请项后可删除项目' : '删除空项目')} disabled={disabled || group.itemIds.length > 0} onClick={() => setGroups(old => old.filter(item => item.id !== group.id))}><Trash2 size={15} /></Button>)}
+              {localize(groups.length > 1 && <Button size="sm" variant="ghost" aria-label={localizeMessage("移除空项目 {0}", [localize(groupIndex + 1)])} title={localize(group.itemIds.length ? '移出全部申请项后可删除项目' : '删除空项目')} disabled={disabled || group.itemIds.length > 0} onClick={() => setGroups(old => old.filter(item => item.id !== group.id))}><Trash2 size={15} /></Button>)}
             </div>
-            <div className="sr-project-name"><Input aria-label={localize(`项目 ${groupIndex + 1} 名称`)} placeholder={localize("填写项目名称")} value={group.name} maxLength={100} disabled={disabled} onChange={event => setGroups(old => old.map(item => item.id === group.id ? { ...item, name: event.target.value } : item))} /></div>
+            <div className="sr-project-name"><Input aria-label={localizeMessage("项目 {0} 名称", [localize(groupIndex + 1)])} placeholder={localize("填写项目名称")} value={group.name} maxLength={100} disabled={disabled} onChange={event => setGroups(old => old.map(item => item.id === group.id ? { ...item, name: event.target.value } : item))} /></div>
             {localize(!record.expectedServiceDate && <div className="sr-project-name"><DateField id={`project-date-${group.id}`} label={localize("计划执行日期")} required value={group.expectedServiceDate || ''} disabled={disabled} onChange={value => setGroups(old => old.map(item => item.id === group.id ? { ...item, expectedServiceDate: value } : item))} /></div>)}
             <div className="sr-project-drag-items">
               {localize(group.itemIds.map(itemId => {

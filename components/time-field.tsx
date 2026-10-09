@@ -31,7 +31,7 @@ export function TimeField({
   disabled?: boolean;
   required?: boolean;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const generatedId = useId();
   const fieldId = id ?? generatedId;
   const [open, setOpen] = useState(false);
@@ -109,7 +109,7 @@ export function TimeField({
             ref={panelRef}
             align="start"
             className="sr-time-popover"
-            aria-label={localize('选择' + label)}
+            aria-label={localize(localizeMessage("选择{0}", [String(localize(label))]))}
           >
             <Input
               aria-label={localize("直接输入时间")}
@@ -161,7 +161,7 @@ export function TimeField({
                         <RadioGroupItem
                           value={part}
                           className="sr-time-choice"
-                          aria-label={localize(`${part}${index === 0 ? '时' : '分'}`)}
+                          aria-label={index === 0 ? localizeMessage('{0}时', [part]) : localizeMessage('{0}分', [part])}
                         />
                         <span aria-hidden="true">{localize(part)}</span>
                       </label>

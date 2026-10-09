@@ -1,10 +1,11 @@
 'use client';
+import { translateMaterialRequirement } from '@/lib/i18n/materials';
 import { useI18n } from '@/lib/i18n/context';
 
 import { useEffect, useRef, useState, type PointerEvent } from 'react';
 import { startRequestFieldDrag } from '@/lib/request-field-drag';
 import { requestTypes } from '@/lib/request-types';
-import { materialRequiredFor, materialRequiredTypes, materialRequirementLabel } from '@/lib/material-requirements';
+import { materialRequiredFor, materialRequiredTypes } from '@/lib/material-requirements';
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,7 +51,7 @@ export function RequestFormBuilder({
   readonly?: boolean;
   update: (config: RequestConfig) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage, locale, labels: translationLabels } = useI18n();
   const busy = saving || readonly;
   const [selected, select] = useState('method');
   const templateInput = useRef<HTMLInputElement>(null);
@@ -257,7 +258,7 @@ export function RequestFormBuilder({
                     disabled={saving}
                     onPointerDown={(event) => beginDrag(event, id)}
                     onClick={() => select(id)}
-                    aria-label={localize(`${readonly ? '查看' : '配置'}${f.name}`)}
+                    aria-label={readonly ? localizeMessage('查看{0}', [localize(f.name)]) : localizeMessage('配置{0}', [localize(f.name)])}
                   >
                     <span>
                       {localize(f.name)} {localize(config.fieldRequiredWhen?.[id] ? <small>{localize(fieldRequirementLabels[config.fieldRequiredWhen[id]])}</small> : required(id) && <em>*</em>)}
@@ -275,10 +276,10 @@ export function RequestFormBuilder({
                           <small>
                             {localize(isEntitlementService(service)
                               ? 'SMTX OS 系统'
-                              : (
+                              : localizeList((
                                   config.basicFields?.businessObjects
                                     ?.products ?? products
-                                ).join('、'))}
+                                ), '、'))}
                           </small>
                         </div>
                       ) : (
@@ -334,11 +335,11 @@ export function RequestFormBuilder({
                   select(`material:${m.id}`);
                   setMaterialError('');
                 }}
-                aria-label={localize(`${readonly ? '查看' : '配置'}材料${m.name || '未命名材料'}`)}
+                aria-label={localizeMessage("{0}材料{1}", [localize(readonly ? '查看' : '配置'), localize(m.name || '未命名材料')])}
               >
                 <span className="rf-material-title">
                   {localize(m.name || '未命名材料')}
-                  <small>{localize(materialRequirementLabel(m))}</small>
+                  <small>{translateMaterialRequirement(m, locale, translationLabels)}</small>
                 </span>
                 <span className="rf-material-instructions">
                   {localize(m.instructions || '暂无填写说明')}
@@ -545,7 +546,7 @@ export function RequestFormBuilder({
             {localize(selected === 'edition' && fixed && <p className="sr-help">{localize("其他字段的显示条件依赖授权版本，因此该字段必须保留并填写。")}</p>)}
             {localize(selected === 'method' ? (
               <p className="sr-help">
-                {localize("引用服务目录：")}{localize(service.deliveryMethods.join('、'))}
+                {localize("引用服务目录：")}{localizeList(service.deliveryMethods)}
               </p>
             ) : selected === 'businessObjects' ? (
               <fieldset disabled={busy || fixed}>

@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import { withRequestCollaborators } from './request-collaboration.ts';
 import { writeAddress } from './request-address.ts';
 import {
@@ -128,9 +129,9 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
     record = withRequestCollaborators(record, sources.contacts, sources.customers, sources.users);
     const issues = requestIssues(record, { ...sources, audience: 'internal' });
     if (issues.length) throw new Error(`样例申请校验未通过：${issues.join('、')}`);
-    record = appendActivity(record, sales, '提交', '创建示例申请', '本地初始化的演示数据。', at);
+    record = appendActivity(record, sales, '提交', activityMessage("创建示例申请"), activityMessage("本地初始化的演示数据。"), at);
     if (states[index] !== '草稿') {
-      record = appendActivity({ ...record, status: '待评估', submittedAt: at }, sales, '提交', '提交服务申请', '示例材料已准备，等待项目经理评估。', at);
+      record = appendActivity({ ...record, status: '待评估', submittedAt: at }, sales, '提交', activityMessage("提交服务申请"), activityMessage("示例材料已准备，等待项目经理评估。"), at);
       if (routing) record = routeAssessmentOnSave(record, undefined, routing, sources.users, at, sources.customers);
     }
     const eventAt = (minutes: number) => new Date(Date.parse(at) + minutes * 60000).toISOString();
@@ -215,7 +216,7 @@ export function buildRequestSamples(sources: Sources, existing: ServiceRequest[]
       act({ type: 'confirm', externalNote: '请确认服务范围与期望日期；此记录仅用于流程演示。' }, applicant);
       if (index === 3) record = applyCustomerDecision(record, { id: contact.id, name: contact.name, role: '客户' }, customer.id, true, '', new Date(Date.parse(record.updatedAt) + 3600000).toISOString());
     }
-    if (index === 4) record = appendActivity({ ...record, status: '已取消', cancelledFromStatus: '待评估' }, sales, '提交', '取消服务请求', '客户调整季度维护计划，本次演示申请取消。', eventAt(55));
+    if (index === 4) record = appendActivity({ ...record, status: '已取消', cancelledFromStatus: '待评估' }, sales, '提交', activityMessage("取消服务请求"), activityMessage("客户调整季度维护计划，本次演示申请取消。"), eventAt(55));
     if (record.status !== states[index]) throw new Error('样例状态与流程不一致。');
     result.push(record);
   }

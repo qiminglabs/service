@@ -40,7 +40,7 @@ export function OperationPermissionSettings({
   identities: OperationActor[];
   initialActorId: string;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [userId, setUserId] = useState(initialActorId);
   const [site, setSite] = useState('');
   const [object, setObject] = useState('');
@@ -95,7 +95,7 @@ export function OperationPermissionSettings({
         </div>
         <span className="permission-selected-user">
           {localize(selectedUser
-            ? `${selectedUser.name} · ${permissionRoles[role!]}`
+            ? localizeMessage("{0} · {1}", [String(localize(selectedUser.name)), String(localize(permissionRoles[role!]))])
             : '全部角色')}
         </span>
       </div>

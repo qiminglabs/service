@@ -25,7 +25,7 @@ import { readRoutingData } from '@/lib/assessment-routing-store';
 import type { OperationActor } from '@/lib/request-operations';
 
 export function ApprovalRuleSettings({ actor, scope = 'request' }: { actor: OperationActor; scope?: ApprovalScope }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const [users, setUsers] = useState<InternalUser[]>([]);
   const [routingDictionary, setRoutingDictionary] = useState<RoutingDictionary>({ customers: [], services: [] });
   const [defaultUserId, setDefaultUserId] = useState(''), [savedDefaultUserId, setSavedDefaultUserId] = useState(''), [defaultRevision, setDefaultRevision] = useState(0);
@@ -174,8 +174,8 @@ export function ApprovalRuleSettings({ actor, scope = 'request' }: { actor: Oper
       target: <>{localize(version.flow.nodes.length)}<details className="disabled-rule-flow">
         <summary>{localize("查看审批流程")}</summary>
         <ol>{localize(version.flow.nodes.map(node => <li key={node.id}>
-          {localize(node.name)} · {localize(node.source === 'people' ? node.userIds.map(id => users.find(user => user.id === id)?.name ?? id).join('、')
-            : node.source === 'manager' ? '直属主管' : `逐级主管（${node.stopUserIds.length ? '截止人：' + node.stopUserIds.map(id => users.find(user => user.id === id)?.name ?? id).join('、') : node.depth + ' 级'}）`)}
+          {localize(node.name)} · {localize(node.source === 'people' ? localizeList(node.userIds.map(id => users.find(user => user.id === id)?.name ?? id), '、')
+            : node.source === 'manager' ? '直属主管' : localizeMessage("逐级主管（{0}）", [String(localize(node.stopUserIds.length ? localizeMessage('截止人：{0}', [localizeList(node.stopUserIds.map(id => users.find(user => user.id === id)?.name ?? id))]) : localizeMessage('{0} 级', [node.depth])))]))}
           <span> {localize(" · 驳回退回申请人")}</span>
         </li>))}</ol>
         {localize(!version.flow.nodes.length && <p>{localize("尚未配置审批节点")}</p>)}

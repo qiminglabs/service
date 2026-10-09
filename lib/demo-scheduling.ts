@@ -1,3 +1,4 @@
+import { activityMessage } from './activity-events.ts';
 import type { ServiceRequest, CustomerRef } from './service-requests';
 import type { ServiceFlowConfig } from './service-flows';
 import { operationIdentities } from './internal-users.ts';
@@ -112,7 +113,7 @@ export function buildSchedulingSamples(
       project,
       manager,
       '项目',
-      '创建项目',
+      activityMessage("创建项目"),
       project.id,
       at,
     );

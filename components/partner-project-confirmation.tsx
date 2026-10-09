@@ -17,7 +17,7 @@ export function PartnerProjectConfirmation({ project, actor, busy, onBusy, onSav
   project: ServiceProjectRecord; actor: OperationActor; busy: boolean; onBusy: (busy: boolean) => void;
   onSaved: (project: ServiceProjectRecord) => void; beforeSubmit: () => boolean;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [mailOpen, setMailOpen] = useState(false);
   const [open, setOpen] = useState(false), [note, setNote] = useState(''), [error, setError] = useState('');
   const confirmation = project.review?.confirmations.at(-1);
@@ -51,7 +51,7 @@ export function PartnerProjectConfirmation({ project, actor, busy, onBusy, onSav
     <Dialog open={open && !mailOpen} onOpenChange={value => { if (!busy) setOpen(value); }}><DialogContent className="sr-ops-dialog sr-ops-dialog--wide" showCloseButton={!busy}>
       <DialogHeader><DialogTitle>{localize("发起客户确认")}</DialogTitle><DialogDescription>{localize(project.name)}</DialogDescription></DialogHeader>
       <div className="sr-ops-form">
-        {localize(content.services.map(service => <p key={service.id}>{localize(service.name)} · {localize(service.method)}{localize(service.description && ` · ${service.description}`)}</p>))}
+        {localize(content.services.map(service => <p key={service.id}>{localize(service.name)} · {localize(service.method)}{localize(service.description && localizeMessage(" · {0}", [String(localize(service.description))]))}</p>))}
         <ServiceProjectDeliverables projectName={project.name} items={content.deliverables} />
         <label className="sr-ops-field" htmlFor="partner-confirmation-note"><span>{localize("客户可见备注")}</span><Textarea id="partner-confirmation-note" value={note} disabled={busy} onChange={event => setNote(event.target.value)} /></label>
         {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}

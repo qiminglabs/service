@@ -27,7 +27,7 @@ const recordId = (kind: EntitlementKind) => `entitlement-conversion-${kind}`;
 const dateLabel = (date: string) =>
   new Date(date).toLocaleString('zh-CN', { hour12: false });
 export function EntitlementConversions({ actor }: { actor: string }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [histories, setHistories] = useState<
     Record<EntitlementKind, ConversionVersion[]>
   >({ inspection: [], upgrade: [] });
@@ -140,9 +140,9 @@ export function EntitlementConversions({ actor }: { actor: string }) {
                       <strong>{localize(entitlementNames[kind])}</strong>
                     </td>
                     <td>
-                      {localize(current ? `1 次 = ${current.days} 人天` : '未配置')}
+                      {localize(current ? localizeMessage("1 次 = {0} 人天", [String(localize(current.days))]) : '未配置')}
                     </td>
-                    <td>{localize(current ? `V${current.version}` : '—')}</td>
+                    <td>{localize(current ? localizeMessage("V{0}", [String(localize(current.version))]) : '—')}</td>
                     <td>{localize(current ? dateLabel(current.updatedAt) : '—')}</td>
                     <td>{localize(current?.updatedBy ?? '—')}</td>
                     <td>

@@ -223,7 +223,7 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
   onRemove: (id: string) => void;
   onCopy: (id: string) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const fieldNames = Object.fromEntries(useContext(RequestFieldsContext).map(field => [field.id, field.name]));
   const internal = isInternal(actor.role);
   return <section className={`sr-panel${internal ? ' sr-customer-visible-panel' : ''}`}>
@@ -253,11 +253,11 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
               {localize((summary.length > 0 || item.description.trim()) && <div className="sr-item-summary">
                 <div className="sr-item-summary-fields">
                   {localize(inlineFields.map(field => <span className="sr-summary-field" key={field.key}><span className="sr-summary-label">{localize(field.label)}</span><span className="sr-summary-value">{localize(field.value)}</span></span>))}
-                  {localize(item.description.trim() && <TooltipProvider><Tooltip><TooltipTrigger render={<button type="button" className="sr-description-hint" aria-label={localize(`查看${fieldNames.description ?? '需求说明'}`)}><CircleAlert size={16} /></button>} /><TooltipContent className="sr-description-tooltip" side="top"><div><strong className="sr-tooltip-heading">{localize(fieldNames.description ?? '需求说明')}</strong><div>{localize(item.description)}</div></div></TooltipContent></Tooltip></TooltipProvider>)}
+                  {localize(item.description.trim() && <TooltipProvider><Tooltip><TooltipTrigger render={<button type="button" className="sr-description-hint" aria-label={localizeMessage("查看{0}", [localize(fieldNames.description ?? '需求说明')])}><CircleAlert size={16} /></button>} /><TooltipContent className="sr-description-tooltip" side="top"><div><strong className="sr-tooltip-heading">{localize(fieldNames.description ?? '需求说明')}</strong><div>{localize(item.description)}</div></div></TooltipContent></Tooltip></TooltipProvider>)}
                 </div>
                 {localize(addressFields.map(field => <div className="sr-summary-address" key={field.key}><span className="sr-summary-label">{localize(field.label)}</span><span className="sr-summary-value">{localize(field.value)}</span></div>))}
               </div>)}
-              {localize(basicMissing.length > 0 && <p className="sr-missing">{localize("待补充：")}{localize(basicMissing.join('、'))}</p>)}
+              {localize(basicMissing.length > 0 && <p className="sr-missing">{localize("待补充：")}{localizeList(basicMissing)}</p>)}
             </div>
             <div className="sr-item-actions">
               <Button variant="outline" disabled={busy} onClick={() => onEdit(item)}>{localize(readonly ? '查看详细信息' : '编辑详细信息')}</Button>
@@ -271,7 +271,7 @@ function RequestItemsPanel({ record, objects, actor, busy, readonly, showComplet
 }
 
 export function RequestWorkspace(props: Props) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const applicationFields = useContext(ApplicationFieldsContext);
   const applicationLabel = (id: string, fallback: string) => applicationFields.find(field => field.id === id)?.name ?? fallback;
   const access = {
@@ -789,7 +789,7 @@ export function RequestWorkspace(props: Props) {
                   <Search size={16} />
                   <Input
                     aria-label={localize("搜索服务请求")}
-                    placeholder={localize(customerPortal ? `搜索${applicationLabel('title', '申请主题')}或编号` : `搜索${applicationLabel('title', '申请主题')}、编号或${applicationLabel('customerId', '客户')}`)}
+                    placeholder={localize(customerPortal ? localizeMessage("搜索{0}或编号", [String(localize(applicationLabel('title', '申请主题')))]) : localizeMessage("搜索{0}、编号或{1}", [String(localize(applicationLabel('title', '申请主题'))), String(localize(applicationLabel('customerId', '客户')))]))}
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                   />
@@ -1304,7 +1304,7 @@ export function RequestWorkspace(props: Props) {
                     <strong>{localize(pendingItem.serviceName)}</strong>
                     <p>
                       {localize(pendingItem.serviceId)} {localize(" · 版本")}{localize(' ')}
-                      {localize(pendingService ? `v${pendingService.version ?? 1}` : '—')}
+                      {localize(pendingService ? localizeMessage("v{0}", [String(localize(pendingService.version ?? 1))]) : '—')}
                     </p>
                     </div>
                     {localize(pendingServiceContent && (
@@ -1663,7 +1663,7 @@ function ItemBasicFields({
   busy: boolean;
   update: (patch: Partial<RequestItem>) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const fields = useContext(RequestFieldsContext);
   const methodField = fields.find((field) => field.id === 'method');
   const formOrder = requestFormOrder(value.config);
@@ -1829,7 +1829,7 @@ function ItemBasicFields({
                                     <small>
                                       （
                                       {localize(recorded
-                                        ? `${o.nodeCount} 节点`
+                                        ? localizeMessage("{0} 节点", [String(localize(o.nodeCount))])
                                         : '申请时数量未记录')}
                                       ）
                                     </small>
@@ -1934,7 +1934,7 @@ function ItemBasicFields({
                       placeholder={
                         localize(key === 'nodes'
                           ? '填写本项涉及的节点数'
-                          : `填写${label}`)
+                          : localizeMessage("填写{0}", [String(localize(label))]))
                       }
                     />
                   ))}
@@ -1959,7 +1959,7 @@ export function RequestCatalogSettings({
   readonly?: boolean;
   audience?: CatalogFormAudience;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const writable = !readonly && canManageCatalog(actor);
   const configLabel = audience === 'internal' ? '内部申请' : audience === 'partner' ? '合作伙伴中心申请' : '客户中心申请';
   const requestFields = useContext(RequestFieldsContext);
@@ -1992,10 +1992,10 @@ export function RequestCatalogSettings({
   return (
     <section className="detail-card detail-card--wide sr-config-card">
       <div className="sr-panel-heading">
-        <h3>{localize(configLabel)}{localize("表单")}</h3>
+        <h3>{localizeMessage("{0}表单", [localize(configLabel)])}</h3>
         <Button
           variant="outline"
-          aria-label={localize(`${writable ? '配置' : '查看'}${configLabel}表单`)}
+          aria-label={localizeMessage("{0}{1}表单", [localize(writable ? '配置' : '查看'), localize(configLabel)])}
           disabled={!ready}
           onClick={() => {
             setEditing(configForEditing(config, requestFields));
@@ -2008,19 +2008,17 @@ export function RequestCatalogSettings({
         </Button>
       </div>
       <p>
-        {localize("服务项字段：")}{localize(config.fields
-          .map(
-            (fieldId) =>
-              requestFields.find((field) => field.id === fieldId)?.name ??
-              fieldLabels[fieldId] ??
-              fieldId,
-          )
-          .join('、') || '无额外必填参数')}
+        {localize("服务项字段：")}{' '}
+        {localizeList(config.fields.map((fieldId) =>
+          requestFields.find((field) => field.id === fieldId)?.name ??
+          fieldLabels[fieldId] ?? fieldId,
+        )) || localize('无额外必填参数')}
       </p>
       <p>
-        {localize("材料：")}{localize(config.materials
-          .map((m) => `${m.name}（${m.required ? '必填' : '选填'}）`)
-          .join('、') || '无')}
+        {localize("材料：")}{' '}
+        {localizeList(config.materials.map((material) =>
+          material.required ? localizeMessage('{0}（必填）', [localize(material.name)]) : localizeMessage('{0}（选填）', [localize(material.name)]),
+        )) || localize('无')}
       </p>
       {localize(saved && <output className="sr-complete">{localize("申请配置已保存到本机")}</output>)}
       {localize(error && (

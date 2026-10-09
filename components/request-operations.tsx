@@ -1,4 +1,5 @@
 'use client';
+import { ActivityDetail, ActivityTitle } from '@/components/activity-detail';
 import { useI18n } from '@/lib/i18n/context';
 
 
@@ -160,7 +161,7 @@ export function RequestOperationsTabs({
   children,
   sidebar,
 }: Props) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [tab, setTab] = useState('overview');
   const [dialog, setDialog] = useState<'meeting' | 'meeting-notify' | 'worklog' | null>(null);
   const [error, setError] = useState('');
@@ -305,7 +306,7 @@ export function RequestOperationsTabs({
                           </h4>
                           <p>
                             {localize(m.scheduledDate
-                              ? `${m.scheduledDate} ${m.scheduledTime} · ${m.durationMinutes} 分钟`
+                              ? localizeMessage("{0} {1} · {2} 分钟", [String(localize(m.scheduledDate)), String(localize(m.scheduledTime)), String(localize(m.durationMinutes))])
                               : stamp(m.createdAt))}{localize(' ')}
                             {localize("· 主持人")}{localize(m.host)}
                           </p>
@@ -437,7 +438,7 @@ export function RequestOperationsTabs({
                                   </Tooltip>
                                 </TooltipProvider>
                               ) : (
-                                `${formatWorklogHours(w.hours)} 小时`
+                                localizeMessage("{0} 小时", [String(localize(formatWorklogHours(w.hours)))])
                               ))}
                             </td>
                             <td>{localize(w.category)}</td>
@@ -526,10 +527,10 @@ export function RequestOperationsTabs({
                         </span>
                         <div>
                           <h4>
-                            {localize(a.title === '核定人天' ? '人天核定' : a.title === '关联服务依据' ? '服务依据关联' : a.title)}
+                            <ActivityTitle activity={a} />
                             <small>{localize(a.category)}</small>
                           </h4>
-                          <p>{localize(a.detail)}</p>
+                          <p><ActivityDetail activity={a} /></p>
                           <span>
                             {localize(a.actor)} · {localize(stamp(a.at))}
                           </span>
@@ -636,7 +637,7 @@ function WorklogForm({
   run,
   close,
 }: FormActions & { log: RequestWorklog | null; voiding: boolean }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [date, setDate] = useState(log?.date ?? localDate());
   const [startTime, setStartTime] = useState(log?.startTime ?? '');
   const [endTime, setEndTime] = useState(log?.endTime ?? '');
@@ -653,8 +654,8 @@ function WorklogForm({
         </DialogTitle>
         <DialogDescription>
           {localize(voiding && log
-            ? `${log.date} · ${formatWorklogHours(log.hours)} 小时；作废后保留原记录，不计入汇总。`
-            : `录入人：${log?.userName ?? actor.name}。按起止时间计算分钟数，自动换算为投入小时。`)}
+            ? localizeMessage("{0} · {1} 小时；作废后保留原记录，不计入汇总。", [String(localize(log.date)), String(localize(formatWorklogHours(log.hours)))])
+            : localizeMessage("录入人：{0}。按起止时间计算分钟数，自动换算为投入小时。", [String(localize(log?.userName ?? actor.name))]))}
         </DialogDescription>
       </DialogHeader>
       <div className="sr-ops-form">
@@ -841,7 +842,7 @@ function MeetingForm({
   run,
   close,
 }: FormActions & { meeting: RequestMeeting | null; record: ServiceRequest }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const [title, setTitle] = useState(record.title + ' · 需求沟通');
   const [scheduledDate, setScheduledDate] = useState(localDate());
   const [scheduledTime, setScheduledTime] = useState('');
@@ -859,7 +860,7 @@ function MeetingForm({
         <DialogTitle>{localize(meeting ? meeting.title : '预约会议')}</DialogTitle>
         <DialogDescription>
           {localize("腾讯会议 · 本地模拟")}{localize(meeting
-            ? ` · ${meeting.host} · ${stamp(meeting.createdAt)}`
+            ? localizeMessage(" · {0} · {1}", [String(localize(meeting.host)), String(localize(stamp(meeting.createdAt)))])
             : '。不会向腾讯会议创建会议或发送邀请。')}
         </DialogDescription>
       </DialogHeader>
@@ -925,7 +926,7 @@ function MeetingForm({
                 <h3>{localize("模拟会议进行中")}</h3>
                 <p>{localize("尚未接入腾讯会议 SDK，无实际音视频连接。")}</p>
                 <span>
-                  {localize(meeting.participantNames.join('、') || meeting.host)}
+                  {localize(localizeList(meeting.participantNames, '、') || meeting.host)}
                 </span>
               </div>
             ) : (
@@ -935,19 +936,19 @@ function MeetingForm({
                     <dt>{localize("会议时间")}</dt>
                     <dd>
                       {localize(stamp(meeting.startedAt ?? meeting.createdAt))}
-                      {localize(meeting.endedAt ? ` — ${stamp(meeting.endedAt)}` : '')}
+                      {localize(meeting.endedAt ? localizeMessage(" — {0}", [String(localize(stamp(meeting.endedAt)))]) : '')}
                     </dd>
                   </div>
                   <div>
                     <dt>{localize("参会人")}</dt>
                     <dd>
-                      {localize([
+                      {localize(localizeList([
                         ...new Set(
                           [meeting.host, ...meeting.participantNames].filter(
                             Boolean,
                           ),
                         ),
-                      ].join('、') || '未记录')}
+                      ], '、') || '未记录')}
                     </dd>
                   </div>
                 </dl>
@@ -1031,7 +1032,7 @@ function MeetingForm({
                               size="sm"
                               variant="ghost"
                               disabled={disabled}
-                              aria-label={localize(`删除附件 ${file.name}`)}
+                              aria-label={localizeMessage("删除附件 {0}", [localize(file.name)])}
                               onClick={() =>
                                 void run({
                                   type: 'meeting-attachment-delete',

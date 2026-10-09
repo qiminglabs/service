@@ -21,7 +21,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
   save: (record: ServiceRequest, message?: string) => Promise<boolean>;
   validationFailures?: ValidationFailure[];
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [mode, setMode] = useState<'accept' | 'reject' | null>(null);
   useEffect(() => { if (validationFailures?.length) setMode(null); }, [validationFailures]);
   const [reason, setReason] = useState('');
@@ -78,7 +78,7 @@ export function RequestCustomerConfirmation({ record, actor, customerId, busy, s
       <DialogContent showCloseButton={!disabled}>
         <DialogHeader>
           <DialogTitle>{localize(mode === 'accept' ? '确认服务请求' : '拒绝服务请求')}</DialogTitle>
-          <DialogDescription>{localize(mode === 'accept' ? `确认“${record.title}”后，请求将进入待受理。` : '拒绝后退回客户确认步骤，项目经理将根据原因处理后重新发起确认。')}</DialogDescription>
+          <DialogDescription>{localize(mode === 'accept' ? localizeMessage("确认“{0}”后，请求将进入待受理。", [String(localize(record.title))]) : '拒绝后退回客户确认步骤，项目经理将根据原因处理后重新发起确认。')}</DialogDescription>
         </DialogHeader>
         {localize(mode === 'reject' && <label className="sr-ops-field"><span>{localize("拒绝原因（必填）")}</span><Textarea value={reason} onChange={event => setReason(event.target.value)} disabled={disabled} placeholder={localize("请说明拒绝原因")} /></label>)}
         {localize(error && <p className="sr-error" role="alert">{localize(error)}</p>)}

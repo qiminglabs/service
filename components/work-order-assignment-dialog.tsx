@@ -51,7 +51,7 @@ export function WorkOrderAssignmentDialog({
   onBusy: (busy: boolean) => void;
   onSaved: (project: ServiceProjectRecord) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList, localizeMessage } = useI18n();
   const orders = (project.workOrders ?? []).filter((order) =>
     orderIds.includes(order.id),
   );
@@ -215,8 +215,8 @@ export function WorkOrderAssignmentDialog({
                     : '工单日期')}
                   ：
                   {localize(periods[index]
-                    ? `${periods[index]!.start} 至 ${periods[index]!.end}`
-                    : `${order.expectedServiceDate || '未设置'} 至 ${order.plannedCompletionDate || '未设置'}`)}
+                    ? localizeMessage("{0} 至 {1}", [String(localize(periods[index]!.start)), String(localize(periods[index]!.end))])
+                    : localizeMessage("{0} 至 {1}", [String(localize(order.expectedServiceDate || '未设置')), String(localize(order.plannedCompletionDate || '未设置'))]))}
                 </span>
               </span>
             )))}
@@ -225,7 +225,7 @@ export function WorkOrderAssignmentDialog({
             <strong>{localize("所需认证")}</strong>
             <span>
               {localize(directory
-                ? requirements.join('、') ||
+                ? localizeList(requirements, '、') ||
                   (requirementError ? '无法确定' : '无认证要求')
                 : '读取中…')}
             </span>
@@ -265,7 +265,7 @@ export function WorkOrderAssignmentDialog({
                   {localize(unavailable.includes(key) && '（不可用）')}
                   <button
                     type="button"
-                    aria-label={localize(`移除${person?.name || key}`)}
+                    aria-label={localizeMessage("移除{0}", [localize(person?.name || key)])}
                     disabled={saving}
                     onClick={() =>
                       setSelectedKeys((keys) =>
@@ -312,13 +312,12 @@ export function WorkOrderAssignmentDialog({
                                   {localize(entry.orderName)} · {localize(entry.projectName)}
                                 </span>
                                 <small>
-                                  {localize("重叠日期：")}{localize(entry.ranges
+                                  {localize("重叠日期：")}{localize(localizeList(entry.ranges
                                     .map((range) =>
                                       range.start === range.end
                                         ? range.start
-                                        : `${range.start} 至 ${range.end}`,
-                                    )
-                                    .join('、'))}
+                                        : localizeMessage('{0} 至 {1}', [range.start, range.end]),
+                                    ), '、'))}
                                   {localize(entry.period.source === 'project' &&
                                     '（按项目日期）')}
                                 </small>
@@ -354,7 +353,7 @@ export function WorkOrderAssignmentDialog({
                   >
                     <td>
                       <Checkbox
-                        aria-label={localize(`选择工程师 ${person.name} ${person.companyName}`)}
+                        aria-label={localizeMessage("选择工程师 {0} {1}", [localize(person.name), localize(person.companyName)])}
                         disabled={saving}
                         checked={selectedKeys.includes(engineerKey(person))}
                         onCheckedChange={(checked) =>
@@ -423,7 +422,7 @@ export function WorkOrderAssignmentDialog({
               {localize(unavailable.length
                 ? '包含不可用工程师，请移除后重新选择。'
                 : missing.length
-                  ? `认证未满足：${missing.join('、')}`
+                  ? localizeMessage("认证未满足：{0}", [String(localize(localizeList(missing, '、')))])
                   : '所选人员认证并集已满足全部所选工单要求')}
             </p>
           ))}

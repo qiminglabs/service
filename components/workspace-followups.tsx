@@ -1,4 +1,5 @@
 'use client';
+import { ActivityTitle } from '@/components/activity-detail';
 import { useI18n } from '@/lib/i18n/context';
 
 
@@ -31,7 +32,7 @@ export function WorkspaceFollowups({
   selectedCategory?: string;
   onCategoryChange?: (category: string) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeMessage } = useI18n();
   const [localCategory, setLocalCategory] = useState('全部事项');
   const category = selectedCategory ?? localCategory;
   const setCategory = onCategoryChange ?? setLocalCategory;
@@ -105,7 +106,7 @@ export function WorkspaceFollowups({
                 <span className="pm-tag">{localize(task.kind)}</span>
                 <small className={task.overdue ? 'pm-danger' : ''}>
                   {localize(task.date
-                    ? `${task.date}${task.overdue ? ' · 已逾期' : ''}`
+                    ? task.overdue ? localizeMessage('{0} · 已逾期', [task.date]) : task.date
                     : '未设置日期')}
                 </small>
               </span>
@@ -156,7 +157,7 @@ export function WorkspaceRecentActivity({
               <span className="pm-activity-dot" />
               <span>
                 <strong>
-                  {localize(activity.actor)} · {localize(activity.title)}
+                  {activity.actor} · <ActivityTitle activity={activity} />
                 </strong>
                 <small className="pm-activity-context">
                   <span title={localize(activity.recordTitle)}>

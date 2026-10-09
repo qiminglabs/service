@@ -17,7 +17,7 @@ export function ServiceFlowScopeSelect({
   dictionary: FlowDictionary;
   onChange: (scope: Scope) => void;
 }) {
-  const { localize } = useI18n();
+  const { localize, localizeList } = useI18n();
   const [query, setQuery] = useState('');
   const options = [
     ...value.serviceIds
@@ -87,12 +87,11 @@ export function ServiceFlowScopeSelect({
             {localize("个服务目录。选中任意一个即可进入条件匹配。")}</p>
           {localize(!!value.serviceIds.length && (
             <p className="sr-help">
-              {localize(value.serviceIds
+              {localize(localizeList(value.serviceIds
                 .map(
                   (id) =>
                     options.find((service) => service.id === id)?.name ?? id,
-                )
-                .join('、'))}
+                ), '、'))}
             </p>
           ))}
         </>
